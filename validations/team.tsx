@@ -13,12 +13,9 @@ const teamSchemaBase = z.object({
     )
     .optional(),
   loginMethod: z.enum(teamLoginMethods),
-  oidcIssuer: z.string().url("OIDC issuer must be a valid URL").optional(),
-  oidcClientId: z.string().min(1, "OIDC client ID is required").optional(),
-  oidcClientSecret: z
-    .string()
-    .min(1, "OIDC client secret is required")
-    .optional(),
+  oidcIssuer: z.string().optional(),
+  oidcClientId: z.string().optional(),
+  oidcClientSecret: z.string().optional(),
   autoProvisionUsersFromOidc: z.boolean().optional(),
   defaultOidcGroupId: z.string().uuid("Invalid default OIDC group").optional().nullable(),
   registrationPageLogoKey: z.string().optional(),
@@ -57,6 +54,10 @@ const requireOidcFields = (
   options?: { requireClientSecret?: boolean },
 ) => {
   const hasDomain = Boolean(value.loginDomain?.trim());
+  const hasOidcIssuer = Boolean(value.oidcIssuer?.trim());
+  const isOidcIssuerValid = hasOidcIssuer
+    ? z.string().url().safeParse(value.oidcIssuer?.trim()).success
+    : false;
 
   if (value.loginMethod === "OIDC" && !hasDomain) {
     ctx.addIssue({
@@ -71,6 +72,13 @@ const requireOidcFields = (
       code: z.ZodIssueCode.custom,
       path: ["oidcIssuer"],
       message: "OIDC issuer is required when login method is OIDC",
+    });
+  }
+  if (value.loginMethod === "OIDC" && hasOidcIssuer && !isOidcIssuerValid) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["oidcIssuer"],
+      message: "OIDC issuer must be a valid URL",
     });
   }
 
