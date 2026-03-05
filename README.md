@@ -1,174 +1,152 @@
-# Funding Manager
+# CRM
 
-A comprehensive funding management application built with Next.js 15, designed to streamline the relationship between funding providers (Teams) and recipients (Organizations). The platform manages the complete funding lifecycle from application submission to fund disbursement.
+A modular CRM platform built with Next.js to manage relationships, records, workflows, and funding operations between provider teams and partner organizations.
 
-## 🎯 Overview
+## Overview
 
-Funding Manager serves three primary user roles:
-- **Organizations**: Non-profit entities that submit funding requests
-- **Teams**: Funding providers that review and approve requests
-- **Admins**: System administrators managing the platform
+The app supports three primary roles:
+- **Organizations**: partner entities that maintain profiles and submit requests
+- **Teams**: provider-side users who manage CRM workflows and funding pipelines
+- **Admins**: platform administrators managing tenants, access, and configuration
 
-## ✨ Key Features
+The data model supports both application modules:
+- **CRM**: contacts, organizations, lists, engagements, events, and groups
+- **FUNDING**: requests, agreements, files, and transactions
 
-- **Funding Request Management**: Complete workflow from submission to approval
-- **Document Management**: Secure file uploads and storage with AWS S3
-- **Digital Signatures**: Electronic signature workflow for donation agreements
-- **Financial Tracking**: Transaction management with receipt tracking
-- **Email Notifications**: Automated notifications for status changes and reminders
-- **Role-based Access Control**: Secure access management for different user types
-- **Real-time Status Updates**: Live tracking of funding request progress
+## Key Features
 
-## 🛠 Tech Stack
+- Centralized organization, team, and user records
+- Contact and list management with engagement tracking
+- Event and event-role management
+- Organization engagement timeline and custom organization field values
+- Funding request pipeline and status tracking
+- Donation agreement workflow with signature tracking
+- Transaction and receipt tracking
+- Secure document storage and download auditing
+- Team-level OIDC + email magic-link authentication
+- Role-based access control and protected routes
 
-- **Framework**: Next.js 15 with App Router
-- **Database**: PostgreSQL with Prisma ORM
-- **Authentication**: NextAuth.js with email-based login
-- **UI**: Tailwind CSS with Radix UI components (shadcn/ui)
-- **File Storage**: AWS S3
-- **Email**: SMTP via Nodemailer for notifications
-- **Monitoring**: Sentry for error tracking
-- **Language**: TypeScript
+## Tech Stack
 
-## 🏗 Architecture
+- **Framework**: Next.js 16 (App Router)
+- **UI**: React 19, Tailwind CSS v4, Radix UI
+- **Language**: TypeScript (strict mode)
+- **Database**: PostgreSQL + Prisma ORM
+- **Authentication**: NextAuth.js (email magic link + team OIDC)
+- **Storage**: S3-compatible object storage + AWS SDK
+- **Email**: SMTP via Nodemailer
+- **Observability**: Sentry
+- **Code Quality**: Biome
 
-### Core Domain Models
-- **Organizations**: Non-profit entities submitting funding requests
-- **Teams**: Funding providers reviewing applications
-- **Users**: Individuals with specific roles and permissions
-- **FundingRequests**: Applications with status workflow management
-- **DonationAgreements**: Legal agreements with signature tracking
-- **Transactions**: Financial transfers with receipt management
-- **Files**: Document management with secure storage
+## Core Domain
 
-### Status Workflow
+Primary entities include:
+- `Organization`, `Teams`, `User`
+- `Contact`, `ContactList`, `ContactEngagement`
+- `OrganizationEngagement`, `OrganizationType`
+- `Event`, `EventType`, `EventRole`
+- `FundingRequest`, `DonationAgreement`, `Transaction`
+- `File`, `FileDownloadAudit`, `Group`
+
+Funding request workflow:
+
+```text
+Submitted -> Accepted -> WaitingForSignature -> Approved -> FundsDisbursing -> Completed
+                  \-> Rejected (possible at any stage)
 ```
-Submitted → Accepted → WaitingForSignature → Approved → FundsDisbursing → Completed
-                    ↘ Rejected (possible at any stage)
-```
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+
-- PostgreSQL database
-- AWS S3 bucket for file storage
-- SMTP email service
+- Node.js 20+
+- PostgreSQL
+- S3-compatible object storage bucket
+- SMTP provider
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd funding-manager
-   ```
-
-2. **Install dependencies**
-   ```bash
-   yarn install
-   ```
-
-3. **Environment Setup**
-
-   Copy the environment template and configure your variables:
-   ```bash
-   cp .env.example .env.local
-   ```
-
-   Required environment variables:
-   ```env
-   # Database
-   DATABASE_URL="postgresql://username:password@localhost:5432/funding_manager"
-
-   # NextAuth
-   NEXTAUTH_SECRET="your-secret-key"
-   NEXTAUTH_URL="http://localhost:3000"
-
-   # AWS S3
-   AWS_ACCESS_KEY_ID="your-aws-access-key"
-   AWS_SECRET_ACCESS_KEY="your-aws-secret-key"
-   AWS_S3_BUCKET_NAME="your-bucket-name"
-   AWS_REGION="us-east-1"
-
-   # Email Configuration (SMTP)
-   SMTP_HOST="smtp.gmail.com"
-   SMTP_PORT="587"
-   SMTP_SECURE="false"
-   SMTP_USER="your-smtp-username"
-   SMTP_PASS="your-smtp-password"
-   SMTP_FROM="noreply@yourdomain.com"
-
-   # Sentry (optional)
-   SENTRY_DSN="your-sentry-dsn"
-   ```
-
-4. **Database Setup**
-   ```bash
-   # Generate Prisma client
-   npx prisma generate
-
-   # Run database migrations
-   npx prisma migrate dev
-
-   # (Optional) Open Prisma Studio
-   npx prisma studio
-   ```
-
-5. **Start Development Server**
-   ```bash
-   yarn dev
-   ```
-
-   The application will be available at `http://localhost:3000`
-
-## 📜 Available Scripts
+1. Clone the repository
 
 ```bash
-# Development server with Turbopack
-yarn dev
-
-# Build the application
-yarn build
-
-# Start production server
-yarn start
-
-# Run linting
-yarn lint
-
-# Print desired S3 CORS rules
-yarn s3:cors:print
-
-# Check bucket CORS against desired rules (exit code 2 on mismatch)
-yarn s3:cors:check
-
-# Apply desired CORS rules to the configured bucket
-yarn s3:cors:apply
-
-# Database operations
-npx prisma generate      # Generate Prisma client
-npx prisma migrate dev   # Run database migrations
-npx prisma db push       # Push schema changes to database
-npx prisma studio        # Open Prisma Studio
+git clone <repository-url>
+cd funding-manager
 ```
 
-### S3 CORS Bootstrap
+2. Install dependencies
 
-Direct browser uploads use pre-signed S3 URLs, so bucket CORS must allow preflight
-and `PUT`.
+```bash
+yarn install
+```
 
-Set these env vars before running the scripts:
+3. Configure environment
+
+```bash
+cp .env.example .env.local
+```
+
+Then set required values in `.env.local` (see `.env.example` for the full list).
+
+4. Set up database
+
+```bash
+npx prisma generate
+npx prisma migrate dev
+```
+
+5. (Optional) Seed default form config
+
+```bash
+npx tsx scripts/populate-default-form-config.ts
+```
+
+6. Start development server
+
+```bash
+yarn dev
+```
+
+Application URL: `http://localhost:3000`
+
+## Available Scripts
+
+```bash
+# Development
+yarn dev
+yarn build
+yarn start
+
+# Quality checks
+yarn lint          # biome lint .
+yarn lint:fix      # biome lint . --write
+yarn format        # biome format .
+yarn check         # biome check + tsc
+yarn typecheck     # tsc --noEmit
+
+# S3 CORS helpers
+yarn s3:cors:print
+yarn s3:cors:check
+yarn s3:cors:apply
+```
+
+## S3 CORS Bootstrap
+
+For direct browser uploads with pre-signed URLs, bucket CORS must allow preflight and `PUT`.
+
+Required runtime storage vars (see `.env.example`):
 
 ```env
-NEXT_AWS_S3_ENDPOINT="https://s3.<your-region>.scw.cloud"
-NEXT_AWS_S3_BUCKET_REGION="<your-region>"
-NEXT_AWS_S3_BUCKET_NAME="<your-bucket-name>"
 NEXT_AWS_S3_ACCESS_KEY="..."
 NEXT_AWS_S3_ACCESS_SECRET="..."
+NEXT_AWS_S3_BUCKET_NAME="..."
+NEXT_AWS_S3_BUCKET_REGION="..."
+NEXT_AWS_S3_ENDPOINT="https://s3.<your-region>.provider.com"
+```
 
-# Optional overrides
-S3_CORS_ALLOWED_ORIGINS="http://localhost:3000,http://169.254.83.107:3000"
+Optional CORS script overrides:
+
+```env
+S3_CORS_ALLOWED_ORIGINS="http://localhost:3000,http://127.0.0.1:3000"
 S3_CORS_ALLOWED_METHODS="GET,HEAD,PUT"
 S3_CORS_ALLOWED_HEADERS="*"
 S3_CORS_EXPOSE_HEADERS="ETag"
@@ -176,108 +154,46 @@ S3_CORS_MAX_AGE_SECONDS="3000"
 S3_FORCE_PATH_STYLE="true"
 ```
 
-The script auto-loads environment files via `dotenv` in this order:
+`manage-s3-cors.ts` loads env files in this order:
 `.env` -> `.env.local` -> `.env.{NODE_ENV}` -> `.env.{NODE_ENV}.local`.
 
-Use a base endpoint (for example `https://s3.<your-region>.scw.cloud`) rather than a
-bucket-specific host/path. If unsure, keep `S3_FORCE_PATH_STYLE` unset and the
-script will auto-try both styles.
+## Project Structure
 
-## 📁 Project Structure
-
-```
-├── app/                 # Next.js App Router
-│   ├── admin/          # Admin dashboard pages
-│   ├── organizations/  # Organization-specific pages
-│   ├── teams/         # Team-specific pages
-│   └── api/           # API endpoints
-├── components/         # Reusable UI components
-│   ├── ui/            # Base UI components (shadcn/ui)
-│   ├── forms/         # Form components with validation
-│   └── table/         # Data table components
-├── services/          # Business logic layer
-├── lib/              # Utilities (Prisma, S3, etc.)
-├── types/            # TypeScript type definitions
-├── validations/      # Zod schemas for validation
-├── prisma/           # Database schema and migrations
-└── templates/        # Email templates
+```text
+app/                Next.js routes, pages, layouts, API endpoints
+components/         Reusable UI components
+services/           Domain/business logic by feature
+lib/                Shared utilities and clients (Prisma, S3, mail, auth)
+prisma/             Schema and migrations
+templates/          Handlebars email templates
+scripts/            Operational and data helper scripts
 ```
 
-## 🔐 Authentication & Authorization
+## Auth & Authorization
 
-- **Email-based Authentication**: Secure login via NextAuth.js
-- **Role-based Access Control**: Organization, Team, and Admin roles
-- **Route Protection**: Middleware handles access control and redirects
-- **Session Management**: Includes user roles, organizationId, and teamId
+- NextAuth session strategy with JWT
+- Email magic-link auth
+- Team-specific OIDC providers
+- Optional OIDC auto-provisioning by verified team domain
+- Role-based route protection for `Admin`, `Team`, and `Organization`
 
-## 📧 Email Configuration
+## Deployment Notes
 
-The application uses SMTP for sending emails. Configure these variables:
+- Configure all required environment variables in production
+- Ensure `NEXTAUTH_URL` matches your deployed domain
+- Run production migrations:
 
-```env
-SMTP_HOST="smtp.gmail.com"
-SMTP_PORT="587"
-SMTP_SECURE="false"
-SMTP_USER="your-smtp-username"
-SMTP_PASS="your-smtp-password"
-SMTP_FROM="noreply@yourdomain.com"
-```
-
-**Common SMTP Providers:**
-- **Gmail**: `smtp.gmail.com:587` (requires app-specific password, `SMTP_SECURE="false"`)
-- **Outlook**: `smtp-mail.outlook.com:587` (`SMTP_SECURE="false"`)
-- **SendGrid**: `smtp.sendgrid.net:587` (`SMTP_SECURE="false"`)
-- **Mailgun**: `smtp.mailgun.org:587` (`SMTP_SECURE="false"`)
-- **Brevo**: `smtp-relay.brevo.com:587` (`SMTP_SECURE="false"`)
-- **Amazon SES**: `email-smtp.[region].amazonaws.com:587` (`SMTP_SECURE="false"`)
-
-**Port Settings:**
-- Port 587: Use `SMTP_SECURE="false"` (STARTTLS)
-- Port 465: Use `SMTP_SECURE="true"` (SSL/TLS)
-
-**Note**: If SMTP is not configured, the application will attempt to use localhost:25, which will likely fail. At least one email provider must be configured for the application to send emails.
-
-## 🚀 Deployment
-
-The application is designed to be deployed on platforms that support Next.js:
-
-### Environment Variables for Production
-
-Ensure all required environment variables are configured in your deployment environment. Pay special attention to:
-
-- `NEXTAUTH_URL`: Must match your production domain
-- `DATABASE_URL`: Production database connection string
-- AWS credentials and S3 bucket configuration
-- Email service configuration
-
-### Database Migrations
-
-Run migrations in production:
 ```bash
 npx prisma migrate deploy
 ```
 
-## 🤝 Contributing
+## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Create a feature branch
+2. Make focused changes with clear commits
+3. Run `yarn typecheck` and relevant checks
+4. Open a PR with summary, verification steps, and screenshots for UI changes
 
-## 📝 Code Conventions
+## License
 
-- Follow TypeScript strict typing
-- Use Tailwind CSS exclusively for styling
-- Implement early returns for better readability
-- Use const arrow functions over function declarations
-- Prefix event handlers with "handle"
-- Include accessibility features on interactive elements
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🐛 Issues & Support
-
-If you encounter any issues or have questions, please [open an issue](../../issues) on GitHub.
+MIT. See [LICENSE](LICENSE).
