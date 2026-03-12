@@ -6,6 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
+    "test": "node --import ./tests/register-hooks.mjs --test tests/*.test.ts",
+    "test:watch": "node --watch --import ./tests/register-hooks.mjs --test tests/*.test.ts",
     "lint": "biome lint .",
     "lint:fix": "biome lint . --write",
     "format": "biome format .",
