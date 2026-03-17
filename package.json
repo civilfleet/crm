@@ -56,7 +56,7 @@
     "leaflet": "^1.9.4",
     "lodash": "^4.17.23",
     "lucide-react": "^0.575.0",
-    "next": "16.1.6",
+    "next": "16.1.7",
     "next-auth": "^5.0.0-beta.30",
     "nextjs-toploader": "^3.9.17",
     "nodemailer": "^7.0.1",
