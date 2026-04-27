@@ -110,13 +110,13 @@ Application URL: `http://localhost:3000`
 
 ### Docker Compose
 
-To run the app, Postgres, schema bootstrap, and the Zammad worker together:
+To run the app, Postgres, migrations, and the Zammad worker together:
 
 ```bash
 docker compose up --build
 ```
 
-The `migrate` service uses `prisma db push` for local Docker bootstrap because the historical migration order does not replay cleanly into an empty database. Use `prisma migrate deploy` for production databases whose migration history is already established. The `worker` service runs the Zammad worker from the same image as the web app and processes queued sync jobs outside API requests.
+The `migrate` service runs `prisma migrate deploy` before the web app and worker start. The `worker` service runs the Zammad worker from the same image as the web app and processes queued sync jobs outside API requests.
 
 ## Available Scripts
 

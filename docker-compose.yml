@@ -40,14 +40,7 @@ services:
     image: crm-app:local
     build:
       context: .
-    command:
-      [
-        "node",
-        "node_modules/prisma/build/index.js",
-        "db",
-        "push",
-        "--accept-data-loss",
-      ]
+    command: ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
     environment:
       <<: *app-env
     depends_on:

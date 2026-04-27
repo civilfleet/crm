@@ -1,3 +1,0 @@
-ALTER TABLE "Contact"
-ADD COLUMN "pronouns" VARCHAR(120),
-ADD COLUMN "city" VARCHAR(255);
