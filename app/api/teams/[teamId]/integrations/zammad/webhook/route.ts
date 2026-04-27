@@ -17,7 +17,7 @@ export async function POST(
       signature,
     });
 
-    return NextResponse.json({ data: result }, { status: 200 });
+    return NextResponse.json({ data: result }, { status: 202 });
   } catch (error) {
     const { message } = handlePrismaError(error);
     return NextResponse.json(

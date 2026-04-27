@@ -2,6 +2,8 @@ import Link from "next/link";
 import OrganizationTable from "@/components/table/organization-table";
 import { Button } from "@/components/ui/button";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminOrganizationsPage() {
   return (
     <div className="p-4">

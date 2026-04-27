@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { handlePrismaError } from "@/lib/utils";
-import { syncZammadIntegration } from "@/services/integrations/zammad";
+import { getZammadIntegration } from "@/services/integrations/zammad";
+import { enqueueZammadSyncJob } from "@/services/integrations/zammad-queue";
 
 export async function POST(
   request: Request,
@@ -14,9 +15,26 @@ export async function POST(
       fullSyncParam === "1" ||
       fullSyncParam === "true" ||
       fullSyncParam === "yes";
-    const result = await syncZammadIntegration(teamId, { fullSync });
+    const integration = await getZammadIntegration(teamId);
+    if (!integration?.hasApiKey || !integration.baseUrl) {
+      throw new Error("Zammad integration is not configured for this team.");
+    }
+    if (!integration.isEnabled) {
+      throw new Error("Zammad integration is currently disabled.");
+    }
 
-    return NextResponse.json({ data: result }, { status: 200 });
+    const job = await enqueueZammadSyncJob(teamId, { fullSync });
+
+    return NextResponse.json(
+      {
+        data: {
+          jobId: job.id,
+          status: job.status,
+          type: job.type,
+        },
+      },
+      { status: 202 },
+    );
   } catch (error) {
     const { message } = handlePrismaError(error);
     return NextResponse.json(

@@ -227,17 +227,17 @@ export default function ZammadIntegration({ teamId }: ZammadIntegrationProps) {
       }
 
       const result = json.data as {
-        engagementsUpserted?: number;
-        lastSyncedAt?: string;
+        jobId?: string;
+        status?: string;
       };
 
-      const syncedAt = result?.lastSyncedAt;
-      setLastSyncedAt(syncedAt);
       setConnectionVerified(true);
 
       toast({
-        title: fullSync ? "Full sync finished" : "Zammad sync finished",
-        description: `Synced ${result?.engagementsUpserted ?? 0} ticket messages into engagement history.`,
+        title: fullSync ? "Full sync queued" : "Zammad sync queued",
+        description: result?.jobId
+          ? `Worker job ${result.jobId} is ${result.status?.toLowerCase() ?? "queued"}.`
+          : "The worker will sync matching ticket messages into engagement history.",
       });
     } catch (error) {
       toast({

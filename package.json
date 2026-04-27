@@ -14,6 +14,7 @@
     "check": "biome check . --diagnostic-level error && tsc --noEmit",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "typecheck:watch": "tsc --noEmit -w -p tsconfig.json",
+    "zammad:worker": "tsx scripts/zammad-worker.ts",
     "s3:cors:apply": "tsx scripts/manage-s3-cors.ts apply",
     "s3:cors:check": "tsx scripts/manage-s3-cors.ts check",
     "s3:cors:print": "tsx scripts/manage-s3-cors.ts print",

@@ -213,6 +213,7 @@ model Teams {
   groups       Group[]
   integrationConnections IntegrationConnection[]
   zammadGroupSettings ZammadGroupSetting[]
+  zammadSyncJobs ZammadSyncJob[]
   contactFieldAccesses ContactFieldAccess[]
   organizationEngagements OrganizationEngagement[]
   fileDownloadAudits FileDownloadAudit[]
@@ -300,6 +301,31 @@ model ZammadGroupSetting {
   @@index([teamId])
 }
 
+model ZammadSyncJob {
+  id          String              @id @default(uuid()) @unique
+  teamId      String
+  team        Teams               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  type        ZammadSyncJobType
+  status      ZammadSyncJobStatus @default(PENDING)
+  ticketId    Int?
+  payload     Json?
+  result      Json?
+  attempts    Int                 @default(0)
+  maxAttempts Int                 @default(5)
+  runAfter    DateTime            @default(now()) @db.Timestamptz(6)
+  lockedAt    DateTime?           @db.Timestamptz(6)
+  lockedBy    String?             @db.VarChar(255)
+  startedAt   DateTime?           @db.Timestamptz(6)
+  finishedAt  DateTime?           @db.Timestamptz(6)
+  lastError   String?             @db.Text
+  createdAt   DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime            @updatedAt @db.Timestamptz(6)
+
+  @@index([status, runAfter])
+  @@index([teamId, status])
+  @@index([lockedAt])
+}
+
 model User {
   id             String           @id @default(uuid()) @unique
   name           String?          @db.VarChar(255)
@@ -382,6 +408,19 @@ enum AppModule {
 enum IntegrationProvider {
   KLAVIYO
   ZAMMAD
+}
+
+enum ZammadSyncJobType {
+  INCREMENTAL_SYNC
+  FULL_SYNC
+  TICKET_SYNC
+}
+
+enum ZammadSyncJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
 }
 
 enum ContactGender {
