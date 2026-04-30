@@ -3,6 +3,8 @@ import { auth } from "@/auth";
 import { getUserCurrent } from "@/services/users";
 import { Roles } from "@/types";
 
+export const dynamic = "force-dynamic";
+
 export default async function Page() {
   const session = await auth();
 

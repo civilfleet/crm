@@ -1,0 +1,78 @@
+x-app-env: &app-env
+  DATABASE_URL: postgresql://crm:crm@postgres:5432/crm
+  AUTH_SECRET: local-docker-auth-secret-change-me
+  AUTH_URL: http://localhost:3000/api/auth
+  NEXTAUTH_URL: http://localhost:3000/api/auth
+  NEXT_PUBLIC_BASE_URL: http://localhost:3000
+  NEXT_PUBLIC_APP_URL: http://localhost:3000
+  NEXT_PUBLIC_APP_NAME: CRM
+  LOG_LEVEL: debug
+  SMTP_HOST: smtp.example.com
+  SMTP_PORT: "587"
+  SMTP_SECURE: "false"
+  SMTP_USER: local
+  SMTP_PASS: local
+  SMTP_FROM: noreply@example.com
+  NEXT_AWS_S3_ACCESS_KEY: local
+  NEXT_AWS_S3_ACCESS_SECRET: local
+  NEXT_AWS_S3_BUCKET_NAME: local
+  NEXT_AWS_S3_BUCKET_REGION: us-east-1
+  NEXT_AWS_S3_ENDPOINT: http://localhost:9000
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: crm
+      POSTGRES_USER: crm
+      POSTGRES_PASSWORD: crm
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm -d crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: crm-app:local
+    build:
+      context: .
+    command: ["node", "node_modules/prisma/build/index.js", "migrate", "deploy"]
+    environment:
+      <<: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  app:
+    image: crm-app:local
+    build:
+      context: .
+    command:
+      ["node", "node_modules/next/dist/bin/next", "start", "-H", "0.0.0.0"]
+    environment:
+      <<: *app-env
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    image: crm-app:local
+    build:
+      context: .
+    command: ["node", "--import", "tsx", "scripts/zammad-worker.ts"]
+    environment:
+      <<: *app-env
+      ZAMMAD_WORKER_POLL_INTERVAL_MS: "5000"
+      ZAMMAD_WORKER_STALE_LOCK_MS: "3600000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  postgres-data:

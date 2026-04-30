@@ -108,6 +108,16 @@ yarn dev
 
 Application URL: `http://localhost:3000`
 
+### Docker Compose
+
+To run the app, Postgres, migrations, and the Zammad worker together:
+
+```bash
+docker compose up --build
+```
+
+The `migrate` service runs `prisma migrate deploy` before the web app and worker start. The `worker` service runs the Zammad worker from the same image as the web app and processes queued sync jobs outside API requests.
+
 ## Available Scripts
 
 ```bash
@@ -115,6 +125,7 @@ Application URL: `http://localhost:3000`
 yarn dev
 yarn build
 yarn start
+yarn zammad:worker
 
 # Quality checks
 yarn lint          # biome lint .

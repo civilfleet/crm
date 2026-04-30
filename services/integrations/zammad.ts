@@ -3,6 +3,7 @@ import { IntegrationProvider as PrismaIntegrationProvider } from "@prisma/client
 import prisma from "@/lib/prisma";
 import { EngagementDirection, EngagementSource } from "@/types";
 import logger from "@/lib/logger";
+import { enqueueZammadTicketSyncJob } from "@/services/integrations/zammad-queue";
 
 const ZAMMAD_SOURCE_PREFIX = "ZAMMAD";
 
@@ -541,6 +542,7 @@ export const syncZammadIntegration = async (
     fullSync,
   }, "[Zammad] Sync start");
 
+  const syncStartedAt = new Date();
   const groupSettings = await getZammadGroupSettingsMap(teamId);
   const perPage = 50;
   const tickets: ZammadTicket[] = [];
@@ -623,7 +625,7 @@ export const syncZammadIntegration = async (
 
   const updated = await prisma.integrationConnection.update({
     where: { id: integration.id },
-    data: { lastSyncedAt: new Date() },
+    data: { lastSyncedAt: syncStartedAt },
     select: { lastSyncedAt: true },
   });
 
@@ -637,6 +639,66 @@ export const syncZammadIntegration = async (
     engagementsUpserted,
     lastSyncedAt: updated.lastSyncedAt?.toISOString(),
   };
+};
+
+export const syncZammadTicket = async (teamId: string, ticketId: number) => {
+  const integration = await prisma.integrationConnection.findUnique({
+    where: {
+      teamId_provider: {
+        teamId,
+        provider: PrismaIntegrationProvider.ZAMMAD,
+      },
+    },
+  });
+
+  if (!integration || !integration.apiKey || !integration.baseUrl) {
+    logger.error({ teamId }, "[Zammad] Ticket sync missing integration settings");
+    throw new Error("Zammad integration is not configured for this team.");
+  }
+
+  if (!integration.isEnabled) {
+    logger.warn({
+      teamId,
+    }, "[Zammad] Ticket sync skipped because integration is disabled");
+    throw new Error("Zammad integration is currently disabled.");
+  }
+
+  const { ticket, articles } = await getTicketArticles(
+    integration.baseUrl,
+    integration.apiKey,
+    ticketId,
+  );
+
+  const groupSettings = await getZammadGroupSettingsMap(teamId);
+  const groupId = ticket.group_id;
+  const groupSetting = groupId ? groupSettings.get(groupId) : undefined;
+  if (!groupSetting?.importEnabled) {
+    return { engagementsUpserted: 0, ticketId };
+  }
+
+  let engagementsUpserted = 0;
+
+  for (const article of articles) {
+    const contactId = await upsertArticleEngagement(
+      teamId,
+      ticket,
+      article,
+      integration.baseUrl,
+      undefined,
+      groupSetting?.autoCreateContacts ?? false,
+    );
+    if (contactId) {
+      engagementsUpserted += 1;
+    }
+  }
+
+  logger.info({
+    teamId,
+    ticketId,
+    engagementsUpserted,
+  }, "[Zammad] Ticket sync processed");
+
+  return { engagementsUpserted, ticketId };
 };
 
 export const handleZammadWebhook = async ({
@@ -705,55 +767,16 @@ export const handleZammadWebhook = async ({
     throw new Error("Webhook payload missing ticket id.");
   }
 
-  const hasPayloadArticles =
-    (payload.articles && payload.articles.length > 0) || payload.article;
-
-  const shouldFetchTicket =
-    !payload.ticket ||
-    !hasPayloadArticles ||
-    payload.ticket.group_id === undefined;
-
-  const { ticket, articles } = shouldFetchTicket
-    ? await getTicketArticles(
-        integration.baseUrl,
-        integration.apiKey,
-        ticketId,
-      )
-    : {
-        ticket: payload.ticket as ZammadTicket,
-        articles: payload.articles ?? (payload.article ? [payload.article] : []),
-      };
-
-  const groupSettings = await getZammadGroupSettingsMap(teamId);
-  const groupId = ticket.group_id;
-  const groupSetting = groupId ? groupSettings.get(groupId) : undefined;
-  if (!groupSetting?.importEnabled) {
-    return { engagementsUpserted: 0 };
-  }
-
-  let engagementsUpserted = 0;
-
-  for (const article of articles) {
-    const contactId = await upsertArticleEngagement(
-      teamId,
-      ticket,
-      article,
-      integration.baseUrl,
-      undefined,
-      groupSetting?.autoCreateContacts ?? false,
-    );
-    if (contactId) {
-      engagementsUpserted += 1;
-    }
-  }
+  const job = await enqueueZammadTicketSyncJob({ teamId, ticketId });
 
   logger.info({
     teamId,
     ticketId,
-    engagementsUpserted,
-  }, "[Zammad] Webhook processed");
+    jobId: job.id,
+    status: job.status,
+  }, "[Zammad] Webhook queued");
 
-  return { engagementsUpserted };
+  return { jobId: job.id, status: job.status, ticketId };
 };
 
 export const replyToZammadTicket = async ({

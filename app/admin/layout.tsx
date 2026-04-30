@@ -10,6 +10,8 @@ import {
 import { getAdminUser, getUserCurrent } from "@/services/users";
 import { Roles } from "@/types";
 
+export const dynamic = "force-dynamic";
+
 export default async function RootLayout({
   children,
 }: Readonly<{

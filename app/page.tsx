@@ -6,6 +6,8 @@ import { getUserCurrent } from "@/services/users";
 import { Roles } from "@/types";
 import { APP_NAME } from "@/constants/app";
 
+export const dynamic = "force-dynamic";
+
 export default async function LoginPage() {
   const session = await auth();
 
