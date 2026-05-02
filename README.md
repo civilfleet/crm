@@ -118,6 +118,14 @@ docker compose up --build
 
 The `migrate` service runs `prisma migrate deploy` before the web app and worker start. The `worker` service runs the Zammad worker from the same image as the web app and processes queued sync jobs outside API requests.
 
+To bootstrap an initial admin on a fresh database, set `BOOTSTRAP_ADMIN_EMAIL` and optionally `BOOTSTRAP_ADMIN_NAME`:
+
+```bash
+BOOTSTRAP_ADMIN_EMAIL=admin@example.com BOOTSTRAP_ADMIN_NAME="Local Admin" docker compose up --build
+```
+
+If `BOOTSTRAP_ADMIN_EMAIL` is unset, bootstrap exits without changing data. No password is created; the admin signs in through the configured SMTP magic link.
+
 ## Available Scripts
 
 ```bash
@@ -125,6 +133,7 @@ The `migrate` service runs `prisma migrate deploy` before the web app and worker
 yarn dev
 yarn build
 yarn start
+yarn bootstrap:admin
 yarn zammad:worker
 
 # Quality checks
