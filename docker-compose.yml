@@ -5,7 +5,7 @@ x-app-env: &app-env
   NEXTAUTH_URL: http://localhost:3000/api/auth
   NEXT_PUBLIC_BASE_URL: http://localhost:3000
   NEXT_PUBLIC_APP_URL: http://localhost:3000
-  NEXT_PUBLIC_APP_NAME: CRM
+  NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Sea-Watch CRM}
   LOG_LEVEL: debug
   SMTP_HOST: smtp.example.com
   SMTP_PORT: "587"
@@ -15,13 +15,47 @@ x-app-env: &app-env
   SMTP_FROM: noreply@example.com
   BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
   BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Local Admin}
-  NEXT_AWS_S3_ACCESS_KEY: local
-  NEXT_AWS_S3_ACCESS_SECRET: local
-  NEXT_AWS_S3_BUCKET_NAME: local
-  NEXT_AWS_S3_BUCKET_REGION: us-east-1
-  NEXT_AWS_S3_ENDPOINT: http://localhost:9000
+  NEXT_AWS_S3_ACCESS_KEY: ${NEXT_AWS_S3_ACCESS_KEY:-local}
+  NEXT_AWS_S3_ACCESS_SECRET: ${NEXT_AWS_S3_ACCESS_SECRET:-local-secret}
+  NEXT_AWS_S3_BUCKET_NAME: ${NEXT_AWS_S3_BUCKET_NAME:-crm}
+  NEXT_AWS_S3_BUCKET_REGION: ${NEXT_AWS_S3_BUCKET_REGION:-us-east-1}
+  NEXT_AWS_S3_ENDPOINT: ${NEXT_AWS_S3_ENDPOINT:-http://seaweedfs:8333}
+  NEXT_AWS_S3_PUBLIC_ENDPOINT: ${NEXT_AWS_S3_PUBLIC_ENDPOINT:-http://localhost:8333}
 
 services:
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    command:
+      [
+        "server",
+        "-dir=/data",
+        "-s3",
+        "-s3.config=/etc/seaweedfs/s3.json",
+      ]
+    ports:
+      - "8333:8333"
+      - "8888:8888"
+      - "9333:9333"
+    volumes:
+      - seaweedfs-data:/data
+      - ./config/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
+
+  seaweedfs-init:
+    image: amazon/aws-cli:2
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      until aws --endpoint-url=http://seaweedfs:8333 s3api list-buckets >/dev/null 2>&1;
+      do sleep 1; done;
+      aws --endpoint-url=http://seaweedfs:8333 s3api head-bucket --bucket "$${NEXT_AWS_S3_BUCKET_NAME}" >/dev/null 2>&1
+      || aws --endpoint-url=http://seaweedfs:8333 s3api create-bucket --bucket "$${NEXT_AWS_S3_BUCKET_NAME}"
+    environment:
+      AWS_ACCESS_KEY_ID: ${NEXT_AWS_S3_ACCESS_KEY:-local}
+      AWS_SECRET_ACCESS_KEY: ${NEXT_AWS_S3_ACCESS_SECRET:-local-secret}
+      AWS_DEFAULT_REGION: ${NEXT_AWS_S3_BUCKET_REGION:-us-east-1}
+      NEXT_AWS_S3_BUCKET_NAME: ${NEXT_AWS_S3_BUCKET_NAME:-crm}
+    depends_on:
+      - seaweedfs
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -73,6 +107,8 @@ services:
     depends_on:
       bootstrap:
         condition: service_completed_successfully
+      seaweedfs-init:
+        condition: service_completed_successfully
 
   worker:
     image: crm-app:local
@@ -86,6 +122,9 @@ services:
     depends_on:
       bootstrap:
         condition: service_completed_successfully
+      seaweedfs-init:
+        condition: service_completed_successfully
 
 volumes:
   postgres-data:
+  seaweedfs-data:

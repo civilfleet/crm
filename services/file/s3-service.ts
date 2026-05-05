@@ -2,7 +2,7 @@
 
 import { DeleteObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import s3Client from "@/lib/s3-client";
+import s3Client, { s3PresignClient } from "@/lib/s3-client";
 import logger from "@/lib/logger";
 
 import { cleanFileName } from "@/lib/utils";
@@ -25,7 +25,9 @@ export const uploadFile = async ({
     });
 
     // Generate pre-signed PUT URL
-    const putUrl = await getSignedUrl(s3Client, command, { expiresIn: 500 });
+    const putUrl = await getSignedUrl(s3PresignClient, command, {
+      expiresIn: 500,
+    });
 
     return putUrl;
   } catch (error) {

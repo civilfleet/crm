@@ -116,7 +116,7 @@ To run the app, Postgres, migrations, and the Zammad worker together:
 docker compose up --build
 ```
 
-The `migrate` service runs `prisma migrate deploy` before the web app and worker start. The `worker` service runs the Zammad worker from the same image as the web app and processes queued sync jobs outside API requests.
+The `seaweedfs` service provides local S3-compatible storage, and `seaweedfs-init` creates the default `crm` bucket before the web app and worker start. The `migrate` service runs `prisma migrate deploy` before the web app and worker start. The `worker` service runs the Zammad worker from the same image as the web app and processes queued sync jobs outside API requests.
 
 To bootstrap an initial admin on a fresh database, set `BOOTSTRAP_ADMIN_EMAIL` and optionally `BOOTSTRAP_ADMIN_NAME`:
 
@@ -161,6 +161,17 @@ NEXT_AWS_S3_ACCESS_SECRET="..."
 NEXT_AWS_S3_BUCKET_NAME="..."
 NEXT_AWS_S3_BUCKET_REGION="..."
 NEXT_AWS_S3_ENDPOINT="https://s3.<your-region>.provider.com"
+NEXT_AWS_S3_PUBLIC_ENDPOINT="https://s3.<your-region>.provider.com"
+```
+
+In Docker Compose, storage defaults to SeaweedFS:
+
+```env
+NEXT_AWS_S3_ENDPOINT="http://seaweedfs:8333"
+NEXT_AWS_S3_PUBLIC_ENDPOINT="http://localhost:8333"
+NEXT_AWS_S3_ACCESS_KEY="local"
+NEXT_AWS_S3_ACCESS_SECRET="local-secret"
+NEXT_AWS_S3_BUCKET_NAME="crm"
 ```
 
 Optional CORS script overrides:
