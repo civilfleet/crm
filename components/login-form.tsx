@@ -139,7 +139,7 @@ export function LoginForm({
       </form>
 
       <div className="text-center text-sm">
-        Don&apos;t have an account?{" "}
+        <div>Don&apos;t have an account?</div>
         <a
           href="mailto:it@sea-watch.org"
           className="underline underline-offset-4"
