@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    runs-on: [internal, linux-amd64]
+    runs-on: [internal, linux-amd64, docker-build]
     env:
       PACKAGE_REGISTRY: ${{ secrets.PACKAGE_REGISTRY }}
       PACKAGE_IMAGE: ${{ secrets.PACKAGE_IMAGE }}
