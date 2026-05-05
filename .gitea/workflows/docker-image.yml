@@ -19,7 +19,13 @@ jobs:
       PACKAGE_TOKEN: ${{ secrets.PACKAGE_TOKEN }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        run: |
+          set -euo pipefail
+
+          git init .
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --depth 1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
 
       - name: Check package configuration
         run: |
