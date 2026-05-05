@@ -15,11 +15,14 @@ jobs:
       DEPLOY_USER: ${{ vars.DEPLOY_USER }}
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
       DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
-      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
       DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
       DEPLOY_IMAGE: ${{ vars.DEPLOY_IMAGE }}
       DEPLOY_IMAGE_TAG: sha-${{ github.sha }}
       DEPLOY_COMPOSE_FILE: ${{ vars.DEPLOY_COMPOSE_FILE }}
+      PACKAGE_REGISTRY: ${{ vars.PACKAGE_REGISTRY }}
+      PACKAGE_USER: ${{ secrets.PACKAGE_USER }}
+      PACKAGE_TOKEN: ${{ secrets.PACKAGE_TOKEN }}
     steps:
       - name: Check deploy configuration
         run: |
@@ -30,9 +33,12 @@ jobs:
             DEPLOY_HOST \
             DEPLOY_USER \
             DEPLOY_PATH \
-            DEPLOY_SSH_KEY \
+            DEPLOY_SSH_KEY_B64 \
             DEPLOY_SSH_KNOWN_HOSTS \
-            DEPLOY_IMAGE
+            DEPLOY_IMAGE \
+            PACKAGE_REGISTRY \
+            PACKAGE_USER \
+            PACKAGE_TOKEN
           do
             if [ -z "${!name:-}" ]; then
               echo "Missing required secret: ${name}" >&2
@@ -49,7 +55,7 @@ jobs:
           set -euo pipefail
 
           install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy_key"
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 -d > "$HOME/.ssh/deploy_key"
           chmod 600 "$HOME/.ssh/deploy_key"
           printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
@@ -70,13 +76,19 @@ jobs:
             "$DEPLOY_PATH" \
             "$DEPLOY_IMAGE" \
             "$DEPLOY_IMAGE_TAG" \
-            "$DEPLOY_COMPOSE_FILE" <<'REMOTE'
+            "$DEPLOY_COMPOSE_FILE" \
+            "$PACKAGE_REGISTRY" \
+            "$PACKAGE_USER" \
+            "$PACKAGE_TOKEN" <<'REMOTE'
           set -euo pipefail
 
           DEPLOY_PATH="$1"
           DEPLOY_IMAGE="$2"
           DEPLOY_IMAGE_TAG="$3"
           DEPLOY_COMPOSE_FILE="$4"
+          PACKAGE_REGISTRY="$5"
+          PACKAGE_USER="$6"
+          PACKAGE_TOKEN="$7"
 
           cd "$DEPLOY_PATH"
 
@@ -84,6 +96,10 @@ jobs:
           CRM_IMAGE=$DEPLOY_IMAGE
           CRM_IMAGE_TAG=$DEPLOY_IMAGE_TAG
           EOF
+
+          printf '%s\n' "$PACKAGE_TOKEN" | docker login "$PACKAGE_REGISTRY" \
+            --username "$PACKAGE_USER" \
+            --password-stdin
 
           for attempt in $(seq 1 12); do
             if docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" pull; then
