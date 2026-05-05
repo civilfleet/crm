@@ -141,7 +141,7 @@ export function LoginForm({
       <div className="text-center text-sm">
         Don&apos;t have an account?{" "}
         <a
-          href="mailto:support@lnob.net"
+          href="mailto:it@sea-watch.org"
           className="underline underline-offset-4"
         >
           Please contact us to create one
