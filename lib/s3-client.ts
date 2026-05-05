@@ -10,6 +10,7 @@ const createS3Client = (endpoint?: string) => {
     forcePathStyle: true,
     endpoint,
     region: process.env.NEXT_AWS_S3_BUCKET_REGION,
+    requestChecksumCalculation: "WHEN_REQUIRED",
     credentials: {
       accessKeyId: process.env.NEXT_AWS_S3_ACCESS_KEY as string,
       secretAccessKey: process.env.NEXT_AWS_S3_ACCESS_SECRET as string,
