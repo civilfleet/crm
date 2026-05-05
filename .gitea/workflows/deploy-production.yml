@@ -9,7 +9,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: [internal, deploy, linux-amd64]
+    runs-on: deploy
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}

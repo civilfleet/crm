@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    runs-on: [internal, linux-amd64, docker-build]
+    runs-on: docker-build
     env:
       PACKAGE_REGISTRY: ${{ secrets.PACKAGE_REGISTRY }}
       PACKAGE_IMAGE: ${{ secrets.PACKAGE_IMAGE }}
@@ -92,7 +92,7 @@ jobs:
   deploy:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: [internal, deploy, linux-amd64]
+    runs-on: deploy
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
