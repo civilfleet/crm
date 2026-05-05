@@ -92,17 +92,17 @@ jobs:
 
           cd "$DEPLOY_PATH"
 
-          cat > .env.deploy <<EOF
-          CRM_IMAGE=$DEPLOY_IMAGE
-          CRM_IMAGE_TAG=$DEPLOY_IMAGE_TAG
-          EOF
+          printf 'CRM_IMAGE=%s\nCRM_IMAGE_TAG=%s\n' \
+            "$DEPLOY_IMAGE" \
+            "$DEPLOY_IMAGE_TAG" \
+            | sudo tee .env.deploy >/dev/null
 
-          printf '%s\n' "$PACKAGE_TOKEN" | docker login "$PACKAGE_REGISTRY" \
+          printf '%s\n' "$PACKAGE_TOKEN" | sudo docker login "$PACKAGE_REGISTRY" \
             --username "$PACKAGE_USER" \
             --password-stdin
 
           for attempt in $(seq 1 12); do
-            if docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" pull; then
+            if sudo docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" pull; then
               break
             fi
 
@@ -114,6 +114,6 @@ jobs:
             sleep 10
           done
 
-          docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" up -d --remove-orphans
-          docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" ps
+          sudo docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" up -d --remove-orphans
+          sudo docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" ps
           REMOTE
