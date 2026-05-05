@@ -13,8 +13,8 @@ jobs:
   build:
     runs-on: docker-build
     env:
-      PACKAGE_REGISTRY: ${{ secrets.PACKAGE_REGISTRY }}
-      PACKAGE_IMAGE: ${{ secrets.PACKAGE_IMAGE }}
+      PACKAGE_REGISTRY: ${{ vars.PACKAGE_REGISTRY }}
+      PACKAGE_IMAGE: ${{ vars.PACKAGE_IMAGE }}
       PACKAGE_USER: ${{ secrets.PACKAGE_USER }}
       PACKAGE_TOKEN: ${{ secrets.PACKAGE_TOKEN }}
     steps:
@@ -94,15 +94,15 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: deploy
     env:
-      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
-      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
-      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
-      DEPLOY_IMAGE: ${{ secrets.DEPLOY_IMAGE }}
+      DEPLOY_IMAGE: ${{ vars.DEPLOY_IMAGE }}
       DEPLOY_IMAGE_TAG: sha-${{ github.sha }}
-      DEPLOY_COMPOSE_FILE: ${{ secrets.DEPLOY_COMPOSE_FILE }}
+      DEPLOY_COMPOSE_FILE: ${{ vars.DEPLOY_COMPOSE_FILE }}
     steps:
       - name: Check deploy configuration
         run: |
