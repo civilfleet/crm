@@ -226,8 +226,6 @@ PACKAGE_REGISTRY
 PACKAGE_IMAGE
 DEPLOY_HOST
 DEPLOY_USER
-DEPLOY_PATH
-DEPLOY_IMAGE
 ```
 
 Required Gitea secrets:
@@ -243,16 +241,10 @@ Optional Gitea variables:
 
 ```text
 DEPLOY_PORT
-DEPLOY_COMPOSE_FILE
+DEPLOY_SCRIPT_PATH
 ```
 
-`PACKAGE_REGISTRY` should be the registry host, for example `gitea.example.org`. `PACKAGE_IMAGE` and `DEPLOY_IMAGE` should point at the image repository, for example `gitea.example.org/your-org/crm`. The deployed tag is `sha-<commit>`. The deploy workflow reuses `PACKAGE_USER` and `PACKAGE_TOKEN` to run `docker login` on the production host before pulling the private image.
-
-The production Compose service image should be parameterized, for example:
-
-```yaml
-image: ${CRM_IMAGE}:${CRM_IMAGE_TAG}
-```
+`PACKAGE_REGISTRY` should be the registry host, for example `gitea.example.org`. `PACKAGE_IMAGE` should point at the image repository, for example `gitea.example.org/your-org/crm`. The deployed tag is `sha-<commit>`. The deploy workflow SSHes into the production host and runs `sudo ${DEPLOY_SCRIPT_PATH:-/usr/local/sbin/deploy-crm} sha-<commit>`.
 
 ## Contributing
 

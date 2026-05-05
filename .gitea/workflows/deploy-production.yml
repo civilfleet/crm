@@ -14,15 +14,10 @@ jobs:
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
       DEPLOY_USER: ${{ vars.DEPLOY_USER }}
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
-      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+      DEPLOY_SCRIPT_PATH: ${{ vars.DEPLOY_SCRIPT_PATH }}
       DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
       DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
-      DEPLOY_IMAGE: ${{ vars.DEPLOY_IMAGE }}
       DEPLOY_IMAGE_TAG: sha-${{ github.sha }}
-      DEPLOY_COMPOSE_FILE: ${{ vars.DEPLOY_COMPOSE_FILE }}
-      PACKAGE_REGISTRY: ${{ vars.PACKAGE_REGISTRY }}
-      PACKAGE_USER: ${{ secrets.PACKAGE_USER }}
-      PACKAGE_TOKEN: ${{ secrets.PACKAGE_TOKEN }}
     steps:
       - name: Check deploy configuration
         run: |
@@ -32,13 +27,8 @@ jobs:
           for name in \
             DEPLOY_HOST \
             DEPLOY_USER \
-            DEPLOY_PATH \
             DEPLOY_SSH_KEY_B64 \
-            DEPLOY_SSH_KNOWN_HOSTS \
-            DEPLOY_IMAGE \
-            PACKAGE_REGISTRY \
-            PACKAGE_USER \
-            PACKAGE_TOKEN
+            DEPLOY_SSH_KNOWN_HOSTS
           do
             if [ -z "${!name:-}" ]; then
               echo "Missing required secret: ${name}" >&2
@@ -65,7 +55,7 @@ jobs:
           set -euo pipefail
 
           DEPLOY_PORT="${DEPLOY_PORT:-22}"
-          DEPLOY_COMPOSE_FILE="${DEPLOY_COMPOSE_FILE:-docker-compose.yml}"
+          DEPLOY_SCRIPT_PATH="${DEPLOY_SCRIPT_PATH:-/usr/local/sbin/deploy-crm}"
 
           ssh -i "$HOME/.ssh/deploy_key" \
             -p "$DEPLOY_PORT" \
@@ -73,47 +63,12 @@ jobs:
             -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" \
             bash -se -- \
-            "$DEPLOY_PATH" \
-            "$DEPLOY_IMAGE" \
-            "$DEPLOY_IMAGE_TAG" \
-            "$DEPLOY_COMPOSE_FILE" \
-            "$PACKAGE_REGISTRY" \
-            "$PACKAGE_USER" \
-            "$PACKAGE_TOKEN" <<'REMOTE'
+            "$DEPLOY_SCRIPT_PATH" \
+            "$DEPLOY_IMAGE_TAG" <<'REMOTE'
           set -euo pipefail
 
-          DEPLOY_PATH="$1"
-          DEPLOY_IMAGE="$2"
-          DEPLOY_IMAGE_TAG="$3"
-          DEPLOY_COMPOSE_FILE="$4"
-          PACKAGE_REGISTRY="$5"
-          PACKAGE_USER="$6"
-          PACKAGE_TOKEN="$7"
+          DEPLOY_SCRIPT_PATH="$1"
+          DEPLOY_IMAGE_TAG="$2"
 
-          cd "$DEPLOY_PATH"
-
-          printf 'CRM_IMAGE=%s\nCRM_IMAGE_TAG=%s\n' \
-            "$DEPLOY_IMAGE" \
-            "$DEPLOY_IMAGE_TAG" \
-            | sudo tee .env.deploy >/dev/null
-
-          printf '%s\n' "$PACKAGE_TOKEN" | sudo docker login "$PACKAGE_REGISTRY" \
-            --username "$PACKAGE_USER" \
-            --password-stdin
-
-          for attempt in $(seq 1 12); do
-            if sudo docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" pull; then
-              break
-            fi
-
-            if [ "$attempt" -eq 12 ]; then
-              exit 1
-            fi
-
-            echo "Image pull failed; retrying in 10s (${attempt}/12)" >&2
-            sleep 10
-          done
-
-          sudo docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" up -d --remove-orphans
-          sudo docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" ps
+          sudo "$DEPLOY_SCRIPT_PATH" "$DEPLOY_IMAGE_TAG"
           REMOTE
