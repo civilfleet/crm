@@ -1,0 +1,103 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, vpn, deploy]
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+      DEPLOY_IMAGE: ${{ secrets.DEPLOY_IMAGE }}
+      DEPLOY_IMAGE_TAG: sha-${{ github.sha }}
+      DEPLOY_COMPOSE_FILE: ${{ secrets.DEPLOY_COMPOSE_FILE }}
+    steps:
+      - name: Check deploy configuration
+        run: |
+          set -euo pipefail
+
+          missing=0
+          for name in \
+            DEPLOY_HOST \
+            DEPLOY_USER \
+            DEPLOY_PATH \
+            DEPLOY_SSH_KEY \
+            DEPLOY_SSH_KNOWN_HOSTS \
+            DEPLOY_IMAGE
+          do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required secret: ${name}" >&2
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/deploy_key"
+          printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Deploy over SSH
+        run: |
+          set -euo pipefail
+
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          DEPLOY_COMPOSE_FILE="${DEPLOY_COMPOSE_FILE:-docker-compose.yml}"
+
+          ssh -i "$HOME/.ssh/deploy_key" \
+            -p "$DEPLOY_PORT" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            bash -se -- \
+            "$DEPLOY_PATH" \
+            "$DEPLOY_IMAGE" \
+            "$DEPLOY_IMAGE_TAG" \
+            "$DEPLOY_COMPOSE_FILE" <<'REMOTE'
+          set -euo pipefail
+
+          DEPLOY_PATH="$1"
+          DEPLOY_IMAGE="$2"
+          DEPLOY_IMAGE_TAG="$3"
+          DEPLOY_COMPOSE_FILE="$4"
+
+          cd "$DEPLOY_PATH"
+
+          cat > .env.deploy <<EOF
+          CRM_IMAGE=$DEPLOY_IMAGE
+          CRM_IMAGE_TAG=$DEPLOY_IMAGE_TAG
+          EOF
+
+          for attempt in $(seq 1 12); do
+            if docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" pull; then
+              break
+            fi
+
+            if [ "$attempt" -eq 12 ]; then
+              exit 1
+            fi
+
+            echo "Image pull failed; retrying in 10s (${attempt}/12)" >&2
+            sleep 10
+          done
+
+          docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" up -d --remove-orphans
+          docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" ps
+          REMOTE

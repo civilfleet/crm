@@ -1,0 +1,174 @@
+name: Docker Image
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: [self-hosted, vpn, docker]
+    env:
+      PACKAGE_REGISTRY: ${{ secrets.PACKAGE_REGISTRY }}
+      PACKAGE_IMAGE: ${{ secrets.PACKAGE_IMAGE }}
+      PACKAGE_USER: ${{ secrets.PACKAGE_USER }}
+      PACKAGE_TOKEN: ${{ secrets.PACKAGE_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check package configuration
+        run: |
+          set -euo pipefail
+
+          missing=0
+          for name in \
+            PACKAGE_REGISTRY \
+            PACKAGE_IMAGE \
+            PACKAGE_USER \
+            PACKAGE_TOKEN
+          do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required secret: ${name}" >&2
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Build image
+        env:
+          IMAGE_TAG: sha-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          REF_TAG=$(printf '%s' "$GITHUB_REF_NAME" \
+            | tr '[:upper:]' '[:lower:]' \
+            | tr '/:' '--' \
+            | tr -c 'a-z0-9_.-' '-' \
+            | sed 's/^-*//; s/-*$//; s/^$/ref/')
+
+          docker build \
+            -t "$PACKAGE_IMAGE:$IMAGE_TAG" \
+            -t "$PACKAGE_IMAGE:$REF_TAG" \
+            .
+
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            docker tag "$PACKAGE_IMAGE:$IMAGE_TAG" "$PACKAGE_IMAGE:latest"
+          fi
+
+      - name: Login to Gitea container registry
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$PACKAGE_TOKEN" | docker login "$PACKAGE_REGISTRY" \
+            --username "$PACKAGE_USER" \
+            --password-stdin
+
+      - name: Push image
+        if: github.event_name != 'pull_request'
+        env:
+          IMAGE_TAG: sha-${{ github.sha }}
+        run: |
+          set -euo pipefail
+          REF_TAG=$(printf '%s' "$GITHUB_REF_NAME" \
+            | tr '[:upper:]' '[:lower:]' \
+            | tr '/:' '--' \
+            | tr -c 'a-z0-9_.-' '-' \
+            | sed 's/^-*//; s/-*$//; s/^$/ref/')
+
+          docker push "$PACKAGE_IMAGE:$IMAGE_TAG"
+          docker push "$PACKAGE_IMAGE:$REF_TAG"
+
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            docker push "$PACKAGE_IMAGE:latest"
+          fi
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, vpn, deploy]
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+      DEPLOY_IMAGE: ${{ secrets.DEPLOY_IMAGE }}
+      DEPLOY_IMAGE_TAG: sha-${{ github.sha }}
+      DEPLOY_COMPOSE_FILE: ${{ secrets.DEPLOY_COMPOSE_FILE }}
+    steps:
+      - name: Check deploy configuration
+        run: |
+          set -euo pipefail
+
+          missing=0
+          for name in \
+            DEPLOY_HOST \
+            DEPLOY_USER \
+            DEPLOY_PATH \
+            DEPLOY_SSH_KEY \
+            DEPLOY_SSH_KNOWN_HOSTS \
+            DEPLOY_IMAGE
+          do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required secret: ${name}" >&2
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/deploy_key"
+          printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Deploy over SSH
+        run: |
+          set -euo pipefail
+
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          DEPLOY_COMPOSE_FILE="${DEPLOY_COMPOSE_FILE:-docker-compose.yml}"
+
+          ssh -i "$HOME/.ssh/deploy_key" \
+            -p "$DEPLOY_PORT" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            bash -se -- \
+            "$DEPLOY_PATH" \
+            "$DEPLOY_IMAGE" \
+            "$DEPLOY_IMAGE_TAG" \
+            "$DEPLOY_COMPOSE_FILE" <<'REMOTE'
+          set -euo pipefail
+
+          DEPLOY_PATH="$1"
+          DEPLOY_IMAGE="$2"
+          DEPLOY_IMAGE_TAG="$3"
+          DEPLOY_COMPOSE_FILE="$4"
+
+          cd "$DEPLOY_PATH"
+
+          cat > .env.deploy <<EOF
+          CRM_IMAGE=$DEPLOY_IMAGE
+          CRM_IMAGE_TAG=$DEPLOY_IMAGE_TAG
+          EOF
+
+          docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" pull
+          docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" up -d --remove-orphans
+          docker compose --env-file .env --env-file .env.deploy -f "$DEPLOY_COMPOSE_FILE" ps
+          REMOTE

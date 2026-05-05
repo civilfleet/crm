@@ -207,6 +207,48 @@ scripts/            Operational and data helper scripts
 npx prisma migrate deploy
 ```
 
+### Gitea Image Build And Production Deploy
+
+The GitHub workflow in `.github/workflows/mirror-to-gitea.yml` pushes `main` to Gitea. That Gitea push triggers `.gitea/workflows/docker-image.yml`, which builds and pushes the image to the Gitea container registry, then deploys it from a VPN-connected `act_runner` over SSH. It expects the production Compose file to use `CRM_IMAGE` and `CRM_IMAGE_TAG`, and writes those values to `.env.deploy` on the server before running `docker compose pull` and `docker compose up -d`.
+
+Required GitHub secrets for mirroring to Gitea:
+
+```text
+GITEA_MIRROR_SSH_KEY
+GITEA_MIRROR_REPO_SSH_URL
+GITEA_MIRROR_KNOWN_HOSTS
+```
+
+Required Gitea secrets:
+
+```text
+PACKAGE_REGISTRY
+PACKAGE_IMAGE
+PACKAGE_USER
+PACKAGE_TOKEN
+DEPLOY_HOST
+DEPLOY_USER
+DEPLOY_PATH
+DEPLOY_SSH_KEY
+DEPLOY_SSH_KNOWN_HOSTS
+DEPLOY_IMAGE
+```
+
+Optional Gitea secrets:
+
+```text
+DEPLOY_PORT
+DEPLOY_COMPOSE_FILE
+```
+
+`PACKAGE_REGISTRY` should be the registry host, for example `gitea.example.org`. `PACKAGE_IMAGE` and `DEPLOY_IMAGE` should point at the image repository, for example `gitea.example.org/your-org/crm`. The deployed tag is `sha-<commit>`.
+
+The production Compose service image should be parameterized, for example:
+
+```yaml
+image: ${CRM_IMAGE}:${CRM_IMAGE_TAG}
+```
+
 ## Contributing
 
 1. Create a feature branch
