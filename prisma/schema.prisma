@@ -207,6 +207,7 @@ model Teams {
   Transaction Transaction[]
   contacts     Contact[]
   contactLists ContactList[]
+  emailBatches EmailBatch[]
   events       Event[]
   eventRoles   EventRole[]
   eventTypes   EventType[]
@@ -413,6 +414,22 @@ enum IntegrationProvider {
   SCALEWAY_TEM
 }
 
+enum EmailBatchStatus {
+  SENDING
+  SENT
+  PARTIAL
+  FAILED
+}
+
+enum EmailRecipientStatus {
+  PENDING
+  SENT
+  SKIPPED
+  FAILED
+  DELIVERED
+  BOUNCED
+}
+
 enum ZammadSyncJobType {
   INCREMENTAL_SYNC
   FULL_SYNC
@@ -474,6 +491,7 @@ model Contact {
   events            EventContact[]
   registrations     EventRegistration[]
   engagements       ContactEngagement[]
+  emailRecipients   EmailRecipient[]
   changeLogs        ContactChangeLog[]
   lists             ContactListMember[]
   organizationsAsContactPerson Organization[] @relation("OrganizationContactPerson")
@@ -481,6 +499,53 @@ model Contact {
   @@index([groupId])
   @@index([teamId, groupId])
   @@unique([teamId, email])
+}
+
+model EmailBatch {
+  id          String              @id @default(uuid()) @unique
+  teamId      String
+  team        Teams               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  provider    IntegrationProvider
+  subject     String              @db.VarChar(500)
+  html        String              @db.Text
+  text        String?             @db.Text
+  senderEmail String?             @db.VarChar(255)
+  senderName  String?             @db.VarChar(255)
+  status      EmailBatchStatus    @default(SENDING)
+  requestedCount Int              @default(0)
+  sentCount      Int              @default(0)
+  skippedCount   Int              @default(0)
+  failedCount    Int              @default(0)
+  userId      String?
+  userName    String?             @db.VarChar(255)
+  recipients  EmailRecipient[]
+  createdAt   DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime            @updatedAt @db.Timestamptz(6)
+  completedAt DateTime?           @db.Timestamptz(6)
+
+  @@index([teamId, createdAt])
+  @@index([status])
+}
+
+model EmailRecipient {
+  id          String                @id @default(uuid()) @unique
+  batchId     String
+  batch       EmailBatch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  contactId   String?
+  contact     Contact?              @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  email       String                @db.VarChar(255)
+  name        String?               @db.VarChar(255)
+  status      EmailRecipientStatus  @default(PENDING)
+  providerMessageId String?         @db.VarChar(255)
+  errorMessage String?              @db.Text
+  sentAt      DateTime?             @db.Timestamptz(6)
+  createdAt   DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime              @updatedAt @db.Timestamptz(6)
+
+  @@index([batchId])
+  @@index([contactId])
+  @@index([email])
+  @@index([status])
 }
 
 model PostalCodeCentroid {

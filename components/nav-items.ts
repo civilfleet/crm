@@ -5,6 +5,7 @@ import {
   Calendar,
   FolderOpen,
   List,
+  Mail,
   type LucideIcon,
   Scroll,
   Settings,
@@ -107,6 +108,12 @@ const navItems: {
       title: "Lists",
       url: "crm/lists",
       icon: List,
+      module: "CRM",
+    },
+    {
+      title: "Emails",
+      url: "crm/emails",
+      icon: Mail,
       module: "CRM",
     },
     {

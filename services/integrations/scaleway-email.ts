@@ -4,7 +4,11 @@ import {
   IntegrationProvider,
   type IntegrationConnection,
 } from "@/types";
-import { IntegrationProvider as PrismaIntegrationProvider } from "@prisma/client";
+import {
+  EmailBatchStatus,
+  EmailRecipientStatus,
+  IntegrationProvider as PrismaIntegrationProvider,
+} from "@prisma/client";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 
@@ -36,6 +40,7 @@ export type SendMassEmailInput = {
 };
 
 export type SendMassEmailResult = {
+  batchId: string;
   requested: number;
   sent: number;
   skipped: number;
@@ -52,9 +57,9 @@ const maskApiKey = (value?: string | null) => {
     return undefined;
   }
   if (value.length <= 8) {
-    return "••••";
+    return "****";
   }
-  return `${value.slice(0, 4)}••••${value.slice(-4)}`;
+  return `${value.slice(0, 4)}****${value.slice(-4)}`;
 };
 
 const stripHtml = (html: string) =>
@@ -315,6 +320,20 @@ export const sendMassEmailToContacts = async ({
 
   const from = buildSender(integration);
   const region = integration.baseUrl || DEFAULT_REGION;
+  const batch = await prisma.emailBatch.create({
+    data: {
+      teamId,
+      provider: PrismaIntegrationProvider.SCALEWAY_TEM,
+      subject,
+      html,
+      text: stripHtml(html),
+      senderEmail: from.email,
+      senderName: from.name,
+      requestedCount: uniqueContactIds.length,
+      userId,
+      userName,
+    },
+  });
   const failures: SendMassEmailResult["failures"] = [];
   let sent = 0;
   let skipped = 0;
@@ -324,6 +343,16 @@ export const sendMassEmailToContacts = async ({
     const email = contact.email?.trim().toLowerCase();
     if (!email) {
       skipped += 1;
+      await prisma.emailRecipient.create({
+        data: {
+          batchId: batch.id,
+          contactId: contact.id,
+          email: "missing-email",
+          name: contact.name,
+          status: EmailRecipientStatus.SKIPPED,
+          errorMessage: "Contact has no email address.",
+        },
+      });
       failures.push({
         contactId: contact.id,
         message: "Contact has no email address.",
@@ -340,6 +369,18 @@ export const sendMassEmailToContacts = async ({
         to: { email, name: contact.name },
         subject,
         html,
+      });
+
+      await prisma.emailRecipient.create({
+        data: {
+          batchId: batch.id,
+          contactId: contact.id,
+          email,
+          name: contact.name,
+          status: EmailRecipientStatus.SENT,
+          providerMessageId: scalewayEmail.id,
+          sentAt: new Date(),
+        },
       });
 
       await prisma.contactEngagement.create({
@@ -367,6 +408,16 @@ export const sendMassEmailToContacts = async ({
         "Scaleway mass email recipient failed",
       );
       failed += 1;
+      await prisma.emailRecipient.create({
+        data: {
+          batchId: batch.id,
+          contactId: contact.id,
+          email,
+          name: contact.name,
+          status: EmailRecipientStatus.FAILED,
+          errorMessage: message,
+        },
+      });
       failures.push({ contactId: contact.id, email, message });
     }
   }
@@ -376,7 +427,26 @@ export const sendMassEmailToContacts = async ({
     skipped += missingContacts;
   }
 
+  const status =
+    sent > 0 && failed === 0 && skipped === 0
+      ? EmailBatchStatus.SENT
+      : sent > 0
+        ? EmailBatchStatus.PARTIAL
+        : EmailBatchStatus.FAILED;
+
+  await prisma.emailBatch.update({
+    where: { id: batch.id },
+    data: {
+      status,
+      sentCount: sent,
+      skippedCount: skipped,
+      failedCount: failed,
+      completedAt: new Date(),
+    },
+  });
+
   return {
+    batchId: batch.id,
     requested: uniqueContactIds.length,
     sent,
     skipped,
