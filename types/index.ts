@@ -25,6 +25,7 @@ export type AppModule = (typeof APP_MODULES)[number];
 export enum IntegrationProvider {
   KLAVIYO = "KLAVIYO",
   ZAMMAD = "ZAMMAD",
+  SCALEWAY_TEM = "SCALEWAY_TEM",
 }
 
 export enum ContactGender {
@@ -48,6 +49,8 @@ export interface IntegrationConnection {
   baseUrl?: string;
   webhookSecret?: string;
   defaultListId?: string;
+  senderEmail?: string;
+  senderName?: string;
   isEnabled: boolean;
   lastSyncedAt?: Date;
   createdAt: Date;

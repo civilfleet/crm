@@ -278,6 +278,8 @@ model IntegrationConnection {
   baseUrl       String?              @db.VarChar(500)
   webhookSecret String?              @db.Text
   defaultListId String?              @db.VarChar(255)
+  senderEmail   String?              @db.VarChar(255)
+  senderName    String?              @db.VarChar(255)
   isEnabled     Boolean              @default(true)
   lastSyncedAt  DateTime?            @db.Timestamptz(6)
   createdAt     DateTime             @default(now()) @db.Timestamptz(6)
@@ -408,6 +410,7 @@ enum AppModule {
 enum IntegrationProvider {
   KLAVIYO
   ZAMMAD
+  SCALEWAY_TEM
 }
 
 enum ZammadSyncJobType {

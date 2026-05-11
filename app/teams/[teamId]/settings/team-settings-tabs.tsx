@@ -9,6 +9,7 @@ import EventTypesManager from "@/components/forms/event-types-manager";
 import OrganizationTypesManager from "@/components/forms/organization-types-manager";
 import FormConfigurationManager from "@/components/forms/form-configuration-manager";
 import KlaviyoIntegration from "@/components/forms/klaviyo-integration";
+import ScalewayEmailIntegration from "@/components/forms/scaleway-email-integration";
 import StrategicPrioritiesForm from "@/components/forms/strategic-priorities";
 import TeamModulesForm from "@/components/forms/team-modules";
 import TeamSsoSettings from "@/components/forms/team-sso-settings";
@@ -200,6 +201,7 @@ export default function TeamSettingsTabs({
 
       <TabsContent value="integrations" className="space-y-8">
         <KlaviyoIntegration teamId={teamId} />
+        <ScalewayEmailIntegration teamId={teamId} />
         <ZammadIntegration teamId={teamId} />
       </TabsContent>
     </Tabs>

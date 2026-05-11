@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Filter, Loader2, Plus, X } from "lucide-react";
+import { Filter, Loader2, Mail, Plus, Send, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -20,6 +20,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -27,6 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -34,6 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import type { ContactFilter, ContactFilterType } from "@/types";
 
@@ -206,6 +216,11 @@ const isFilterComplete = (filter: ContactFilter) => {
 export default function ContactTable({ teamId }: ContactTableProps) {
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [emailRecipients, setEmailRecipients] = useState<ContactRow[]>([]);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
   const [filters, setFilters] = useState<ContactFilter[]>([]);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -853,6 +868,71 @@ export default function ContactTable({ teamId }: ContactTableProps) {
     }
   };
 
+  const openEmailDialog = (selectedRows: ContactRow[]) => {
+    setEmailRecipients(selectedRows);
+    setIsEmailDialogOpen(true);
+  };
+
+  const handleSendEmail = async (clearSelection: () => void) => {
+    const contactIds = emailRecipients.map((contact) => contact.id);
+    if (contactIds.length === 0) {
+      return;
+    }
+
+    setIsSendingEmail(true);
+    try {
+      const response = await fetch(
+        `/api/teams/${teamId}/integrations/scaleway-email/send`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contactIds,
+            subject: emailSubject,
+            html: emailBody,
+          }),
+        },
+      );
+
+      const json = await response.json();
+      if (!response.ok) {
+        throw new Error(json?.error || "Failed to send email");
+      }
+
+      const result = json.data as {
+        requested: number;
+        sent: number;
+        skipped: number;
+        failed: number;
+      };
+
+      toast({
+        title: "Email sending finished",
+        description: `Sent ${result.sent} of ${result.requested}. ${result.skipped} skipped, ${result.failed} failed.`,
+      });
+
+      setIsEmailDialogOpen(false);
+      setEmailRecipients([]);
+      setEmailSubject("");
+      setEmailBody("");
+      clearSelection();
+      await mutate();
+    } catch (sendError) {
+      toast({
+        title: "Unable to send email",
+        description:
+          sendError instanceof Error
+            ? sendError.message
+            : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
   return (
     <div className="my-4 flex flex-col gap-5">
       <Form {...form}>
@@ -1000,6 +1080,20 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={
+                      isDeleting ||
+                      isSendingEmail ||
+                      selectedRows.filter((contact) => contact.email).length === 0
+                    }
+                    onClick={() => openEmailDialog(selectedRows)}
+                  >
+                    <Mail className="mr-2 h-4 w-4" />
+                    Email selected
+                  </Button>
+                  <Button
+                    type="button"
                     variant="destructive"
                     size="sm"
                     disabled={isDeleting}
@@ -1026,6 +1120,17 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                     Clear
                   </Button>
                 </div>
+                <MassEmailDialog
+                  open={isEmailDialogOpen}
+                  recipients={emailRecipients}
+                  subject={emailSubject}
+                  body={emailBody}
+                  isSending={isSendingEmail}
+                  onOpenChange={setIsEmailDialogOpen}
+                  onSubjectChange={setEmailSubject}
+                  onBodyChange={setEmailBody}
+                  onSend={() => handleSendEmail(clearSelection)}
+                />
               </div>
             )}
           />
@@ -1049,3 +1154,111 @@ export default function ContactTable({ teamId }: ContactTableProps) {
     </div>
   );
 }
+
+type MassEmailDialogProps = {
+  open: boolean;
+  recipients: ContactRow[];
+  subject: string;
+  body: string;
+  isSending: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubjectChange: (value: string) => void;
+  onBodyChange: (value: string) => void;
+  onSend: () => void;
+};
+
+const MassEmailDialog = ({
+  open,
+  recipients,
+  subject,
+  body,
+  isSending,
+  onOpenChange,
+  onSubjectChange,
+  onBodyChange,
+  onSend,
+}: MassEmailDialogProps) => {
+  const recipientsWithEmail = recipients.filter((contact) => contact.email);
+  const missingEmailCount = recipients.length - recipientsWithEmail.length;
+  const canSend =
+    recipientsWithEmail.length > 0 &&
+    subject.trim().length > 0 &&
+    body.trim().length > 0 &&
+    !isSending;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Send email to selected contacts</DialogTitle>
+          <DialogDescription>
+            Sends one email per contact through the Scaleway Transactional Email
+            integration.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+            {recipientsWithEmail.length} recipient
+            {recipientsWithEmail.length === 1 ? "" : "s"} with email selected
+            {missingEmailCount > 0
+              ? `, ${missingEmailCount} without email will be skipped`
+              : ""}
+            .
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="mass-email-subject">Subject</Label>
+            <Input
+              id="mass-email-subject"
+              value={subject}
+              onChange={(event) => onSubjectChange(event.target.value)}
+              disabled={isSending}
+              placeholder="Email subject"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="mass-email-body">Email body</Label>
+            <Textarea
+              id="mass-email-body"
+              value={body}
+              onChange={(event) => onBodyChange(event.target.value)}
+              disabled={isSending}
+              placeholder="<p>Hello,</p><p>Write your email here.</p>"
+              className="min-h-56 font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              HTML is supported. Successful sends are logged in each contact's
+              engagement history.
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSending}
+          >
+            Cancel
+          </Button>
+          <Button type="button" onClick={onSend} disabled={!canSend}>
+            {isSending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Send className="mr-2 h-4 w-4" />
+                Send email
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
