@@ -516,6 +516,13 @@ model EmailBatch {
   sentCount      Int              @default(0)
   skippedCount   Int              @default(0)
   failedCount    Int              @default(0)
+  attempts    Int                 @default(0)
+  maxAttempts Int                 @default(5)
+  runAfter    DateTime            @default(now()) @db.Timestamptz(6)
+  lockedAt    DateTime?           @db.Timestamptz(6)
+  lockedBy    String?             @db.VarChar(255)
+  startedAt   DateTime?           @db.Timestamptz(6)
+  lastError   String?             @db.Text
   userId      String?
   userName    String?             @db.VarChar(255)
   recipients  EmailRecipient[]
@@ -524,7 +531,9 @@ model EmailBatch {
   completedAt DateTime?           @db.Timestamptz(6)
 
   @@index([teamId, createdAt])
-  @@index([status])
+  @@index([status, runAfter])
+  @@index([teamId, status])
+  @@index([lockedAt])
 }
 
 model EmailRecipient {

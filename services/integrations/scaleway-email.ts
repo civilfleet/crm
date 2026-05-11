@@ -8,6 +8,7 @@ import {
   EmailBatchStatus,
   EmailRecipientStatus,
   IntegrationProvider as PrismaIntegrationProvider,
+  type EmailBatch,
 } from "@prisma/client";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
@@ -15,6 +16,8 @@ import prisma from "@/lib/prisma";
 const DEFAULT_REGION = "fr-par";
 const EXTERNAL_SOURCE = "SCALEWAY_TEM";
 const MAX_RECIPIENTS = 100;
+const DEFAULT_RETRY_DELAY_SECONDS = 30;
+const MAX_RETRY_DELAY_SECONDS = 15 * 60;
 
 type ScalewayEmailRecord = {
   id?: string;
@@ -71,6 +74,15 @@ const stripHtml = (html: string) =>
     .replace(/\n+\s*\n+/g, "\n\n")
     .replace(/\s{2,}/g, " ")
     .trim();
+
+const getRetryDelayMs = (attempts: number) => {
+  const delaySeconds = Math.min(
+    DEFAULT_RETRY_DELAY_SECONDS * 2 ** Math.max(attempts - 1, 0),
+    MAX_RETRY_DELAY_SECONDS,
+  );
+
+  return delaySeconds * 1000;
+};
 
 const parseScalewayResponse = async (response: Response) => {
   const text = await response.text();
@@ -319,7 +331,6 @@ export const sendMassEmailToContacts = async ({
   });
 
   const from = buildSender(integration);
-  const region = integration.baseUrl || DEFAULT_REGION;
   const batch = await prisma.emailBatch.create({
     data: {
       teamId,
@@ -334,10 +345,9 @@ export const sendMassEmailToContacts = async ({
       userName,
     },
   });
+
   const failures: SendMassEmailResult["failures"] = [];
-  let sent = 0;
   let skipped = 0;
-  let failed = 0;
 
   for (const contact of contacts) {
     const email = contact.email?.trim().toLowerCase();
@@ -360,66 +370,15 @@ export const sendMassEmailToContacts = async ({
       continue;
     }
 
-    try {
-      const scalewayEmail = await sendScalewayEmail({
-        apiKey: integration.apiKey,
-        region,
-        projectId: integration.defaultListId,
-        from,
-        to: { email, name: contact.name },
-        subject,
-        html,
-      });
-
-      await prisma.emailRecipient.create({
-        data: {
-          batchId: batch.id,
-          contactId: contact.id,
-          email,
-          name: contact.name,
-          status: EmailRecipientStatus.SENT,
-          providerMessageId: scalewayEmail.id,
-          sentAt: new Date(),
-        },
-      });
-
-      await prisma.contactEngagement.create({
-        data: {
-          contactId: contact.id,
-          teamId,
-          direction: EngagementDirection.OUTBOUND,
-          source: EngagementSource.EMAIL,
-          subject,
-          message: html,
-          userId,
-          userName,
-          externalId: scalewayEmail.id,
-          externalSource: EXTERNAL_SOURCE,
-          engagedAt: new Date(),
-        },
-      });
-
-      sent += 1;
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Email delivery failed.";
-      logger.error(
-        { teamId, contactId: contact.id, email, error },
-        "Scaleway mass email recipient failed",
-      );
-      failed += 1;
-      await prisma.emailRecipient.create({
-        data: {
-          batchId: batch.id,
-          contactId: contact.id,
-          email,
-          name: contact.name,
-          status: EmailRecipientStatus.FAILED,
-          errorMessage: message,
-        },
-      });
-      failures.push({ contactId: contact.id, email, message });
-    }
+    await prisma.emailRecipient.create({
+      data: {
+        batchId: batch.id,
+        contactId: contact.id,
+        email,
+        name: contact.name,
+        status: EmailRecipientStatus.PENDING,
+      },
+    });
   }
 
   const missingContacts = uniqueContactIds.length - contacts.length;
@@ -427,30 +386,231 @@ export const sendMassEmailToContacts = async ({
     skipped += missingContacts;
   }
 
-  const status =
-    sent > 0 && failed === 0 && skipped === 0
-      ? EmailBatchStatus.SENT
-      : sent > 0
-        ? EmailBatchStatus.PARTIAL
-        : EmailBatchStatus.FAILED;
-
-  await prisma.emailBatch.update({
-    where: { id: batch.id },
-    data: {
-      status,
-      sentCount: sent,
-      skippedCount: skipped,
-      failedCount: failed,
-      completedAt: new Date(),
-    },
-  });
+  if (skipped > 0) {
+    await prisma.emailBatch.update({
+      where: { id: batch.id },
+      data: { skippedCount: skipped },
+    });
+  }
 
   return {
     batchId: batch.id,
     requested: uniqueContactIds.length,
-    sent,
+    sent: 0,
     skipped,
-    failed,
+    failed: 0,
     failures: failures.slice(0, 10),
+  };
+};
+
+export const claimNextEmailBatch = async (workerId: string) =>
+  await prisma.$transaction(async (tx) => {
+    const batches = await tx.$queryRaw<EmailBatch[]>`
+      SELECT *
+      FROM "EmailBatch"
+      WHERE "status" = 'SENDING'::"EmailBatchStatus"
+        AND "runAfter" <= now()
+        AND "lockedAt" IS NULL
+      ORDER BY "createdAt" ASC
+      FOR UPDATE SKIP LOCKED
+      LIMIT 1
+    `;
+
+    const batch = batches[0];
+    if (!batch) {
+      return null;
+    }
+
+    return await tx.emailBatch.update({
+      where: { id: batch.id },
+      data: {
+        attempts: { increment: 1 },
+        lockedAt: new Date(),
+        lockedBy: workerId,
+        startedAt: batch.startedAt ?? new Date(),
+        lastError: null,
+      },
+    });
+  });
+
+export const recoverStaleEmailBatches = async (staleAfterMs: number) => {
+  const cutoff = new Date(Date.now() - staleAfterMs);
+
+  return await prisma.emailBatch.updateMany({
+    where: {
+      status: EmailBatchStatus.SENDING,
+      lockedAt: { lt: cutoff },
+    },
+    data: {
+      lockedAt: null,
+      lockedBy: null,
+      runAfter: new Date(),
+      lastError: "Recovered stale worker lock.",
+    },
+  });
+};
+
+export const markEmailBatchFailed = async (
+  batch: EmailBatch,
+  error: unknown,
+) => {
+  const message = error instanceof Error ? error.message : String(error);
+  const willRetry = batch.attempts < batch.maxAttempts;
+
+  return await prisma.emailBatch.update({
+    where: { id: batch.id },
+    data: {
+      status: willRetry ? EmailBatchStatus.SENDING : EmailBatchStatus.FAILED,
+      runAfter: willRetry
+        ? new Date(Date.now() + getRetryDelayMs(batch.attempts))
+        : batch.runAfter,
+      lockedAt: null,
+      lockedBy: null,
+      completedAt: willRetry ? null : new Date(),
+      lastError: message,
+    },
+  });
+};
+
+export const processEmailBatch = async (batch: EmailBatch) => {
+  const integration = await prisma.integrationConnection.findUnique({
+    where: {
+      teamId_provider: {
+        teamId: batch.teamId,
+        provider: PrismaIntegrationProvider.SCALEWAY_TEM,
+      },
+    },
+  });
+
+  if (!integration?.apiKey || !integration.defaultListId) {
+    throw new Error("Scaleway Transactional Email is not configured.");
+  }
+  if (!integration.isEnabled) {
+    throw new Error("Scaleway Transactional Email is disabled.");
+  }
+
+  const from = buildSender({
+    senderEmail: batch.senderEmail ?? integration.senderEmail,
+    senderName: batch.senderName ?? integration.senderName,
+  });
+  const region = integration.baseUrl || DEFAULT_REGION;
+  const pendingRecipients = await prisma.emailRecipient.findMany({
+    where: {
+      batchId: batch.id,
+      status: EmailRecipientStatus.PENDING,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  for (const recipient of pendingRecipients) {
+    try {
+      const scalewayEmail = await sendScalewayEmail({
+        apiKey: integration.apiKey,
+        region,
+        projectId: integration.defaultListId,
+        from,
+        to: { email: recipient.email, name: recipient.name ?? undefined },
+        subject: batch.subject,
+        html: batch.html,
+      });
+
+      const sentAt = new Date();
+      await prisma.emailRecipient.update({
+        where: { id: recipient.id },
+        data: {
+          status: EmailRecipientStatus.SENT,
+          providerMessageId: scalewayEmail.id,
+          sentAt,
+          errorMessage: null,
+        },
+      });
+
+      if (recipient.contactId) {
+        await prisma.contactEngagement.create({
+          data: {
+            contactId: recipient.contactId,
+            teamId: batch.teamId,
+            direction: EngagementDirection.OUTBOUND,
+            source: EngagementSource.EMAIL,
+            subject: batch.subject,
+            message: batch.html,
+            userId: batch.userId,
+            userName: batch.userName,
+            externalId: scalewayEmail.id,
+            externalSource: EXTERNAL_SOURCE,
+            engagedAt: sentAt,
+          },
+        });
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Email delivery failed.";
+      logger.error(
+        {
+          teamId: batch.teamId,
+          batchId: batch.id,
+          recipientId: recipient.id,
+          email: recipient.email,
+          error,
+        },
+        "Scaleway email recipient failed",
+      );
+      await prisma.emailRecipient.update({
+        where: { id: recipient.id },
+        data: {
+          status: EmailRecipientStatus.FAILED,
+          errorMessage: message,
+        },
+      });
+    }
+  }
+
+  const grouped = await prisma.emailRecipient.groupBy({
+    by: ["status"],
+    where: { batchId: batch.id },
+    _count: { _all: true },
+  });
+
+  const countFor = (status: EmailRecipientStatus) =>
+    grouped.find((entry) => entry.status === status)?._count._all ?? 0;
+  const sentCount =
+    countFor(EmailRecipientStatus.SENT) +
+    countFor(EmailRecipientStatus.DELIVERED);
+  const failedCount =
+    countFor(EmailRecipientStatus.FAILED) +
+    countFor(EmailRecipientStatus.BOUNCED);
+  const skippedCount = countFor(EmailRecipientStatus.SKIPPED);
+  const pendingCount = countFor(EmailRecipientStatus.PENDING);
+
+  const status =
+    pendingCount > 0
+      ? EmailBatchStatus.SENDING
+      : sentCount > 0 && failedCount === 0 && skippedCount === 0
+        ? EmailBatchStatus.SENT
+        : sentCount > 0
+          ? EmailBatchStatus.PARTIAL
+          : EmailBatchStatus.FAILED;
+
+  const updated = await prisma.emailBatch.update({
+    where: { id: batch.id },
+    data: {
+      status,
+      sentCount,
+      failedCount,
+      skippedCount,
+      lockedAt: null,
+      lockedBy: null,
+      completedAt: pendingCount > 0 ? null : new Date(),
+      lastError: null,
+    },
+  });
+
+  return {
+    batchId: updated.id,
+    status: updated.status,
+    sent: sentCount,
+    failed: failedCount,
+    skipped: skippedCount,
+    pending: pendingCount,
   };
 };

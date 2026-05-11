@@ -902,6 +902,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
       }
 
       const result = json.data as {
+        batchId: string;
         requested: number;
         sent: number;
         skipped: number;
@@ -909,8 +910,10 @@ export default function ContactTable({ teamId }: ContactTableProps) {
       };
 
       toast({
-        title: "Email sending finished",
-        description: `Sent ${result.sent} of ${result.requested}. ${result.skipped} skipped, ${result.failed} failed.`,
+        title: "Email batch queued",
+        description: `${result.requested - result.skipped} email${
+          result.requested - result.skipped === 1 ? "" : "s"
+        } queued for worker delivery. ${result.skipped} skipped.`,
       });
 
       setIsEmailDialogOpen(false);

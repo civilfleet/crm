@@ -12,6 +12,12 @@ import {
   syncZammadIntegration,
   syncZammadTicket,
 } from "@/services/integrations/zammad";
+import {
+  claimNextEmailBatch,
+  markEmailBatchFailed,
+  processEmailBatch,
+  recoverStaleEmailBatches,
+} from "@/services/integrations/scaleway-email";
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_STALE_LOCK_MS = 60 * 60 * 1000;
@@ -68,13 +74,52 @@ export const runZammadWorker = async () => {
     );
   }
 
+  const recoveredEmailBatches = await recoverStaleEmailBatches(staleLockMs);
+  if (recoveredEmailBatches.count > 0) {
+    logger.warn(
+      { workerId, recovered: recoveredEmailBatches.count },
+      "[ZammadWorker] Recovered stale email batches",
+    );
+  }
+
   logger.info({ workerId, pollIntervalMs }, "[ZammadWorker] Started");
 
   while (!shouldStop) {
     const job = await claimNextZammadSyncJob(workerId);
 
     if (!job) {
-      await sleep(pollIntervalMs);
+      const emailBatch = await claimNextEmailBatch(workerId);
+
+      if (!emailBatch) {
+        await sleep(pollIntervalMs);
+        continue;
+      }
+
+      logger.info(
+        { workerId, batchId: emailBatch.id, teamId: emailBatch.teamId },
+        "[ZammadWorker] Processing email batch",
+      );
+
+      try {
+        const result = await processEmailBatch(emailBatch);
+        logger.info(
+          { workerId, batchId: emailBatch.id, result },
+          "[ZammadWorker] Email batch processed",
+        );
+      } catch (error) {
+        const updated = await markEmailBatchFailed(emailBatch, error);
+        logger.error(
+          {
+            workerId,
+            batchId: emailBatch.id,
+            attempts: updated.attempts,
+            status: updated.status,
+            error,
+          },
+          "[ZammadWorker] Email batch failed",
+        );
+      }
+
       continue;
     }
 
