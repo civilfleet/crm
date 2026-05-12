@@ -64,11 +64,44 @@ const formatDateTime = (value?: string) => {
 const getStatusClass = (status: string) =>
   statusClasses[status] ?? "bg-muted text-foreground border-border";
 
+const isFutureDate = (value?: string) => {
+  if (!value) {
+    return false;
+  }
+
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) && time > Date.now();
+};
+
 const canRetryBatch = (batch: EmailHistoryBatch) =>
   (batch.status === "FAILED" || batch.status === "PARTIAL") &&
   batch.recipients.some((recipient) =>
     ["FAILED", "BOUNCED", "PENDING"].includes(recipient.status),
   );
+
+const getBatchWorkerState = (batch: EmailHistoryBatch) => {
+  if (batch.lockedAt) {
+    return "Running";
+  }
+
+  if (batch.status === "SENDING") {
+    return isFutureDate(batch.runAfter) ? "Scheduled retry" : "Queued";
+  }
+
+  if (canRetryBatch(batch)) {
+    return "Retry available";
+  }
+
+  return "Idle";
+};
+
+const getPendingRetryCount = (batch: EmailHistoryBatch) =>
+  batch.recipients.filter((recipient) => recipient.status === "PENDING").length;
+
+const getFailedRetryCount = (batch: EmailHistoryBatch) =>
+  batch.recipients.filter((recipient) =>
+    ["FAILED", "BOUNCED"].includes(recipient.status),
+  ).length;
 
 export default function EmailHistoryView({
   teamId,
@@ -124,7 +157,7 @@ export default function EmailHistoryView({
 
       toast({
         title: "Email batch queued",
-        description: "The worker will retry the failed recipients.",
+        description: "Only failed recipients were queued for retry.",
       });
       router.refresh();
     } catch (error) {
@@ -182,6 +215,9 @@ export default function EmailHistoryView({
                     >
                       {batch.status}
                     </Badge>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {getBatchWorkerState(batch)}
+                    </p>
                   </TableCell>
                   <TableCell>
                     <div className="text-sm">
@@ -196,6 +232,12 @@ export default function EmailHistoryView({
                         {batch.failedCount} failed, {batch.skippedCount} skipped
                       </p>
                     )}
+                    {batch.status === "SENDING" &&
+                    getPendingRetryCount(batch) > 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        {getPendingRetryCount(batch)} queued for delivery
+                      </p>
+                    ) : null}
                   </TableCell>
                   <TableCell>
                     <div className="text-sm">
@@ -208,7 +250,14 @@ export default function EmailHistoryView({
                     </div>
                   </TableCell>
                   <TableCell>{batch.userName || "-"}</TableCell>
-                  <TableCell>{formatDateTime(batch.createdAt)}</TableCell>
+                  <TableCell>
+                    <div className="text-sm">
+                      <p>{formatDateTime(batch.createdAt)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Attempts {batch.attempts}/{batch.maxAttempts}
+                      </p>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
                       {canRetryBatch(batch) ? (
@@ -329,6 +378,41 @@ const EmailBatchDetails = ({
       <Metric label="Skipped" value={batch.skippedCount} icon={UserRound} />
     </div>
 
+    <div className="rounded-md border bg-muted/30 p-4">
+      <div className="grid gap-4 text-sm sm:grid-cols-2">
+        <DetailItem label="Worker state" value={getBatchWorkerState(batch)} />
+        <DetailItem
+          label="Attempts"
+          value={`${batch.attempts}/${batch.maxAttempts}`}
+        />
+        <DetailItem label="Next run" value={formatDateTime(batch.runAfter)} />
+        <DetailItem label="Started" value={formatDateTime(batch.startedAt)} />
+        <DetailItem label="Locked at" value={formatDateTime(batch.lockedAt)} />
+        <DetailItem label="Locked by" value={batch.lockedBy || "-"} />
+      </div>
+      {batch.lastError ? (
+        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-950">
+          <p className="font-medium">Batch error</p>
+          <p className="mt-1 whitespace-pre-wrap break-words">
+            {batch.lastError}
+          </p>
+        </div>
+      ) : null}
+      {canRetryBatch(batch) || getPendingRetryCount(batch) > 0 ? (
+        <div className="mt-4 rounded-md border bg-background p-3 text-sm">
+          <p className="font-medium">Retry behavior</p>
+          <p className="mt-1 text-muted-foreground">
+            Already-sent recipients are not resent. Retry only queues failed,
+            bounced, or still-pending recipients.
+          </p>
+          <p className="mt-2 text-muted-foreground">
+            {getFailedRetryCount(batch)} failed or bounced,{" "}
+            {getPendingRetryCount(batch)} pending.
+          </p>
+        </div>
+      ) : null}
+    </div>
+
     <div className="space-y-2">
       <h3 className="text-sm font-semibold">Message preview</h3>
       <iframe
@@ -388,5 +472,14 @@ const EmailBatchDetails = ({
         </Table>
       </div>
     </div>
+  </div>
+);
+
+const DetailItem = ({ label, value }: { label: string; value: string }) => (
+  <div>
+    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      {label}
+    </p>
+    <p className="mt-1 break-words">{value}</p>
   </div>
 );

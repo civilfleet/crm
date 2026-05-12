@@ -38,6 +38,13 @@ export type EmailHistoryBatch = {
   sentCount: number;
   skippedCount: number;
   failedCount: number;
+  attempts: number;
+  maxAttempts: number;
+  runAfter: string;
+  lockedAt?: string;
+  lockedBy?: string;
+  startedAt?: string;
+  lastError?: string;
   userId?: string;
   userName?: string;
   createdAt: string;
@@ -76,6 +83,13 @@ const mapEmailBatch = (
   sentCount: batch.sentCount,
   skippedCount: batch.skippedCount,
   failedCount: batch.failedCount,
+  attempts: batch.attempts,
+  maxAttempts: batch.maxAttempts,
+  runAfter: batch.runAfter.toISOString(),
+  lockedAt: toIso(batch.lockedAt),
+  lockedBy: batch.lockedBy ?? undefined,
+  startedAt: toIso(batch.startedAt),
+  lastError: batch.lastError ?? undefined,
   userId: batch.userId ?? undefined,
   userName: batch.userName ?? undefined,
   createdAt: batch.createdAt.toISOString(),
