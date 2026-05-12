@@ -71,6 +71,23 @@ type TeamUser = {
   email: string;
 };
 
+type ZammadIntegrationResponse = {
+  data?: {
+    isEnabled?: boolean;
+    hasApiKey?: boolean;
+    baseUrl?: string;
+  } | null;
+};
+
+type ZammadGroupsResponse = {
+  data?: Array<{
+    groupId: number;
+    groupName: string;
+    importEnabled: boolean;
+  }>;
+  error?: string;
+};
+
 const getSourceColor = (source: EngagementSource) => {
   switch (source) {
     case EngagementSource.EMAIL:
@@ -271,19 +288,33 @@ const ZammadTicketDialog = React.memo(function ZammadTicketDialog({
   const [ticketGroupId, setTicketGroupId] = useState<number | null>(null);
   const [isCreatingTicket, setIsCreatingTicket] = useState(false);
 
-  const { data: zammadGroupsData } = useSWR(
-    `/api/teams/${teamId}/integrations/zammad/groups`,
+  const { data: zammadIntegrationData } = useSWR<ZammadIntegrationResponse>(
+    `/api/teams/${teamId}/integrations/zammad`,
     fetcher,
   );
-  const zammadGroups =
-    (zammadGroupsData?.data || zammadGroupsData || []) as Array<{
-      groupId: number;
-      groupName: string;
-      importEnabled: boolean;
-    }>;
+  const zammadIntegration = zammadIntegrationData?.data;
+  const isZammadConfigured = Boolean(
+    zammadIntegration?.isEnabled &&
+      zammadIntegration.hasApiKey &&
+      zammadIntegration.baseUrl,
+  );
+
+  const { data: zammadGroupsData } = useSWR<ZammadGroupsResponse>(
+    isZammadConfigured
+      ? `/api/teams/${teamId}/integrations/zammad/groups`
+      : null,
+    fetcher,
+  );
+  const zammadGroups = Array.isArray(zammadGroupsData?.data)
+    ? zammadGroupsData.data
+    : [];
   const zammadGroupOptions = zammadGroups.filter(
     (group) => group.importEnabled,
   );
+
+  if (!isZammadConfigured) {
+    return null;
+  }
 
   const handleCreateTicket = async () => {
     if (!ticketGroupId) {
