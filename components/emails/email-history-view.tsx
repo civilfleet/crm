@@ -1,7 +1,14 @@
 "use client";
 
-import { Mail, MailCheck, MailWarning, UserRound } from "lucide-react";
+import {
+  Mail,
+  MailCheck,
+  MailWarning,
+  RefreshCw,
+  UserRound,
+} from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast";
 import type { EmailHistoryBatch } from "@/services/emails";
 
 type EmailHistoryViewProps = {
@@ -56,14 +64,23 @@ const formatDateTime = (value?: string) => {
 const getStatusClass = (status: string) =>
   statusClasses[status] ?? "bg-muted text-foreground border-border";
 
+const canRetryBatch = (batch: EmailHistoryBatch) =>
+  (batch.status === "FAILED" || batch.status === "PARTIAL") &&
+  batch.recipients.some((recipient) =>
+    ["FAILED", "BOUNCED", "PENDING"].includes(recipient.status),
+  );
+
 export default function EmailHistoryView({
   teamId,
   batches,
 }: EmailHistoryViewProps) {
+  const router = useRouter();
+  const { toast } = useToast();
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(
     batches[0]?.id ?? null,
   );
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [retryingBatchId, setRetryingBatchId] = useState<string | null>(null);
 
   const selectedBatch = useMemo(
     () => batches.find((batch) => batch.id === selectedBatchId) ?? null,
@@ -87,6 +104,41 @@ export default function EmailHistoryView({
   const openBatch = (batchId: string) => {
     setSelectedBatchId(batchId);
     setIsSheetOpen(true);
+  };
+
+  const retryBatch = async (batchId: string) => {
+    setRetryingBatchId(batchId);
+
+    try {
+      const response = await fetch(
+        `/api/teams/${teamId}/emails/${batchId}/retry`,
+        { method: "POST" },
+      );
+      const payload = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+
+      if (!response.ok) {
+        throw new Error(payload?.error ?? "Failed to retry email batch.");
+      }
+
+      toast({
+        title: "Email batch queued",
+        description: "The worker will retry the failed recipients.",
+      });
+      router.refresh();
+    } catch (error) {
+      toast({
+        title: "Retry failed",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to retry email batch.",
+        variant: "destructive",
+      });
+    } finally {
+      setRetryingBatchId(null);
+    }
   };
 
   return (
@@ -124,7 +176,10 @@ export default function EmailHistoryView({
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="secondary" className={getStatusClass(batch.status)}>
+                    <Badge
+                      variant="secondary"
+                      className={getStatusClass(batch.status)}
+                    >
                       {batch.status}
                     </Badge>
                   </TableCell>
@@ -155,14 +210,28 @@ export default function EmailHistoryView({
                   <TableCell>{batch.userName || "-"}</TableCell>
                   <TableCell>{formatDateTime(batch.createdAt)}</TableCell>
                   <TableCell>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => openBatch(batch.id)}
-                    >
-                      View
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      {canRetryBatch(batch) ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => retryBatch(batch.id)}
+                          disabled={retryingBatchId === batch.id}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          Retry
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openBatch(batch.id)}
+                      >
+                        View
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -184,9 +253,17 @@ export default function EmailHistoryView({
       </div>
 
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-3xl">
+        <SheetContent
+          side="right"
+          className="w-full overflow-y-auto sm:max-w-3xl"
+        >
           {selectedBatch ? (
-            <EmailBatchDetails teamId={teamId} batch={selectedBatch} />
+            <EmailBatchDetails
+              teamId={teamId}
+              batch={selectedBatch}
+              isRetrying={retryingBatchId === selectedBatch.id}
+              onRetry={() => retryBatch(selectedBatch.id)}
+            />
           ) : null}
         </SheetContent>
       </Sheet>
@@ -213,17 +290,37 @@ const Metric = ({ label, value, icon: Icon }: MetricProps) => (
 const EmailBatchDetails = ({
   teamId,
   batch,
+  isRetrying,
+  onRetry,
 }: {
   teamId: string;
   batch: EmailHistoryBatch;
+  isRetrying: boolean;
+  onRetry: () => void;
 }) => (
   <div className="space-y-6">
-    <SheetHeader>
-      <SheetTitle>{batch.subject}</SheetTitle>
-      <SheetDescription>
-        {formatDateTime(batch.createdAt)} by {batch.userName || "unknown user"}
-      </SheetDescription>
-    </SheetHeader>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <SheetHeader>
+        <SheetTitle>{batch.subject}</SheetTitle>
+        <SheetDescription>
+          {formatDateTime(batch.createdAt)} by{" "}
+          {batch.userName || "unknown user"}
+        </SheetDescription>
+      </SheetHeader>
+      {canRetryBatch(batch) ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onRetry}
+          disabled={isRetrying}
+          className="sm:mt-1"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Retry failed
+        </Button>
+      ) : null}
+    </div>
 
     <div className="grid gap-3 sm:grid-cols-4">
       <Metric label="Requested" value={batch.requestedCount} icon={Mail} />

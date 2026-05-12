@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "node scripts/dev-with-worker.mjs",
+    "dev:web": "next dev --turbopack",
+    "dev:worker": "tsx scripts/zammad-worker.ts",
     "build": "next build",
     "start": "next start",
     "test": "node --import ./tests/register-hooks.mjs --test tests/*.test.ts",

@@ -1,4 +1,8 @@
-import type { Prisma } from "@prisma/client";
+import {
+  EmailBatchStatus,
+  EmailRecipientStatus,
+  type Prisma,
+} from "@prisma/client";
 import prisma from "@/lib/prisma";
 
 const emailBatchInclude = {
@@ -105,3 +109,101 @@ export const getEmailHistoryBatches = async (
 
   return batches.map(mapEmailBatch);
 };
+
+export const retryEmailBatch = async (teamId: string, batchId: string) =>
+  await prisma.$transaction(async (tx) => {
+    const batch = await tx.emailBatch.findFirst({
+      where: {
+        id: batchId,
+        teamId,
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!batch) {
+      throw new Error("Email batch not found.");
+    }
+
+    if (batch.status === EmailBatchStatus.SENDING) {
+      throw new Error("Email batch is already queued or running.");
+    }
+
+    if (
+      batch.status !== EmailBatchStatus.FAILED &&
+      batch.status !== EmailBatchStatus.PARTIAL
+    ) {
+      throw new Error(
+        "Only failed or partially failed email batches can be retried.",
+      );
+    }
+
+    const retryableRecipients = await tx.emailRecipient.updateMany({
+      where: {
+        batchId,
+        status: {
+          in: [EmailRecipientStatus.FAILED, EmailRecipientStatus.BOUNCED],
+        },
+      },
+      data: {
+        status: EmailRecipientStatus.PENDING,
+        providerMessageId: null,
+        errorMessage: null,
+        sentAt: null,
+      },
+    });
+
+    const pendingRecipients = await tx.emailRecipient.count({
+      where: {
+        batchId,
+        status: EmailRecipientStatus.PENDING,
+      },
+    });
+
+    if (pendingRecipients === 0) {
+      throw new Error("This email batch has no failed recipients to retry.");
+    }
+
+    const grouped = await tx.emailRecipient.groupBy({
+      by: ["status"],
+      where: { batchId },
+      _count: { _all: true },
+    });
+
+    const countFor = (status: EmailRecipientStatus) =>
+      grouped.find((entry) => entry.status === status)?._count._all ?? 0;
+
+    const updated = await tx.emailBatch.update({
+      where: { id: batchId },
+      data: {
+        status: EmailBatchStatus.SENDING,
+        sentCount:
+          countFor(EmailRecipientStatus.SENT) +
+          countFor(EmailRecipientStatus.DELIVERED),
+        failedCount:
+          countFor(EmailRecipientStatus.FAILED) +
+          countFor(EmailRecipientStatus.BOUNCED),
+        skippedCount: countFor(EmailRecipientStatus.SKIPPED),
+        attempts: 0,
+        runAfter: new Date(),
+        lockedAt: null,
+        lockedBy: null,
+        startedAt: null,
+        completedAt: null,
+        lastError: null,
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    return {
+      id: updated.id,
+      status: updated.status,
+      retryableRecipients: retryableRecipients.count,
+      pendingRecipients,
+    };
+  });
