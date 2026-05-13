@@ -4,14 +4,14 @@ import {
   EUROPEAN_COUNTRY_CODES,
   EUROPEAN_COUNTRY_OPTIONS,
   normalizeCountryCode,
-} from "../lib/countries";
+} from "@/lib/countries";
 import {
   buildDomainVerificationRecordName,
   buildDomainVerificationRecordValue,
   generateDomainVerificationToken,
-} from "../lib/domain-verification";
-import { normalizePostalCode } from "../lib/geo";
-import { generateSlug } from "../lib/slug";
+} from "@/lib/domain-verification";
+import { normalizePostalCode } from "@/lib/geo";
+import { generateSlug } from "@/lib/slug";
 
 test("normalizeCountryCode resolves ISO codes and localized country names", () => {
   assert.equal(normalizeCountryCode("de"), "DE");

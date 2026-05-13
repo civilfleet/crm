@@ -8,7 +8,7 @@ import { pipeline } from "node:stream/promises";
 import { Client } from "pg";
 import { from as copyFrom } from "pg-copy-streams";
 import yauzl from "yauzl";
-import logger from "../lib/logger";
+import logger from "@/lib/logger";
 
 const DEFAULT_URL = "https://download.geonames.org/export/zip/allCountries.zip";
 const ZIP_NAME = "allCountries.zip";

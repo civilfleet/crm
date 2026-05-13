@@ -1,7 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Roles } from "@prisma/client";
 import { Pool } from "pg";
-import logger from "../lib/logger";
+import logger from "@/lib/logger";
 
 const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim();
 const bootstrapAdminName = process.env.BOOTSTRAP_ADMIN_NAME?.trim();

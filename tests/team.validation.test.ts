@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTeamSchema, updateTeamSchema } from "../validations/team";
+import { createTeamSchema, updateTeamSchema } from "@/validations/team";
 
 const validBasePayload = {
   name: "Makerspace",

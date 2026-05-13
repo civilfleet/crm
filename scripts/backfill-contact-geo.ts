@@ -1,7 +1,7 @@
 import { normalizeCountryCode } from "@/lib/countries";
 import { normalizePostalCode } from "@/lib/geo";
 import prisma from "@/lib/prisma";
-import logger from "../lib/logger";
+import logger from "@/lib/logger";
 
 const BATCH_SIZE = Number(process.env.BATCH_SIZE ?? 200);
 const DRY_RUN = process.env.DRY_RUN === "1";

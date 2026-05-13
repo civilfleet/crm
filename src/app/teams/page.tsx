@@ -1,4 +1,4 @@
-import { auth } from "auth";
+import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { getAdminUser, getUserCurrent } from "@/services/users";
 import { Roles } from "@/types";

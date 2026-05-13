@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import yauzl from "yauzl";
-import { createZipBuffer } from "../lib/zip";
+import { createZipBuffer } from "@/lib/zip";
 
 const openZip = (buffer: Buffer) =>
   new Promise<yauzl.ZipFile>((resolve, reject) => {

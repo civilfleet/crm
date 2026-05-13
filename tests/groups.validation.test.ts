@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CONTACT_SUBMODULES } from "../constants/contact-submodules";
-import { DEFAULT_TEAM_MODULES } from "../types";
-import { createGroupSchema, updateGroupSchema } from "../validations/groups";
+import { CONTACT_SUBMODULES } from "@/constants/contact-submodules";
+import { DEFAULT_TEAM_MODULES } from "@/types";
+import { createGroupSchema, updateGroupSchema } from "@/validations/groups";
 
 const TEAM_ID = "11111111-1111-4111-8111-111111111111";
 const GROUP_ID = "77777777-7777-4777-8777-777777777777";
