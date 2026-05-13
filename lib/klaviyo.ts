@@ -177,20 +177,13 @@ export const requestKlaviyo = async <TData, TIncluded = never>(
   return (await response.json()) as KlaviyoListResponse<TData, TIncluded>;
 };
 
-export const fetchKlaviyoProfiles = async (
-  apiKey: string,
-  cursor?: string,
-) => {
-  const response = await requestKlaviyo<KlaviyoProfile[]>(
-    apiKey,
-    "/profiles",
-    {
-      "page[size]": "50",
-      "page[cursor]": cursor,
-      "fields[profile]":
-        "email,first_name,last_name,phone_number,location,properties",
-    },
-  );
+export const fetchKlaviyoProfiles = async (apiKey: string, cursor?: string) => {
+  const response = await requestKlaviyo<KlaviyoProfile[]>(apiKey, "/profiles", {
+    "page[size]": "50",
+    "page[cursor]": cursor,
+    "fields[profile]":
+      "email,first_name,last_name,phone_number,location,properties",
+  });
 
   return {
     profiles: response.data,
@@ -202,19 +195,15 @@ export const fetchKlaviyoEmailEvents = async (
   apiKey: string,
   cursor?: string,
 ) => {
-  const response = await requestKlaviyo<KlaviyoEvent[]>(
-    apiKey,
-    "/events",
-    {
-      "page[size]": "50",
-      "page[cursor]": cursor,
-      sort: "-timestamp",
-      "fields[event]": "event_properties,timestamp",
-      include: "metric,profile",
-      "fields[metric]": "name",
-      "fields[profile]": "email",
-    },
-  );
+  const response = await requestKlaviyo<KlaviyoEvent[]>(apiKey, "/events", {
+    "page[size]": "50",
+    "page[cursor]": cursor,
+    sort: "-timestamp",
+    "fields[event]": "event_properties,timestamp",
+    include: "metric,profile",
+    "fields[metric]": "name",
+    "fields[profile]": "email",
+  });
 
   return {
     events: response.data,
@@ -279,14 +268,10 @@ export const fetchKlaviyoCampaignMessage = async (
     const response = await requestKlaviyo<
       KlaviyoCampaignMessage,
       KlaviyoTemplate
-    >(
-      apiKey,
-      `/campaign-messages/${messageId}`,
-      {
-        include: "template",
-        "fields[template]": "html,text,name",
-      },
-    );
+    >(apiKey, `/campaign-messages/${messageId}`, {
+      include: "template",
+      "fields[template]": "html,text,name",
+    });
     return response;
   } catch (_error) {
     return null;

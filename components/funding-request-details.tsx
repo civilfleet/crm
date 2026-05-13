@@ -4,7 +4,7 @@ import OrganizationView from "@/components/funding-request/organization-view";
 import FundingRequestOverview from "@/components/funding-request/overview";
 import TransactionTable from "@/components/table/transaction-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { type FundingRequest } from "../types";
+import type { FundingRequest } from "../types";
 import FundingRequestHeader from "./funding-request/header";
 import { FileList } from "./helper/file-list";
 

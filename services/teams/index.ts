@@ -1,5 +1,5 @@
-import prisma from "@/lib/prisma";
 import { normalizeLoginDomain } from "@/lib/auth-routing";
+import prisma from "@/lib/prisma";
 import { ensureDefaultGroup } from "@/services/groups";
 import { Roles } from "@/types";
 import type { CreateTeamInput } from "@/validations/team";
@@ -146,7 +146,9 @@ const transferTeamOwnership = async (
   const isSuperAdmin = actorRoles?.includes(Roles.Admin) ?? false;
 
   if (team.ownerId && team.ownerId !== actorUserId && !isSuperAdmin) {
-    throw new Error("Only the current owner or a super admin can transfer ownership");
+    throw new Error(
+      "Only the current owner or a super admin can transfer ownership",
+    );
   }
 
   const newOwner = await prisma.user.findFirst({
@@ -199,16 +201,18 @@ const getTeamOwner = async (teamId: string) => {
       where: { id: ensured },
       select: { id: true, name: true, email: true },
     });
-    return owner ? { id: owner.id, name: owner.name, email: owner.email } : null;
+    return owner
+      ? { id: owner.id, name: owner.name, email: owner.email }
+      : null;
   }
 
   return team.owner ?? null;
 };
 
 export {
-  getTeamsByRoles,
   createTeam,
   ensureTeamOwner,
-  transferTeamOwnership,
   getTeamOwner,
+  getTeamsByRoles,
+  transferTeamOwnership,
 };

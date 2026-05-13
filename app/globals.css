@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-@plugin 'tailwindcss-animate';
+@plugin "tailwindcss-animate";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -152,10 +152,23 @@
   body {
     @apply bg-background text-foreground antialiased;
     background-image:
-      radial-gradient(circle at 12% 2%, hsl(54 100% 50% / 0.13), transparent 30%),
-      radial-gradient(circle at 95% 10%, hsl(198 100% 17% / 0.06), transparent 32%);
+      radial-gradient(
+        circle at 12% 2%,
+        hsl(54 100% 50% / 0.13),
+        transparent 30%
+      ),
+      radial-gradient(
+        circle at 95% 10%,
+        hsl(198 100% 17% / 0.06),
+        transparent 32%
+      );
   }
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     letter-spacing: -0.015em;
     color: hsl(var(--foreground));
   }

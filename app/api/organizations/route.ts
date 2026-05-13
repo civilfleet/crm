@@ -1,21 +1,21 @@
+import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { sendEmail } from "@/lib/nodemailer";
 import { APP_NAME } from "@/constants/app";
-import { getAppUrl, getLoginUrl, handlePrismaError } from "@/lib/utils";
-import prisma from "@/lib/prisma";
 import logger from "@/lib/logger";
+import { sendEmail } from "@/lib/nodemailer";
+import prisma from "@/lib/prisma";
+import { getAppUrl, getLoginUrl, handlePrismaError } from "@/lib/utils";
 import {
   createOrUpdateOrganization,
   getOrganizations,
 } from "@/services/organizations";
+import { DEFAULT_TEAM_MODULES } from "@/types";
+import { organizationFiltersSchema } from "@/validations/organization-filters";
 import {
   createOrganizationSchema,
   updateOrganizationSchema,
 } from "@/validations/organizations";
-import { organizationFiltersSchema } from "@/validations/organization-filters";
-import { DEFAULT_TEAM_MODULES } from "@/types";
 
 export async function GET(req: Request) {
   try {
@@ -28,12 +28,12 @@ export async function GET(req: Request) {
     const hasPagination = hasPageParam || hasPageSizeParam;
     const pageParam = Number(searchParams.get("page") || "1");
     const pageSizeParam = Number(searchParams.get("pageSize") || "10");
-    const page = Number.isFinite(pageParam) && pageParam > 0
-      ? Math.floor(pageParam)
-      : 1;
-    const pageSize = Number.isFinite(pageSizeParam) && pageSizeParam > 0
-      ? Math.min(Math.floor(pageSizeParam), 100)
-      : 10;
+    const page =
+      Number.isFinite(pageParam) && pageParam > 0 ? Math.floor(pageParam) : 1;
+    const pageSize =
+      Number.isFinite(pageSizeParam) && pageSizeParam > 0
+        ? Math.min(Math.floor(pageSizeParam), 100)
+        : 10;
     const parsedFilters = filtersParam
       ? organizationFiltersSchema.parse(JSON.parse(filtersParam))
       : [];
@@ -93,13 +93,18 @@ export async function POST(req: Request) {
       if (!team || !teamModules.includes("FUNDING")) {
         return NextResponse.json(
           { error: "Organization self-registration is disabled" },
-          { status: 403, statusText: "Organization self-registration is disabled" },
+          {
+            status: 403,
+            statusText: "Organization self-registration is disabled",
+          },
         );
       }
     }
     const normalizedData = {
       ...validatedData,
-      profileData: validatedData.profileData as Prisma.InputJsonValue | undefined,
+      profileData: validatedData.profileData as
+        | Prisma.InputJsonValue
+        | undefined,
     };
     const { organization, user } =
       await createOrUpdateOrganization(normalizedData);
@@ -170,7 +175,9 @@ export async function PUT(req: Request) {
       .parse({ ...organization });
     const normalizedData = {
       ...validatedData,
-      profileData: validatedData.profileData as Prisma.InputJsonValue | undefined,
+      profileData: validatedData.profileData as
+        | Prisma.InputJsonValue
+        | undefined,
     };
     await createOrUpdateOrganization(normalizedData);
     return NextResponse.json(

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { getTeamAdminAccess } from "@/services/teams/access";
-import { DEFAULT_TEAM_MODULES, type AppModule } from "@/types";
+import { type AppModule, DEFAULT_TEAM_MODULES } from "@/types";
 
 const TEAM_MODULES: AppModule[] = ["CRM", "FUNDING"];
 
@@ -57,9 +57,9 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = (await request.json().catch(() => null)) as
-    | { modules?: AppModule[] }
-    | null;
+  const body = (await request.json().catch(() => null)) as {
+    modules?: AppModule[];
+  } | null;
 
   const requested = body?.modules ?? [];
   const filtered = requested.filter((module) => TEAM_MODULES.includes(module));

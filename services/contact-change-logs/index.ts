@@ -131,8 +131,8 @@ const logFieldUpdate = async (
 };
 
 export {
-  getContactChangeLogs,
   createChangeLog,
+  getContactChangeLogs,
   logContactCreation,
   logFieldUpdate,
 };

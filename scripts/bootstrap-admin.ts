@@ -1,12 +1,13 @@
-import { PrismaClient, Roles } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient, Roles } from "@prisma/client";
 import { Pool } from "pg";
 import logger from "../lib/logger";
 
 const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim();
 const bootstrapAdminName = process.env.BOOTSTRAP_ADMIN_NAME?.trim();
 
-const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const isValidEmail = (email: string) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 async function main() {
   if (!bootstrapAdminEmail) {

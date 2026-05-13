@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { BulkInviteUsersDialog } from "@/components/forms/bulk-invite-users";
 import UserTable from "@/components/table/user-table";
 import { Button } from "@/components/ui/button";
-import { BulkInviteUsersDialog } from "@/components/forms/bulk-invite-users";
 import { getTeamAdminAccess } from "@/services/teams/access";
 
 interface PageProps {

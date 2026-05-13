@@ -1,25 +1,25 @@
-import { Prisma, type $Enums } from "@prisma/client";
-import prisma from "@/lib/prisma";
+import { type $Enums, Prisma } from "@prisma/client";
+import {
+  CONTACT_SUBMODULE_FIELDS,
+  CONTACT_SUBMODULES,
+  type ContactSubmodule,
+} from "@/constants/contact-submodules";
 import { normalizeCountryCode } from "@/lib/countries";
 import { normalizePostalCode } from "@/lib/geo";
+import prisma from "@/lib/prisma";
 import {
   logContactCreation,
   logFieldUpdate,
 } from "@/services/contact-change-logs";
 import { ensureDefaultGroup, mapGroup } from "@/services/groups";
 import {
-  CONTACT_SUBMODULE_FIELDS,
-  CONTACT_SUBMODULES,
-  type ContactSubmodule,
-} from "@/constants/contact-submodules";
-import {
   ContactAttributeType,
-  type ContactGender,
-  type ContactRequestPreference,
   type ContactFilter,
+  type ContactGender,
   type ContactLocationValue,
-  type ContactSocialLink,
   type ContactProfileAttribute,
+  type ContactRequestPreference,
+  type ContactSocialLink,
   type Contact as ContactType,
   Roles,
 } from "@/types";
@@ -460,7 +460,8 @@ const toProfileAttribute = (
 
 const mapContactGender = (
   gender?: $Enums.ContactGender | null,
-): ContactGender | undefined => (gender ? (gender as ContactGender) : undefined);
+): ContactGender | undefined =>
+  gender ? (gender as ContactGender) : undefined;
 
 const mapContactRequestPreference = (
   preference?: $Enums.ContactRequestPreference | null,
@@ -916,38 +917,23 @@ async function getTeamContacts(
       switch (fieldName) {
         case "email":
           return {
-            OR: [
-              { email: { equals: null } },
-              { email: { equals: "" } },
-            ],
+            OR: [{ email: { equals: null } }, { email: { equals: "" } }],
           };
         case "phone":
           return {
-            OR: [
-              { phone: { equals: null } },
-              { phone: { equals: "" } },
-            ],
+            OR: [{ phone: { equals: null } }, { phone: { equals: "" } }],
           };
         case "pronouns":
           return {
-            OR: [
-              { pronouns: { equals: null } },
-              { pronouns: { equals: "" } },
-            ],
+            OR: [{ pronouns: { equals: null } }, { pronouns: { equals: "" } }],
           };
         case "signal":
           return {
-            OR: [
-              { signal: { equals: null } },
-              { signal: { equals: "" } },
-            ],
+            OR: [{ signal: { equals: null } }, { signal: { equals: "" } }],
           };
         case "address":
           return {
-            OR: [
-              { address: { equals: null } },
-              { address: { equals: "" } },
-            ],
+            OR: [{ address: { equals: null } }, { address: { equals: "" } }],
           };
         case "postalCode":
           return {
@@ -958,31 +944,19 @@ async function getTeamContacts(
           };
         case "state":
           return {
-            OR: [
-              { state: { equals: null } },
-              { state: { equals: "" } },
-            ],
+            OR: [{ state: { equals: null } }, { state: { equals: "" } }],
           };
         case "city":
           return {
-            OR: [
-              { city: { equals: null } },
-              { city: { equals: "" } },
-            ],
+            OR: [{ city: { equals: null } }, { city: { equals: "" } }],
           };
         case "country":
           return {
-            OR: [
-              { country: { equals: null } },
-              { country: { equals: "" } },
-            ],
+            OR: [{ country: { equals: null } }, { country: { equals: "" } }],
           };
         case "website":
           return {
-            OR: [
-              { website: { equals: null } },
-              { website: { equals: "" } },
-            ],
+            OR: [{ website: { equals: null } }, { website: { equals: "" } }],
           };
         default:
           return { name: { equals: "" } };
@@ -1164,7 +1138,8 @@ async function getTeamContacts(
 
   for (const filter of distanceFilters) {
     const normalizedPostal = normalizePostalCode(filter.postalCode);
-    const normalizedCountry = normalizeCountryCode(filter.countryCode) ??
+    const normalizedCountry =
+      normalizeCountryCode(filter.countryCode) ??
       normalizeCountryCode(filter.countryCode.toUpperCase());
     const radiusKm = Number(filter.radiusKm);
 
@@ -1364,9 +1339,9 @@ const createContact = async (
 
   const normalizedPronouns = pronouns?.trim() || undefined;
   const normalizedGender = gender ?? undefined;
-  const normalizedGenderRequestPreference = genderRequestPreference ?? undefined;
-  const normalizedIsBipoc =
-    typeof isBipoc === "boolean" ? isBipoc : undefined;
+  const normalizedGenderRequestPreference =
+    genderRequestPreference ?? undefined;
+  const normalizedIsBipoc = typeof isBipoc === "boolean" ? isBipoc : undefined;
   const normalizedRacismRequestPreference =
     racismRequestPreference ?? undefined;
   const normalizedOtherMargins = otherMargins?.trim() || undefined;
@@ -1537,10 +1512,7 @@ const updateContact = async (
     socialLinks,
   } = sanitizedInput;
   const normalizedName = typeof name === "string" ? name.trim() : undefined;
-  const pronounsProvided = Object.hasOwn(
-    input,
-    "pronouns",
-  );
+  const pronounsProvided = Object.hasOwn(input, "pronouns");
   const addressProvided = Object.hasOwn(input, "address");
   const postalCodeProvided = Object.hasOwn(input, "postalCode");
   const stateProvided = Object.hasOwn(input, "state");
@@ -1616,13 +1588,13 @@ const updateContact = async (
     return normalizeCountryCode(normalizedCountry ?? undefined) ?? null;
   })();
   const genderProvided = Object.hasOwn(input, "gender");
-  const normalizedGender = genderProvided ? gender ?? null : undefined;
+  const normalizedGender = genderProvided ? (gender ?? null) : undefined;
   const genderRequestPreferenceProvided = Object.hasOwn(
     input,
     "genderRequestPreference",
   );
   const normalizedGenderRequestPreference = genderRequestPreferenceProvided
-    ? genderRequestPreference ?? null
+    ? (genderRequestPreference ?? null)
     : undefined;
   const bipocProvided = Object.hasOwn(input, "isBipoc");
   const normalizedIsBipoc = (() => {
@@ -1639,7 +1611,7 @@ const updateContact = async (
     "racismRequestPreference",
   );
   const normalizedRacismRequestPreference = racismPreferenceProvided
-    ? racismRequestPreference ?? null
+    ? (racismRequestPreference ?? null)
     : undefined;
   const otherMarginsProvided = Object.hasOwn(input, "otherMargins");
   const normalizedOtherMargins = (() => {
@@ -1804,7 +1776,10 @@ const updateContact = async (
       updates.racismRequestPreference = normalizedRacismRequestPreference;
     }
 
-    if (otherMarginsProvided && normalizedOtherMargins !== existing.otherMargins) {
+    if (
+      otherMarginsProvided &&
+      normalizedOtherMargins !== existing.otherMargins
+    ) {
       await logFieldUpdate(
         contactId,
         "otherMargins",
@@ -1929,12 +1904,17 @@ const updateContact = async (
     }
 
     if (postalCodeProvided || countryProvided) {
-      const lookupPostalCode =
-        postalCodeProvided ? normalizedPostalCode ?? undefined : existing.postalCode ?? undefined;
+      const lookupPostalCode = postalCodeProvided
+        ? (normalizedPostalCode ?? undefined)
+        : (existing.postalCode ?? undefined);
       const lookupCountryCode =
-        (countryProvided ? normalizedCountryCode ?? undefined : existing.countryCode ?? undefined) ??
+        (countryProvided
+          ? (normalizedCountryCode ?? undefined)
+          : (existing.countryCode ?? undefined)) ??
         normalizeCountryCode(
-          countryProvided ? normalizedCountry ?? undefined : existing.country ?? undefined,
+          countryProvided
+            ? (normalizedCountry ?? undefined)
+            : (existing.country ?? undefined),
         );
 
       const centroid = await resolvePostalCentroid(
@@ -1989,7 +1969,10 @@ const updateContact = async (
       updates.phone = normalizedPhone;
     }
 
-    if (normalizedSignal !== undefined && normalizedSignal !== existing.signal) {
+    if (
+      normalizedSignal !== undefined &&
+      normalizedSignal !== existing.signal
+    ) {
       await logFieldUpdate(
         contactId,
         "signal",
@@ -2002,7 +1985,10 @@ const updateContact = async (
       updates.signal = normalizedSignal;
     }
 
-    if (normalizedWebsite !== undefined && normalizedWebsite !== existing.website) {
+    if (
+      normalizedWebsite !== undefined &&
+      normalizedWebsite !== existing.website
+    ) {
       await logFieldUpdate(
         contactId,
         "website",
@@ -2253,7 +2239,13 @@ const getTeamContactAttributeKeys = async (
   userId?: string,
   roles: Roles[] = [],
 ) => {
-  const contacts = await getTeamContacts(teamId, undefined, userId, undefined, roles);
+  const contacts = await getTeamContacts(
+    teamId,
+    undefined,
+    userId,
+    undefined,
+    roles,
+  );
 
   const keys = new Set<string>();
 
@@ -2270,11 +2262,11 @@ const getTeamContactAttributeKeys = async (
 };
 
 export {
-  getTeamContacts,
-  getContactById,
-  getAllowedContactSubmodules,
   createContact,
-  updateContact,
   deleteContacts,
+  getAllowedContactSubmodules,
+  getContactById,
   getTeamContactAttributeKeys,
+  getTeamContacts,
+  updateContact,
 };

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
+import { ZodError } from "zod";
 import { auth } from "@/auth";
-import prisma from "@/lib/prisma";
 import { normalizeLoginDomain } from "@/lib/auth-routing";
+import logger from "@/lib/logger";
+import prisma from "@/lib/prisma";
 import { Roles } from "@/types";
 import { createTeamSchema } from "@/validations/team";
-import logger from "@/lib/logger";
-import { ZodError } from "zod";
 
 const hasAdminRole = (roles?: Roles[] | string[]) =>
   Boolean(roles?.includes(Roles.Admin));
@@ -45,7 +45,9 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({ data: teams.map((team) => sanitizeTeamResponse(team)) });
+    return NextResponse.json({
+      data: teams.map((team) => sanitizeTeamResponse(team)),
+    });
   } catch (_error) {
     return NextResponse.json(
       { error: "Failed to fetch teams" },
@@ -159,9 +161,13 @@ export async function POST(request: Request) {
       return newTeam;
     });
 
-    return NextResponse.json(sanitizeTeamResponse(team as Record<string, unknown> & {
-      oidcClientSecret?: string | null;
-    }));
+    return NextResponse.json(
+      sanitizeTeamResponse(
+        team as Record<string, unknown> & {
+          oidcClientSecret?: string | null;
+        },
+      ),
+    );
   } catch (error) {
     if (error instanceof ZodError) {
       return NextResponse.json(

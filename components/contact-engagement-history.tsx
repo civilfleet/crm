@@ -17,16 +17,8 @@ import useSWR from "swr";
 import ContactEngagementForm from "@/components/forms/contact-engagement";
 import { Loader } from "@/components/helper/loader";
 import MentionText from "@/components/mention-text";
-import { CONTACT_SUBMODULE_LABELS } from "@/constants/contact-submodules";
-import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Separator as UiSeparator } from "@/components/ui/separator";
 import {
   Card,
   CardContent,
@@ -35,6 +27,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -42,10 +39,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator, Separator as UiSeparator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { CONTACT_SUBMODULE_LABELS } from "@/constants/contact-submodules";
+import { useToast } from "@/hooks/use-toast";
 import {
   type ContactEngagement,
   EngagementDirection,
@@ -109,10 +108,7 @@ const getSourceColor = (source: EngagementSource) => {
   }
 };
 
-const getSourceLabel = (
-  source: EngagementSource,
-  externalSource?: string,
-) => {
+const getSourceLabel = (source: EngagementSource, externalSource?: string) => {
   const normalizedExternal = externalSource?.toUpperCase() ?? "";
   switch (source) {
     case EngagementSource.EMAIL:
@@ -395,9 +391,7 @@ const ZammadTicketDialog = React.memo(function ZammadTicketDialog({
               id="zammad-ticket-group"
               className="w-full rounded-md border bg-background px-3 py-2 text-sm"
               value={ticketGroupId ?? ""}
-              onChange={(event) =>
-                setTicketGroupId(Number(event.target.value))
-              }
+              onChange={(event) => setTicketGroupId(Number(event.target.value))}
             >
               <option value="" disabled>
                 Select a group
@@ -477,9 +471,10 @@ function EngagementRow({
   teamUsersByEmail: Map<string, TeamUser>;
   useHeader?: boolean;
 }) {
-  const parsed = engagement.source === EngagementSource.NOTE
-    ? null
-    : parseEngagementContent(engagement.message);
+  const parsed =
+    engagement.source === EngagementSource.NOTE
+      ? null
+      : parseEngagementContent(engagement.message);
   const previewText =
     engagement.source === EngagementSource.NOTE
       ? engagement.message
@@ -546,7 +541,10 @@ function EngagementRow({
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 uppercase tracking-wide">
-                    {getSourceLabel(engagement.source, engagement.externalSource)}
+                    {getSourceLabel(
+                      engagement.source,
+                      engagement.externalSource,
+                    )}
                   </span>
                   {engagement.source === EngagementSource.TODO &&
                     engagement.todoStatus && (
@@ -578,7 +576,8 @@ function EngagementRow({
                         }
                         className="text-xs inline-flex items-center gap-1"
                       >
-                        {engagement.direction === EngagementDirection.OUTBOUND ? (
+                        {engagement.direction ===
+                        EngagementDirection.OUTBOUND ? (
                           <ArrowUpRight className="h-3 w-3" />
                         ) : (
                           <ArrowDownLeft className="h-3 w-3" />
@@ -660,9 +659,8 @@ function EngagementRow({
               return null;
             }
             const metric =
-              parsed.details.find(
-                (d) => d.label.toLowerCase() === "metric",
-              )?.value ?? undefined;
+              parsed.details.find((d) => d.label.toLowerCase() === "metric")
+                ?.value ?? undefined;
             return (
               <div className="space-y-3">
                 <div className="rounded-lg border shadow-sm bg-white">
@@ -804,8 +802,8 @@ export default function ContactEngagementHistory({
   const { data: teamUsersData } = useSWR(`/api/teams/${teamId}/users`, fetcher);
 
   const engagements = (data?.data || []) as ContactEngagement[];
-  const teamUsers = ((teamUsersData?.data || []) as TeamUser[]).filter(
-    (user) => Boolean(user.email),
+  const teamUsers = ((teamUsersData?.data || []) as TeamUser[]).filter((user) =>
+    Boolean(user.email),
   );
   const teamUsersByEmail = React.useMemo(
     () => new Map(teamUsers.map((user) => [user.email.toLowerCase(), user])),
@@ -815,7 +813,6 @@ export default function ContactEngagementHistory({
     () => buildEngagementList(engagements),
     [engagements],
   );
-
 
   const handleSuccess = () => {
     mutate();
@@ -981,14 +978,14 @@ export default function ContactEngagementHistory({
                 return (
                   <div key={item.engagement.id}>
                     <div className="rounded-xl border bg-white shadow-sm p-4">
-                    <EngagementRow
-                      engagement={item.engagement}
-                      showConnector={false}
-                      onReply={handleReplyOpen}
-                      teamId={teamId}
-                      teamUsersByEmail={teamUsersByEmail}
-                      useHeader
-                    />
+                      <EngagementRow
+                        engagement={item.engagement}
+                        showConnector={false}
+                        onReply={handleReplyOpen}
+                        teamId={teamId}
+                        teamUsersByEmail={teamUsersByEmail}
+                        useHeader
+                      />
                     </div>
                     {index < engagementItems.length - 1 && <Separator />}
                   </div>
@@ -1031,9 +1028,9 @@ export default function ContactEngagementHistory({
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 uppercase tracking-wide">
-                          Thread ({item.engagements.length} messages)
-                        </span>
+                          <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 uppercase tracking-wide">
+                            Thread ({item.engagements.length} messages)
+                          </span>
                           <span className="text-xs text-muted-foreground">
                             Ticket #{item.ticketId}
                           </span>
@@ -1150,7 +1147,11 @@ export default function ContactEngagementHistory({
               >
                 Cancel
               </Button>
-              <Button type="button" onClick={handleReplySubmit} disabled={isReplying}>
+              <Button
+                type="button"
+                onClick={handleReplySubmit}
+                disabled={isReplying}
+              >
                 {isReplying && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}

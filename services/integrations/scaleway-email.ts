@@ -1,17 +1,17 @@
 import {
-  EngagementDirection,
-  EngagementSource,
-  IntegrationProvider,
-  type IntegrationConnection,
-} from "@/types";
-import {
+  type EmailBatch,
   EmailBatchStatus,
   EmailRecipientStatus,
   IntegrationProvider as PrismaIntegrationProvider,
-  type EmailBatch,
 } from "@prisma/client";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
+import {
+  EngagementDirection,
+  EngagementSource,
+  type IntegrationConnection,
+  IntegrationProvider,
+} from "@/types";
 
 const DEFAULT_REGION = "fr-par";
 const EXTERNAL_SOURCE = "SCALEWAY_TEM";
@@ -299,7 +299,9 @@ export const sendMassEmailToContacts = async ({
 }: SendMassEmailInput): Promise<SendMassEmailResult> => {
   const uniqueContactIds = Array.from(new Set(contactIds));
   if (uniqueContactIds.length > MAX_RECIPIENTS) {
-    throw new Error(`You can send to at most ${MAX_RECIPIENTS} contacts at once.`);
+    throw new Error(
+      `You can send to at most ${MAX_RECIPIENTS} contacts at once.`,
+    );
   }
 
   const integration = await prisma.integrationConnection.findUnique({

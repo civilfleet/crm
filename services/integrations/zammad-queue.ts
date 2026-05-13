@@ -1,11 +1,11 @@
 import {
-  Prisma,
+  type Prisma,
+  type ZammadSyncJob,
   ZammadSyncJobStatus,
   ZammadSyncJobType,
-  type ZammadSyncJob,
 } from "@prisma/client";
-import prisma from "@/lib/prisma";
 import logger from "@/lib/logger";
+import prisma from "@/lib/prisma";
 
 const ACTIVE_JOB_STATUSES = [
   ZammadSyncJobStatus.PENDING,

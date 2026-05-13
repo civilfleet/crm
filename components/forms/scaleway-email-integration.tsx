@@ -1,6 +1,12 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Loader2, Mail, PlugZap } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  Mail,
+  PlugZap,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { Badge } from "@/components/ui/badge";

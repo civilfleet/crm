@@ -67,9 +67,9 @@ const legacyCreateFundingRequestSchema = createFundingRequestSchema.merge(
 const updateFundingRequestSchema = legacyCreateFundingRequestSchema.partial();
 
 export {
-  staticFundingRequestSchema,
-  dynamicFieldsSchema,
   createFundingRequestSchema,
+  dynamicFieldsSchema,
   legacyCreateFundingRequestSchema,
+  staticFundingRequestSchema,
   updateFundingRequestSchema,
 };

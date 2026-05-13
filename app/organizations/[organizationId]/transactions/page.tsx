@@ -1,4 +1,3 @@
-
 import TransactionTable from "@/components/table/transaction-table";
 
 interface PageProps {

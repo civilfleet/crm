@@ -1,9 +1,9 @@
-import crypto from "crypto";
 import { IntegrationProvider as PrismaIntegrationProvider } from "@prisma/client";
-import prisma from "@/lib/prisma";
-import { EngagementDirection, EngagementSource } from "@/types";
+import crypto from "crypto";
 import logger from "@/lib/logger";
+import prisma from "@/lib/prisma";
 import { enqueueZammadTicketSyncJob } from "@/services/integrations/zammad-queue";
+import { EngagementDirection, EngagementSource } from "@/types";
 
 const ZAMMAD_SOURCE_PREFIX = "ZAMMAD";
 
@@ -26,9 +26,14 @@ const extractEmails = (value?: string | null): string[] => {
 };
 
 const stripHtml = (value?: string | null) =>
-  (value || "").replace(/<[^>]*>/g, "").replace(/\s+\n/g, "\n").trim();
+  (value || "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\s+\n/g, "\n")
+    .trim();
 
-const buildDetails = (details: Array<{ label: string; value?: string | null }>) =>
+const buildDetails = (
+  details: Array<{ label: string; value?: string | null }>,
+) =>
   details
     .filter((detail) => detail.value)
     .map((detail) => `${detail.label}: ${detail.value}`)
@@ -48,7 +53,11 @@ const buildZammadHeaders = (apiKey: string) => ({
   "Content-Type": "application/json",
 });
 
-const fetchZammad = async <T>(baseUrl: string, path: string, apiKey: string) => {
+const fetchZammad = async <T>(
+  baseUrl: string,
+  path: string,
+  apiKey: string,
+) => {
   logger.debug({ baseUrl, path }, "[Zammad] Fetch");
   const response = await fetch(`${normalizeBaseUrl(baseUrl)}${path}`, {
     headers: buildZammadHeaders(apiKey),
@@ -57,11 +66,14 @@ const fetchZammad = async <T>(baseUrl: string, path: string, apiKey: string) => 
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    logger.error({
-      path,
-      status: response.status,
-      body: text,
-    }, "[Zammad] Fetch failed");
+    logger.error(
+      {
+        path,
+        status: response.status,
+        body: text,
+      },
+      "[Zammad] Fetch failed",
+    );
     throw new Error(text || response.statusText);
   }
 
@@ -290,12 +302,15 @@ const upsertArticleEngagement = async (
     }
   }
   if (!contactId) {
-    logger.warn({
-      teamId,
-      ticketId: ticket.id,
-      articleId: article.id,
-      emails,
-    }, "[Zammad] No matching contact");
+    logger.warn(
+      {
+        teamId,
+        ticketId: ticket.id,
+        articleId: article.id,
+        emails,
+      },
+      "[Zammad] No matching contact",
+    );
     return null;
   }
 
@@ -346,12 +361,15 @@ const upsertArticleEngagement = async (
     },
   });
 
-  logger.debug({
-    teamId,
-    contactId,
-    ticketId: ticket.id,
-    articleId: article.id,
-  }, "[Zammad] Engagement upserted");
+  logger.debug(
+    {
+      teamId,
+      contactId,
+      ticketId: ticket.id,
+      articleId: article.id,
+    },
+    "[Zammad] Engagement upserted",
+  );
 
   return contactId;
 };
@@ -460,7 +478,11 @@ export const saveZammadIntegration = async ({
 
   if (shouldTestConnection ?? true) {
     try {
-      await fetchZammad<ZammadUser>(nextBaseUrl, "/api/v1/users/me", nextApiKey);
+      await fetchZammad<ZammadUser>(
+        nextBaseUrl,
+        "/api/v1/users/me",
+        nextApiKey,
+      );
       connectionVerified = true;
       connectionMessage = "Zammad connection verified.";
     } catch (error) {
@@ -529,18 +551,24 @@ export const syncZammadIntegration = async (
   }
 
   if (!integration.isEnabled) {
-    logger.warn({
-      teamId,
-    }, "[Zammad] Sync skipped because integration is disabled");
+    logger.warn(
+      {
+        teamId,
+      },
+      "[Zammad] Sync skipped because integration is disabled",
+    );
     throw new Error("Zammad integration is currently disabled.");
   }
 
-  logger.debug({
-    teamId,
-    baseUrl: integration.baseUrl,
-    lastSyncedAt: integration.lastSyncedAt?.toISOString(),
-    fullSync,
-  }, "[Zammad] Sync start");
+  logger.debug(
+    {
+      teamId,
+      baseUrl: integration.baseUrl,
+      lastSyncedAt: integration.lastSyncedAt?.toISOString(),
+      fullSync,
+    },
+    "[Zammad] Sync start",
+  );
 
   const syncStartedAt = new Date();
   const groupSettings = await getZammadGroupSettingsMap(teamId);
@@ -556,10 +584,13 @@ export const syncZammadIntegration = async (
       integration.apiKey,
     );
 
-    logger.debug({
-      page,
-      count: pageTickets.length,
-    }, "[Zammad] Tickets page fetched");
+    logger.debug(
+      {
+        page,
+        count: pageTickets.length,
+      },
+      "[Zammad] Tickets page fetched",
+    );
 
     if (!pageTickets.length) {
       break;
@@ -588,10 +619,13 @@ export const syncZammadIntegration = async (
         })
       : tickets;
 
-  logger.debug({
-    total: tickets.length,
-    filtered: filtered.length,
-  }, "[Zammad] Tickets fetched");
+  logger.debug(
+    {
+      total: tickets.length,
+      filtered: filtered.length,
+    },
+    "[Zammad] Tickets fetched",
+  );
 
   let engagementsUpserted = 0;
 
@@ -629,11 +663,14 @@ export const syncZammadIntegration = async (
     select: { lastSyncedAt: true },
   });
 
-  logger.info({
-    teamId,
-    engagementsUpserted,
-    lastSyncedAt: updated.lastSyncedAt?.toISOString(),
-  }, "[Zammad] Sync finished");
+  logger.info(
+    {
+      teamId,
+      engagementsUpserted,
+      lastSyncedAt: updated.lastSyncedAt?.toISOString(),
+    },
+    "[Zammad] Sync finished",
+  );
 
   return {
     engagementsUpserted,
@@ -652,14 +689,20 @@ export const syncZammadTicket = async (teamId: string, ticketId: number) => {
   });
 
   if (!integration || !integration.apiKey || !integration.baseUrl) {
-    logger.error({ teamId }, "[Zammad] Ticket sync missing integration settings");
+    logger.error(
+      { teamId },
+      "[Zammad] Ticket sync missing integration settings",
+    );
     throw new Error("Zammad integration is not configured for this team.");
   }
 
   if (!integration.isEnabled) {
-    logger.warn({
-      teamId,
-    }, "[Zammad] Ticket sync skipped because integration is disabled");
+    logger.warn(
+      {
+        teamId,
+      },
+      "[Zammad] Ticket sync skipped because integration is disabled",
+    );
     throw new Error("Zammad integration is currently disabled.");
   }
 
@@ -692,11 +735,14 @@ export const syncZammadTicket = async (teamId: string, ticketId: number) => {
     }
   }
 
-  logger.info({
-    teamId,
-    ticketId,
-    engagementsUpserted,
-  }, "[Zammad] Ticket sync processed");
+  logger.info(
+    {
+      teamId,
+      ticketId,
+      engagementsUpserted,
+    },
+    "[Zammad] Ticket sync processed",
+  );
 
   return { engagementsUpserted, ticketId };
 };
@@ -725,9 +771,12 @@ export const handleZammadWebhook = async ({
   }
 
   if (!integration.isEnabled) {
-    logger.warn({
-      teamId,
-    }, "[Zammad] Webhook received but integration disabled");
+    logger.warn(
+      {
+        teamId,
+      },
+      "[Zammad] Webhook received but integration disabled",
+    );
     throw new Error("Zammad integration is currently disabled.");
   }
 
@@ -760,21 +809,27 @@ export const handleZammadWebhook = async ({
     null;
 
   if (!ticketId) {
-    logger.error({
-      teamId,
-      payloadKeys: Object.keys(payload || {}),
-    }, "[Zammad] Webhook missing ticket id");
+    logger.error(
+      {
+        teamId,
+        payloadKeys: Object.keys(payload || {}),
+      },
+      "[Zammad] Webhook missing ticket id",
+    );
     throw new Error("Webhook payload missing ticket id.");
   }
 
   const job = await enqueueZammadTicketSyncJob({ teamId, ticketId });
 
-  logger.info({
-    teamId,
-    ticketId,
-    jobId: job.id,
-    status: job.status,
-  }, "[Zammad] Webhook queued");
+  logger.info(
+    {
+      teamId,
+      ticketId,
+      jobId: job.id,
+      status: job.status,
+    },
+    "[Zammad] Webhook queued",
+  );
 
   return { jobId: job.id, status: job.status, ticketId };
 };
@@ -999,9 +1054,14 @@ export const getZammadGroups = async (teamId: string) => {
     settings.map((setting) => [setting.groupId, setting]),
   );
 
-  const userGroupIds = tokenUser && (tokenUser as { group_ids?: Record<string, unknown> }).group_ids
-    ? Object.keys((tokenUser as { group_ids?: Record<string, unknown> }).group_ids || {}).map((id) => Number(id))
-    : [];
+  const userGroupIds =
+    tokenUser &&
+    (tokenUser as { group_ids?: Record<string, unknown> }).group_ids
+      ? Object.keys(
+          (tokenUser as { group_ids?: Record<string, unknown> }).group_ids ||
+            {},
+        ).map((id) => Number(id))
+      : [];
   const filteredGroups =
     userGroupIds.length > 0
       ? groups.filter((group) => userGroupIds.includes(group.id))
@@ -1017,7 +1077,6 @@ export const getZammadGroups = async (teamId: string) => {
     };
   });
 };
-
 
 export const saveZammadGroups = async (
   teamId: string,

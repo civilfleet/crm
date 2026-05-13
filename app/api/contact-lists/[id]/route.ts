@@ -6,8 +6,8 @@ import {
   getContactListById,
   updateContactList,
 } from "@/services/contact-lists";
-import { updateContactListSchema } from "@/validations/contact-lists";
 import type { Roles } from "@/types";
+import { updateContactListSchema } from "@/validations/contact-lists";
 
 export async function GET(
   request: NextRequest,

@@ -7,7 +7,11 @@ import {
 } from "@/services/integrations/scaleway-email";
 
 const updateIntegrationSchema = z.object({
-  apiKey: z.string().trim().min(1, "Scaleway secret key is required").optional(),
+  apiKey: z
+    .string()
+    .trim()
+    .min(1, "Scaleway secret key is required")
+    .optional(),
   region: z.string().trim().min(1).default("fr-par"),
   projectId: z.string().trim().min(1, "Project ID is required").optional(),
   senderEmail: z

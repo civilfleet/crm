@@ -1,4 +1,3 @@
-
 import prisma from "@/lib/prisma";
 import { FundingStatus } from "@/types";
 
@@ -412,11 +411,12 @@ const getDonationAgreementPastEightWeeks = async () => {
 
   return donationAgreements;
 };
+
 export {
   createDonationAgreement,
-  updateDonationAgreement,
-  getDonationAgreements,
   getDonationAgreementById,
   getDonationAgreementPastEightWeeks,
   getDonationAgreementPastSevenDays,
+  getDonationAgreements,
+  updateDonationAgreement,
 };

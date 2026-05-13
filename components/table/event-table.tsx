@@ -187,13 +187,19 @@ export default function EventTable({ teamId }: EventTableProps) {
             name="query"
             placeholder="Search events"
           />
+          <FormInputControl form={form} name="state" placeholder="State" />
           <FormInputControl
             form={form}
-            name="state"
-            placeholder="State"
+            name="from"
+            placeholder="From"
+            type="date"
           />
-          <FormInputControl form={form} name="from" placeholder="From" type="date" />
-          <FormInputControl form={form} name="to" placeholder="To" type="date" />
+          <FormInputControl
+            form={form}
+            name="to"
+            placeholder="To"
+            type="date"
+          />
           <div className="min-w-[200px]">
             <Select
               onValueChange={(value) => form.setValue("eventTypeId", value)}
@@ -239,7 +245,10 @@ export default function EventTable({ teamId }: EventTableProps) {
             renderCard={renderEventCard}
             initialView="table"
             toolbar={
-              <Link href={`/teams/${teamId}/crm/events/create`} aria-label="Add event">
+              <Link
+                href={`/teams/${teamId}/crm/events/create`}
+                aria-label="Add event"
+              >
                 <Button
                   type="button"
                   size="sm"

@@ -112,6 +112,7 @@ export const columns: ColumnDef<Transaction>[] = [
             <a
               href={`${process.env.NEXT_PUBLIC_BASE_URL}/api/files/${row.getValue("transactionReciept")}`}
               target="_blank"
+              rel="noopener"
             >
               View
             </a>

@@ -1,19 +1,20 @@
 "use client";
 
-import useSWR from "swr";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import useSWR from "swr";
 import CreateEmailTemplate from "@/components/forms/create-email-template";
 import EventRolesManager from "@/components/forms/event-roles-manager";
 import EventTypesManager from "@/components/forms/event-types-manager";
-import OrganizationTypesManager from "@/components/forms/organization-types-manager";
 import FormConfigurationManager from "@/components/forms/form-configuration-manager";
 import KlaviyoIntegration from "@/components/forms/klaviyo-integration";
+import OrganizationTypesManager from "@/components/forms/organization-types-manager";
 import ScalewayEmailIntegration from "@/components/forms/scaleway-email-integration";
 import StrategicPrioritiesForm from "@/components/forms/strategic-priorities";
 import TeamModulesForm from "@/components/forms/team-modules";
 import TeamSsoSettings from "@/components/forms/team-sso-settings";
 import ZammadIntegration from "@/components/forms/zammad-integration";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   Select,
@@ -23,7 +24,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import type { EmailTemplate } from "@/types";
 
@@ -342,7 +342,8 @@ const OwnershipCard = ({
             </option>
             {users.map((user) => (
               <option key={user.id} value={user.id}>
-                {user.name || user.email} {user.id === currentUserId ? "(You)" : ""}
+                {user.name || user.email}{" "}
+                {user.id === currentUserId ? "(You)" : ""}
               </option>
             ))}
           </select>

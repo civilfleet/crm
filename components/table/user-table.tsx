@@ -44,7 +44,7 @@ export default function UserTable({ teamId, organizationId }: UserTableProps) {
   );
   const loading = isLoading || !data;
   const ownerId = data?.ownerId as string | undefined;
-  const totalUsers = Number(data?.total ?? (data?.data?.length ?? 0));
+  const totalUsers = Number(data?.total ?? data?.data?.length ?? 0);
 
   useEffect(() => {
     setPage(1);
@@ -151,9 +151,7 @@ export default function UserTable({ teamId, organizationId }: UserTableProps) {
           />
         </form>
       </Form>
-      <div
-        className="relative rounded-md border my-2 flex justify-center items-center grow h-full"
-      >
+      <div className="relative rounded-md border my-2 flex justify-center items-center grow h-full">
         {isValidating && !loading ? (
           <p className="absolute right-4 top-4 text-xs text-muted-foreground">
             Refreshing...
@@ -164,12 +162,10 @@ export default function UserTable({ teamId, organizationId }: UserTableProps) {
         ) : (
           <DataTable
             columns={columns}
-            data={
-              (data?.data || []).map((user: User) => ({
-                ...user,
-                isOwner: ownerId ? user.id === ownerId : false,
-              }))
-            }
+            data={(data?.data || []).map((user: User) => ({
+              ...user,
+              isOwner: ownerId ? user.id === ownerId : false,
+            }))}
             initialView="table"
             serverPagination={{
               page,

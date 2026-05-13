@@ -1,94 +1,99 @@
 {
-	"css": {
-		"parser": {
-			"tailwindDirectives": true
-		}
-	},
-	"$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
-	"files": {
-		"ignoreUnknown": true,
-		"includes": [
-			"**",
-			"!.*",
-			"!node_modules",
-			"!.next",
-			"!out",
-			"!build",
-			"!.yarn",
-			"!.vercel",
-			"!dist",
-			"!coverage",
-			"!public",
-			"!prisma/migrations",
-			"!**/*.d.ts",
-			"!**/*.log",
-			"!**/*.lock",
-			"!**/*.hbs",
-			"!templates",
-			"!docs",
-			"!next-env.d.ts",
-			"!tsconfig.tsbuildinfo"
-		]
-	},
-	"formatter": {
-		"useEditorconfig": true,
-		"enabled": true
-	},
-	"linter": {
-		"enabled": true,
-		"rules": {
-			"recommended": true,
-			"correctness": {
-				"noUnusedVariables": "warn"
-			},
-			"suspicious": {
-				"noExplicitAny": "warn"
-			},
-			"style": {
-				"noCommonJs": "off"
-			}
-		},
-		"includes": [
-			"**",
-			"!node_modules/**",
-			"!.next/**",
-			"!out/**",
-			"!build/**",
-			"!.yarn/**",
-			"!.vercel/**",
-			"!public/**",
-			"!prisma/migrations/**",
-			"!**/*.d.ts",
-			"!**/*.hbs",
-			"!templates/**",
-			"!docs/**",
-			"!next-env.d.ts",
-			"!tsconfig.tsbuildinfo"
-		]
-	},
-	"javascript": {
-		"formatter": {
-			"quoteStyle": "double"
-		}
-	},
-	"overrides": [
-		{
-			"includes": ["**/*.config.*", "scripts/**/*.{ts,tsx,js}"],
-			"linter": {
-				"rules": {
-					"style": {
-						"noCommonJs": "off"
-					}
-				}
-			}
-		}
-	],
-	"assist": {
-		"enabled": true,
-		"actions": {
-			"source": {
-				"organizeImports": "on"
-			}
-		}
-	}
+  "$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "**",
+      "!.*",
+      "!node_modules",
+      "!.next",
+      "!out",
+      "!build",
+      "!.yarn",
+      "!.vercel",
+      "!dist",
+      "!coverage",
+      "!public",
+      "!prisma/migrations",
+      "!**/*.d.ts",
+      "!**/*.log",
+      "!**/*.lock",
+      "!**/*.hbs",
+      "!templates",
+      "!docs",
+      "!next-env.d.ts",
+      "!tsconfig.tsbuildinfo"
+    ]
+  },
+  "formatter": {
+    "useEditorconfig": true,
+    "enabled": true
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "noUnusedVariables": "warn"
+      },
+      "suspicious": {
+        "noExplicitAny": "warn"
+      },
+      "style": {
+        "noCommonJs": "off"
+      }
+    },
+    "includes": [
+      "**",
+      "!node_modules/**",
+      "!.next/**",
+      "!out/**",
+      "!build/**",
+      "!.yarn/**",
+      "!.vercel/**",
+      "!public/**",
+      "!prisma/migrations/**",
+      "!**/*.d.ts",
+      "!**/*.hbs",
+      "!templates/**",
+      "!docs/**",
+      "!next-env.d.ts",
+      "!tsconfig.tsbuildinfo"
+    ]
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double"
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.config.*", "scripts/**/*.{ts,tsx,js}"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noCommonJs": "off"
+          }
+        }
+      }
+    }
+  ],
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  }
 }

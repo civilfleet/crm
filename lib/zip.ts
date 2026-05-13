@@ -30,7 +30,9 @@ const crc32 = (data: Buffer) => {
 const dateToDos = (date: Date) => {
   const year = Math.max(date.getFullYear(), 1980);
   const dosTime =
-    (date.getHours() << 11) | (date.getMinutes() << 5) | (date.getSeconds() >> 1);
+    (date.getHours() << 11) |
+    (date.getMinutes() << 5) |
+    (date.getSeconds() >> 1);
   const dosDate =
     ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
   return { dosTime, dosDate };
@@ -115,4 +117,3 @@ export const createZipBuffer = (entries: ZipEntry[]) => {
 
   return Buffer.concat([...fileParts, centralDirectory, endOfCentralDirectory]);
 };
-

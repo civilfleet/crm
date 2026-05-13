@@ -3,14 +3,14 @@
 import type { LayerGroup, Map as LeafletMap } from "leaflet";
 import {
   circleMarker,
-  layerGroup,
-  latLngBounds,
   map as createMap,
+  latLngBounds,
+  layerGroup,
   tileLayer,
 } from "leaflet";
 import { useEffect, useMemo, useRef } from "react";
-import { Card } from "@/components/ui/card";
 import type { ContactRow } from "@/components/table/contact-columns";
+import { Card } from "@/components/ui/card";
 
 type ContactMapProps = {
   contacts: ContactRow[];
@@ -29,7 +29,9 @@ type ContactPoint = {
 const DEFAULT_CENTER: [number, number] = [52.52, 13.405];
 
 const getBounds = (points: ContactPoint[]) => {
-  const bounds = latLngBounds(points.map((point) => [point.latitude, point.longitude]));
+  const bounds = latLngBounds(
+    points.map((point) => [point.latitude, point.longitude]),
+  );
   return bounds;
 };
 
@@ -39,8 +41,10 @@ export default function ContactMap({ contacts }: ContactMapProps) {
   const layerRef = useRef<LayerGroup | null>(null);
   const points = useMemo<ContactPoint[]>(() => {
     return contacts
-      .filter((contact) =>
-        typeof contact.latitude === "number" && typeof contact.longitude === "number",
+      .filter(
+        (contact) =>
+          typeof contact.latitude === "number" &&
+          typeof contact.longitude === "number",
       )
       .map((contact) => ({
         id: contact.id,
@@ -53,7 +57,10 @@ export default function ContactMap({ contacts }: ContactMapProps) {
       }));
   }, [contacts]);
   const mapKey = useMemo(() => {
-    const ids = points.map((point) => point.id).sort().join("|");
+    const ids = points
+      .map((point) => point.id)
+      .sort()
+      .join("|");
     return ids || "empty";
   }, [points]);
 

@@ -2,13 +2,13 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import NextAuth, { type DefaultSession } from "next-auth";
 import Nodemailer from "next-auth/providers/nodemailer";
 import authConfig from "./config/auth";
+import mailConfig from "./config/mail";
 import {
   extractEmailDomain,
   loadTeamOidcProviders,
   normalizeLoginDomain,
   resolveExpectedProviderByEmail,
 } from "./lib/auth-routing";
-import mailConfig from "./config/mail";
 import logger from "./lib/logger";
 import prisma from "./lib/prisma";
 import { ensureDefaultGroup } from "./services/groups";
@@ -29,7 +29,9 @@ declare module "next-auth" {
 }
 
 const buildAuth = async () => {
-  let teamOidcProviders = [] as Awaited<ReturnType<typeof loadTeamOidcProviders>>;
+  let teamOidcProviders = [] as Awaited<
+    ReturnType<typeof loadTeamOidcProviders>
+  >;
   try {
     teamOidcProviders = await loadTeamOidcProviders();
   } catch (error) {
@@ -77,16 +79,14 @@ const buildAuth = async () => {
               autoProvisionUsersFromOidc: true,
               defaultOidcGroupId: true,
             },
-          } as any)) as
-            | {
-                id: string;
-                loginMethod?: string | null;
-                loginDomain?: string | null;
-                domainVerifiedAt?: Date | null;
-                autoProvisionUsersFromOidc?: boolean | null;
-                defaultOidcGroupId?: string | null;
-              }
-            | null;
+          } as any)) as {
+            id: string;
+            loginMethod?: string | null;
+            loginDomain?: string | null;
+            domainVerifiedAt?: Date | null;
+            autoProvisionUsersFromOidc?: boolean | null;
+            defaultOidcGroupId?: string | null;
+          } | null;
 
           const userEmailDomain = extractEmailDomain(user.email);
           const teamLoginDomain = normalizeLoginDomain(team?.loginDomain);
@@ -194,7 +194,9 @@ const buildAuth = async () => {
           }
         }
         try {
-          const expectedProvider = await resolveExpectedProviderByEmail(user.email);
+          const expectedProvider = await resolveExpectedProviderByEmail(
+            user.email,
+          );
           if (expectedProvider !== account.provider) {
             logger.warn(
               {

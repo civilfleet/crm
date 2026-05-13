@@ -316,7 +316,11 @@ export default function EventTypesManager({ teamId }: EventTypesManagerProps) {
               />
 
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={handleCloseDialog}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCloseDialog}
+                >
                   Cancel
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>

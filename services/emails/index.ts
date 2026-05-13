@@ -67,9 +67,7 @@ export type EmailHistoryBatch = {
 
 const toIso = (value?: Date | null) => value?.toISOString();
 
-const mapEmailBatch = (
-  batch: EmailBatchWithRecipients,
-): EmailHistoryBatch => ({
+const mapEmailBatch = (batch: EmailBatchWithRecipients): EmailHistoryBatch => ({
   id: batch.id,
   teamId: batch.teamId,
   provider: batch.provider,

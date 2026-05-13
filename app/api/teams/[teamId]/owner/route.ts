@@ -3,10 +3,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
-import {
-  ensureTeamOwner,
-  transferTeamOwnership,
-} from "@/services/teams";
+import { ensureTeamOwner, transferTeamOwnership } from "@/services/teams";
 
 const transferSchema = z.object({
   newOwnerId: z.string().uuid(),
@@ -63,10 +60,7 @@ export async function PATCH(
       session.user.roles,
     );
 
-    return NextResponse.json(
-      { data: { ownerId } },
-      { status: 200 },
-    );
+    return NextResponse.json({ data: { ownerId } }, { status: 200 });
   } catch (error) {
     const { message } = handlePrismaError(error);
     return NextResponse.json(

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
 import { getTeamContactAttributeKeys } from "@/services/contacts";
-import prisma from "@/lib/prisma";
 import type { Roles } from "@/types";
 
 export async function GET(req: Request) {

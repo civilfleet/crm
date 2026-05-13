@@ -8,10 +8,10 @@ import { DataTable } from "@/components/data-table";
 import TableLoadingState from "@/components/loading/table-loading-state";
 import { getFileColumns } from "@/components/table/file-columns";
 import { useToast } from "@/hooks/use-toast";
+import type { FileDownloadAudit } from "@/types";
 import ButtonControl from "../helper/button-control";
 import FormInputControl from "../helper/form-input-control";
 import { Form } from "../ui/form";
-import type { FileDownloadAudit } from "@/types";
 
 const querySchema = z.object({
   query: z.string(),
@@ -68,9 +68,12 @@ export default function FileTable({ teamId, organizationId }: IFileTableProps) {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.error || "Failed to prepare download");
       }
-      const contentDisposition = response.headers.get("content-disposition") || "";
+      const contentDisposition =
+        response.headers.get("content-disposition") || "";
       const match = contentDisposition.match(/filename=([^;]+)/i);
-      const filename = match?.[1] || `funding-files-${new Date().toISOString().slice(0, 10)}.zip`;
+      const filename =
+        match?.[1] ||
+        `funding-files-${new Date().toISOString().slice(0, 10)}.zip`;
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
@@ -98,15 +101,15 @@ export default function FileTable({ teamId, organizationId }: IFileTableProps) {
       <div className="mb-2 flex items-center justify-between gap-3">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-1/2">
-          <div className="flex-1">
-            <FormInputControl
-              form={form}
-              name="query"
-              placeholder="Search..."
-            />
-          </div>
+            <div className="flex-1">
+              <FormInputControl
+                form={form}
+                name="query"
+                placeholder="Search..."
+              />
+            </div>
 
-          <ButtonControl type="submit" label="Submit" className="mx-2" />
+            <ButtonControl type="submit" label="Submit" className="mx-2" />
           </form>
         </Form>
         <ButtonControl
@@ -116,9 +119,7 @@ export default function FileTable({ teamId, organizationId }: IFileTableProps) {
           onClick={downloadAll}
         />
       </div>
-      <div
-        className="relative rounded-md border my-2 flex justify-center items-center grow h-full"
-      >
+      <div className="relative rounded-md border my-2 flex justify-center items-center grow h-full">
         {isValidating && !loading ? (
           <p className="absolute right-4 top-4 text-xs text-muted-foreground">
             Refreshing...
@@ -136,8 +137,8 @@ export default function FileTable({ teamId, organizationId }: IFileTableProps) {
       <div className="rounded-md border my-2 p-3">
         <h3 className="text-sm font-semibold mb-2">Recent Downloads</h3>
         <div className="space-y-2">
-          {((auditData?.data as FileDownloadAudit[] | undefined) ?? []).length ===
-          0 ? (
+          {((auditData?.data as FileDownloadAudit[] | undefined) ?? [])
+            .length === 0 ? (
             <p className="text-sm text-muted-foreground">No downloads yet.</p>
           ) : (
             ((auditData?.data as FileDownloadAudit[] | undefined) ?? []).map(

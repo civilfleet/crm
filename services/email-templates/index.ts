@@ -1,6 +1,6 @@
+import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import type { EmailTemplate } from "@/types";
-import logger from "@/lib/logger";
 
 const getEmailTemplateByType = async (teamId: string, type: string) => {
   const template = await prisma.emailTemplates.findFirst({
@@ -32,8 +32,14 @@ const createEmailTemplate = async (teamId: string, template: EmailTemplate) => {
   });
   return newTemplate;
 };
-const updateEmailTemplate = async (_teamId: string, template: EmailTemplate) => {
-  logger.debug({ templateId: template.id, type: template.type }, "Updating email template");
+const updateEmailTemplate = async (
+  _teamId: string,
+  template: EmailTemplate,
+) => {
+  logger.debug(
+    { templateId: template.id, type: template.type },
+    "Updating email template",
+  );
   const updatedTemplate = await prisma.emailTemplates.update({
     where: { id: template.id },
     data: {

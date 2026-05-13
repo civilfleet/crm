@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
-import { FileDownloadType, Roles } from "@/types";
+import { type FileDownloadType, Roles } from "@/types";
 
 const getFileById = async (id: string) => {
   try {
@@ -22,8 +22,8 @@ const getFiles = async (
     organizationId,
     teamId,
   }: {
-  organizationId: string | undefined;
-  teamId: string | undefined;
+    organizationId: string | undefined;
+    teamId: string | undefined;
   },
   searchQuery: string,
 ) => {
@@ -206,7 +206,8 @@ const canUserAccessTeamOrOrgScope = async ({
   const scope = await getUserAccessScope(userId);
   if (scope.roles.includes(Roles.Admin)) return true;
   if (teamId && scope.teamIds.includes(teamId)) return true;
-  if (organizationId && scope.organizationIds.includes(organizationId)) return true;
+  if (organizationId && scope.organizationIds.includes(organizationId))
+    return true;
   return false;
 };
 
@@ -224,7 +225,10 @@ const canUserAccessFile = async ({
   if (!file) return false;
   if (scope.roles.includes(Roles.Admin)) return true;
 
-  if (file.organizationId && scope.organizationIds.includes(file.organizationId)) {
+  if (
+    file.organizationId &&
+    scope.organizationIds.includes(file.organizationId)
+  ) {
     return true;
   }
 
@@ -359,8 +363,8 @@ export {
   canUserAccessFile,
   canUserAccessTeamOrOrgScope,
   getFileById,
+  getFileByIdWithRelations,
   getFileDownloadAudits,
   getFiles,
-  getFileByIdWithRelations,
   recordFileDownloadAudit,
 };

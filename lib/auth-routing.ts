@@ -62,9 +62,7 @@ const getTeamByEmailDomain = async (
 };
 
 const hasOidcCredentials = (team?: TeamAuthConfig | null) =>
-  Boolean(
-    team?.oidcIssuer && team?.oidcClientId && team?.oidcClientSecret,
-  );
+  Boolean(team?.oidcIssuer && team?.oidcClientId && team?.oidcClientSecret);
 
 export const resolveExpectedProviderByEmail = async (
   email?: string | null,
@@ -165,7 +163,8 @@ export const loadTeamOidcProviders = async (): Promise<
       },
     },
     profile(profile) {
-      const email = typeof profile.email === "string" ? profile.email : undefined;
+      const email =
+        typeof profile.email === "string" ? profile.email : undefined;
       const sub = typeof profile.sub === "string" ? profile.sub : email;
 
       return {

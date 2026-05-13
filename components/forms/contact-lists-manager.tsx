@@ -1,9 +1,18 @@
 "use client";
 
-import { Check, Copy, Download, Loader2, Pencil, Plus, Trash2, Users } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
+import {
+  Check,
+  Copy,
+  Download,
+  Loader2,
+  Pencil,
+  Plus,
+  Trash2,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ColumnDef } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { DataTable } from "@/components/data-table";
@@ -182,9 +191,11 @@ export default function ContactListsManager({
           list.contacts.length === 1 ? "" : "s"
         } to your clipboard.`,
       });
-      setTimeout(() => setCopiedListId((current) =>
-        current === list.id ? null : current,
-      ), 2000);
+      setTimeout(
+        () =>
+          setCopiedListId((current) => (current === list.id ? null : current)),
+        2000,
+      );
     } catch (error) {
       toast({
         title: "Unable to copy contacts",
@@ -235,9 +246,7 @@ export default function ContactListsManager({
     }
 
     const confirmed = confirm(
-      `Are you sure you want to delete ${selectedRows.length} selected list${
-        selectedRows.length === 1 ? "" : "s"
-      }?`,
+      `Are you sure you want to delete ${selectedRows.length} selected list${selectedRows.length === 1 ? "" : "s"}?`,
     );
 
     if (!confirmed) {
@@ -264,9 +273,7 @@ export default function ContactListsManager({
 
       toast({
         title: "Lists deleted",
-        description: `${selectedRows.length} list${
-          selectedRows.length === 1 ? "" : "s"
-        } removed successfully.`,
+        description: `${selectedRows.length} list${selectedRows.length === 1 ? "" : "s"} removed successfully.`,
       });
 
       clearSelection();
@@ -276,7 +283,9 @@ export default function ContactListsManager({
       toast({
         title: "Unable to delete lists",
         description:
-          error instanceof Error ? error.message : "An unexpected error occurred.",
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred.",
         variant: "destructive",
       });
     } finally {
@@ -440,7 +449,12 @@ export default function ContactListsManager({
           <Download className="h-4 w-4" />
           Export
         </Button>
-        <Button asChild variant="outline" size="sm" className="justify-start gap-1">
+        <Button
+          asChild
+          variant="outline"
+          size="sm"
+          className="justify-start gap-1"
+        >
           <Link href={`/teams/${teamId}/crm/lists/${list.id}`}>
             <Pencil className="h-4 w-4" />
             Edit
@@ -496,7 +510,9 @@ export default function ContactListsManager({
                     variant="destructive"
                     size="sm"
                     disabled={isBulkDeleting}
-                    onClick={() => handleDeleteSelected(selectedRows, clearSelection)}
+                    onClick={() =>
+                      handleDeleteSelected(selectedRows, clearSelection)
+                    }
                   >
                     {isBulkDeleting ? (
                       <>
@@ -526,12 +542,20 @@ export default function ContactListsManager({
                     <SelectValue placeholder="Sort lists" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="updated-desc">Updated (newest)</SelectItem>
-                    <SelectItem value="updated-asc">Updated (oldest)</SelectItem>
+                    <SelectItem value="updated-desc">
+                      Updated (newest)
+                    </SelectItem>
+                    <SelectItem value="updated-asc">
+                      Updated (oldest)
+                    </SelectItem>
                     <SelectItem value="name-asc">Name (A–Z)</SelectItem>
                     <SelectItem value="name-desc">Name (Z–A)</SelectItem>
-                    <SelectItem value="count-desc">Contacts (high → low)</SelectItem>
-                    <SelectItem value="count-asc">Contacts (low → high)</SelectItem>
+                    <SelectItem value="count-desc">
+                      Contacts (high → low)
+                    </SelectItem>
+                    <SelectItem value="count-asc">
+                      Contacts (low → high)
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 <Button asChild className="hidden sm:inline-flex">

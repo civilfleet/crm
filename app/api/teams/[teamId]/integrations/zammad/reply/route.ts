@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { auth } from "@/auth";
 import { handlePrismaError } from "@/lib/utils";
 import { replyToZammadTicket } from "@/services/integrations/zammad";
-import { auth } from "@/auth";
 
 const replySchema = z.object({
   ticketId: z.coerce.number().int().positive(),

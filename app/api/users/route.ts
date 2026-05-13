@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { sendEmail } from "@/lib/nodemailer";
 import { APP_NAME } from "@/constants/app";
+import { sendEmail } from "@/lib/nodemailer";
 import { getAppUrl, getLoginUrl, handlePrismaError } from "@/lib/utils";
-import { createUser, getUsers, getUsersForDonation } from "@/services/users";
 import { ensureTeamOwner } from "@/services/teams";
+import { createUser, getUsers, getUsersForDonation } from "@/services/users";
 import { Roles } from "@/types";
 import { createUserSchema } from "@/validations/organizations";
 
@@ -19,12 +19,12 @@ export async function GET(req: Request) {
     const hasPagination = hasPageParam || hasPageSizeParam;
     const pageParam = Number(searchParams.get("page") || "1");
     const pageSizeParam = Number(searchParams.get("pageSize") || "10");
-    const page = Number.isFinite(pageParam) && pageParam > 0
-      ? Math.floor(pageParam)
-      : 1;
-    const pageSize = Number.isFinite(pageSizeParam) && pageSizeParam > 0
-      ? Math.min(Math.floor(pageSizeParam), 100)
-      : 10;
+    const page =
+      Number.isFinite(pageParam) && pageParam > 0 ? Math.floor(pageParam) : 1;
+    const pageSize =
+      Number.isFinite(pageSizeParam) && pageSizeParam > 0
+        ? Math.min(Math.floor(pageSizeParam), 100)
+        : 10;
     const dataPromise =
       fundingRequestId && teamId
         ? getUsersForDonation({

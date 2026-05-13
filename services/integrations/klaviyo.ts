@@ -1,25 +1,25 @@
 import { IntegrationProvider as PrismaIntegrationProvider } from "@prisma/client";
-import prisma from "@/lib/prisma";
 import {
+  fetchKlaviyoCampaignMessage,
   fetchKlaviyoEmailEvents,
   fetchKlaviyoEventDetails,
-  fetchKlaviyoMessageContent,
-  fetchKlaviyoCampaignMessage,
-  fetchKlaviyoTemplate,
-  fetchKlaviyoProfiles,
-  maskKlaviyoApiKey,
-  testKlaviyoCredentials,
   fetchKlaviyoEventMetric,
+  fetchKlaviyoMessageContent,
+  fetchKlaviyoProfiles,
+  fetchKlaviyoTemplate,
   type KlaviyoEvent,
   type KlaviyoProfile,
+  maskKlaviyoApiKey,
+  testKlaviyoCredentials,
 } from "@/lib/klaviyo";
+import prisma from "@/lib/prisma";
+import { logContactCreation } from "@/services/contact-change-logs";
 import {
   EngagementDirection,
   EngagementSource,
-  IntegrationProvider,
   type IntegrationConnection,
+  IntegrationProvider,
 } from "@/types";
-import { logContactCreation } from "@/services/contact-change-logs";
 
 const EXTERNAL_SOURCE = "KLAVIYO";
 
@@ -172,9 +172,9 @@ const buildEngagementContent = async (
   const messageId = resolveMessageId();
 
   const possibleBodyFields = [
-    (properties.body as string | undefined),
-    (properties.Body as string | undefined),
-    (properties.preview_text as string | undefined),
+    properties.body as string | undefined,
+    properties.Body as string | undefined,
+    properties.preview_text as string | undefined,
   ];
   const body = possibleBodyFields.find(
     (value) => typeof value === "string" && value.trim().length > 0,
@@ -219,10 +219,7 @@ const buildEngagementContent = async (
     }
   };
 
-  const addPropertyDetail = (
-    label: string,
-    key?: keyof typeof properties,
-  ) => {
+  const addPropertyDetail = (label: string, key?: keyof typeof properties) => {
     if (!key) return;
     if (Object.hasOwn(properties, key)) {
       usedPropertyKeys.add(String(key));
@@ -296,7 +293,10 @@ const buildEngagementContent = async (
 
   let enrichedBody = body?.trim();
   if (messageId) {
-    const campaignMessage = await fetchKlaviyoCampaignMessage(apiKey, messageId);
+    const campaignMessage = await fetchKlaviyoCampaignMessage(
+      apiKey,
+      messageId,
+    );
     const includedTemplate = campaignMessage?.included?.find(
       (item) => item.type === "template",
     );
@@ -304,7 +304,10 @@ const buildEngagementContent = async (
       includedTemplate?.id ??
       campaignMessage?.data?.relationships?.template?.data?.id;
 
-    if (includedTemplate?.attributes?.html || includedTemplate?.attributes?.text) {
+    if (
+      includedTemplate?.attributes?.html ||
+      includedTemplate?.attributes?.text
+    ) {
       enrichedBody =
         stripHtml(includedTemplate.attributes?.html ?? undefined) ||
         (includedTemplate.attributes?.text ?? undefined)?.trim() ||
@@ -323,7 +326,10 @@ const buildEngagementContent = async (
     }
 
     if (!enrichedBody) {
-      const messageContent = await fetchKlaviyoMessageContent(apiKey, messageId);
+      const messageContent = await fetchKlaviyoMessageContent(
+        apiKey,
+        messageId,
+      );
       const htmlBody =
         messageContent?.attributes?.html_body ??
         messageContent?.attributes?.html ??
@@ -377,14 +383,14 @@ const buildEngagementContent = async (
 const getEmailFromEvent = (event: KlaviyoEvent) => {
   const properties = getEventProperties(event);
   const possibleEmailFields = [
-    (properties.email as string | undefined),
-    (properties.to as string | undefined),
-    (properties.recipient as string | undefined),
-    (properties.to_email as string | undefined),
-    (properties.email_address as string | undefined),
-    (properties.from_email as string | undefined),
-    (properties.from as string | undefined),
-    (properties.customer_email as string | undefined),
+    properties.email as string | undefined,
+    properties.to as string | undefined,
+    properties.recipient as string | undefined,
+    properties.to_email as string | undefined,
+    properties.email_address as string | undefined,
+    properties.from_email as string | undefined,
+    properties.from as string | undefined,
+    properties.customer_email as string | undefined,
   ];
 
   const email = possibleEmailFields.find(
@@ -420,7 +426,10 @@ const createEngagementFromEvent = async ({
   if (!hasMeaningfulProperties || !hasMetricDetails || !hasProfile) {
     try {
       const detail = await fetchKlaviyoEventDetails(apiKey, event.id);
-      if (detail?.attributes?.properties && Object.keys(detail.attributes.properties).length > 0) {
+      if (
+        detail?.attributes?.properties &&
+        Object.keys(detail.attributes.properties).length > 0
+      ) {
         enrichedEvent = {
           ...event,
           attributes: { ...event.attributes, ...detail.attributes },
@@ -470,9 +479,7 @@ const createEngagementFromEvent = async ({
     if (typeof rawTimestamp === "string") {
       const asNumber = Number(rawTimestamp);
       if (!Number.isNaN(asNumber) && asNumber > 0) {
-        return new Date(
-          asNumber > 2_000_000_000 ? asNumber : asNumber * 1000,
-        );
+        return new Date(asNumber > 2_000_000_000 ? asNumber : asNumber * 1000);
       }
       const parsed = new Date(rawTimestamp);
       if (!Number.isNaN(parsed.getTime())) {
@@ -639,7 +646,9 @@ export const syncKlaviyoIntegration = async (
   let contactsUpdated = 0;
   let fallbackContactsCreated = 0;
 
-  const ensureContactForEmail = async (email?: string): Promise<string | undefined> => {
+  const ensureContactForEmail = async (
+    email?: string,
+  ): Promise<string | undefined> => {
     const normalized = normalizeEmail(email);
     if (!normalized) {
       return undefined;

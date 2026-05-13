@@ -7,11 +7,11 @@ import {
   deleteContactLists,
   getTeamContactLists,
 } from "@/services/contact-lists";
+import type { Roles } from "@/types";
 import {
   createContactListSchema,
   deleteContactListsSchema,
 } from "@/validations/contact-lists";
-import type { Roles } from "@/types";
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,11 +32,7 @@ export async function GET(request: NextRequest) {
     }
 
     const roles = (session.user.roles ?? []) as Roles[];
-    const lists = await getTeamContactLists(
-      teamId,
-      session.user.userId,
-      roles,
-    );
+    const lists = await getTeamContactLists(teamId, session.user.userId, roles);
 
     return NextResponse.json({ data: lists }, { status: 200 });
   } catch (e) {

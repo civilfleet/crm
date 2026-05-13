@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -21,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
 
 type LoginMethod = "EMAIL_MAGIC_LINK" | "OIDC";
 
@@ -86,7 +86,8 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
   const [isSaving, setIsSaving] = useState(false);
   const [isStartingVerification, setIsStartingVerification] = useState(false);
   const [isCheckingVerification, setIsCheckingVerification] = useState(false);
-  const [loginMethod, setLoginMethod] = useState<LoginMethod>("EMAIL_MAGIC_LINK");
+  const [loginMethod, setLoginMethod] =
+    useState<LoginMethod>("EMAIL_MAGIC_LINK");
   const [loginDomain, setLoginDomain] = useState("");
   const [oidcIssuer, setOidcIssuer] = useState("");
   const [oidcClientId, setOidcClientId] = useState("");
@@ -94,7 +95,9 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
   const [hasOidcClientSecret, setHasOidcClientSecret] = useState(false);
   const [domainVerificationToken, setDomainVerificationToken] = useState("");
   const [domainVerifiedAt, setDomainVerifiedAt] = useState<string | null>(null);
-  const [domainLastCheckedAt, setDomainLastCheckedAt] = useState<string | null>(null);
+  const [domainLastCheckedAt, setDomainLastCheckedAt] = useState<string | null>(
+    null,
+  );
   const [autoProvisionUsersFromOidc, setAutoProvisionUsersFromOidc] =
     useState(false);
   const [defaultOidcGroupId, setDefaultOidcGroupId] = useState("");
@@ -114,7 +117,8 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
       return;
     }
 
-    const nextLoginMethod = (data.loginMethod || "EMAIL_MAGIC_LINK") as LoginMethod;
+    const nextLoginMethod = (data.loginMethod ||
+      "EMAIL_MAGIC_LINK") as LoginMethod;
     const nextLoginDomain = data.loginDomain || "";
     const nextOidcIssuer = data.oidcIssuer || "";
     const nextOidcClientId = data.oidcClientId || "";
@@ -163,9 +167,7 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
   const hasDomain = normalizedLoginDomain.length > 0;
 
   const providerId = `oidc-${teamId}`;
-  const redirectUri = origin
-    ? `${origin}/api/auth/callback/${providerId}`
-    : "";
+  const redirectUri = origin ? `${origin}/api/auth/callback/${providerId}` : "";
   const signInUri = origin
     ? `${origin}/api/auth/signin?provider=${providerId}`
     : "";
@@ -198,7 +200,9 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
       autoProvisionUsersFromOidc,
       defaultOidcGroupId,
     });
-    return currentSnapshot !== initialSnapshot || oidcClientSecret.trim().length > 0;
+    return (
+      currentSnapshot !== initialSnapshot || oidcClientSecret.trim().length > 0
+    );
   }, [
     initialSnapshot,
     loginMethod,
@@ -249,7 +253,9 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
         }),
       });
 
-      const json = (await response.json()) as TeamAuthSettings & { error?: string };
+      const json = (await response.json()) as TeamAuthSettings & {
+        error?: string;
+      };
       if (!response.ok) {
         throw new Error(json.error || response.statusText);
       }
@@ -264,7 +270,9 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
       toast({
         title: "Unable to save SSO settings",
         description:
-          saveError instanceof Error ? saveError.message : "An unexpected error occurred",
+          saveError instanceof Error
+            ? saveError.message
+            : "An unexpected error occurred",
         variant: "destructive",
       });
     } finally {
@@ -392,7 +400,9 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
         <div className="space-y-3 rounded-md border p-3">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-medium">Domain verification (DNS TXT)</p>
-            <p className="text-xs text-muted-foreground">{verificationStatusText}</p>
+            <p className="text-xs text-muted-foreground">
+              {verificationStatusText}
+            </p>
           </div>
           {!isDomainVerified && isOidc && (
             <p className="text-xs text-amber-600">
@@ -416,7 +426,11 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
           <div className="space-y-2">
             <Label htmlFor="team-domain-txt-value">TXT record value</Label>
             <div className="flex gap-2">
-              <Input id="team-domain-txt-value" value={txtRecordValue} readOnly />
+              <Input
+                id="team-domain-txt-value"
+                value={txtRecordValue}
+                readOnly
+              />
               <Button
                 type="button"
                 variant="outline"
@@ -444,7 +458,9 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
               type="button"
               variant="outline"
               onClick={handleCheckVerification}
-              disabled={!hasDomain || !domainVerificationToken || isCheckingVerification}
+              disabled={
+                !hasDomain || !domainVerificationToken || isCheckingVerification
+              }
             >
               {isCheckingVerification ? "Checking..." : "Check Verification"}
             </Button>
@@ -477,7 +493,11 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
               <div className="space-y-2">
                 <Label htmlFor="team-oidc-provider-id">Provider ID</Label>
                 <div className="flex gap-2">
-                  <Input id="team-oidc-provider-id" value={providerId} readOnly />
+                  <Input
+                    id="team-oidc-provider-id"
+                    value={providerId}
+                    readOnly
+                  />
                   <Button
                     type="button"
                     variant="outline"
@@ -543,7 +563,9 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="team-oidc-client-secret">OIDC client secret</Label>
+              <Label htmlFor="team-oidc-client-secret">
+                OIDC client secret
+              </Label>
               <Input
                 id="team-oidc-client-secret"
                 type="password"

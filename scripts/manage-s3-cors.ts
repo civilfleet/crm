@@ -1,12 +1,12 @@
+import fs from "node:fs";
+import path from "node:path";
 import {
+  type CORSRule,
   GetBucketCorsCommand,
   PutBucketCorsCommand,
   S3,
-  type CORSRule,
 } from "@aws-sdk/client-s3";
 import dotenv from "dotenv";
-import fs from "node:fs";
-import path from "node:path";
 
 type Mode = "apply" | "check" | "print";
 
@@ -41,7 +41,8 @@ const parseList = (value: string | undefined, fallback: string[]) => {
 };
 
 const requiredEnv = (name: string, fallbackName?: string): string => {
-  const value = process.env[name] ?? (fallbackName ? process.env[fallbackName] : undefined);
+  const value =
+    process.env[name] ?? (fallbackName ? process.env[fallbackName] : undefined);
   if (!value || value.trim() === "") {
     const alias = fallbackName ? ` (or ${fallbackName})` : "";
     throw new Error(`Missing required environment variable: ${name}${alias}`);
@@ -119,7 +120,9 @@ const normalizeRules = (rules: CORSRule[] | undefined) => {
 
 const getCurrentRules = async (s3: S3) => {
   try {
-    const response = await s3.send(new GetBucketCorsCommand({ Bucket: bucket }));
+    const response = await s3.send(
+      new GetBucketCorsCommand({ Bucket: bucket }),
+    );
     return response.CORSRules ?? [];
   } catch (error) {
     const code =

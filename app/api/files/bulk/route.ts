@@ -2,8 +2,8 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import s3Client from "@/lib/s3-client";
-import { createZipBuffer } from "@/lib/zip";
 import { handlePrismaError } from "@/lib/utils";
+import { createZipBuffer } from "@/lib/zip";
 import {
   canUserAccessTeamOrOrgScope,
   getFiles,
@@ -22,7 +22,9 @@ const s3BodyToBuffer = async (body: unknown) => {
   if (!body) return Buffer.alloc(0);
   if (Buffer.isBuffer(body)) return body;
 
-  const transformable = body as { transformToByteArray?: () => Promise<Uint8Array> };
+  const transformable = body as {
+    transformToByteArray?: () => Promise<Uint8Array>;
+  };
   if (typeof transformable.transformToByteArray === "function") {
     return Buffer.from(await transformable.transformToByteArray());
   }
@@ -80,7 +82,9 @@ export async function GET(req: Request) {
       const response = await s3Client.send(command);
       const data = await s3BodyToBuffer(response.Body);
 
-      const orgName = normalizePathSegment(file.organization?.name ?? "Unassigned");
+      const orgName = normalizePathSegment(
+        file.organization?.name ?? "Unassigned",
+      );
       const fileType = normalizePathSegment(file.type || "File");
       const datePart = new Date(file.createdAt).toISOString().slice(0, 10);
       const rawName = file.name || file.url.split("/").pop() || file.id;

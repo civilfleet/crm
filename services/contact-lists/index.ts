@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getTeamContacts } from "@/services/contacts";
 import { ensureDefaultGroup } from "@/services/groups";
-import { ContactListType, type ContactFilter, Roles } from "@/types";
+import { type ContactFilter, ContactListType, Roles } from "@/types";
 
 type CreateContactListInput = {
   teamId: string;
@@ -489,11 +489,11 @@ const removeContactsFromList = async (input: RemoveContactsInput) => {
 };
 
 export {
-  getTeamContactLists,
-  getContactListById,
-  createContactList,
-  updateContactList,
-  deleteContactLists,
   addContactsToList,
+  createContactList,
+  deleteContactLists,
+  getContactListById,
+  getTeamContactLists,
   removeContactsFromList,
+  updateContactList,
 };

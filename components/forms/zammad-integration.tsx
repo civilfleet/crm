@@ -3,7 +3,6 @@
 import { AlertTriangle, CheckCircle2, Loader2, PlugZap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
 
 type ZammadIntegrationResponse = {
   id?: string;
@@ -100,14 +100,12 @@ export default function ZammadIntegration({ teamId }: ZammadIntegrationProps) {
       ? `/api/teams/${teamId}/integrations/zammad/groups`
       : null;
 
-
   const {
     data: groupsData,
     error: groupsError,
     isLoading: isGroupsLoading,
     mutate: mutateGroups,
   } = useSWR(groupsKey, fetcher);
-
 
   useEffect(() => {
     if (!integrationData) {
@@ -152,33 +150,31 @@ export default function ZammadIntegration({ teamId }: ZammadIntegrationProps) {
     });
   }, [groupsError, toast]);
 
-
   useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
-    setWebhookUrl(`${window.location.origin}/api/teams/${teamId}/integrations/zammad/webhook`);
+    setWebhookUrl(
+      `${window.location.origin}/api/teams/${teamId}/integrations/zammad/webhook`,
+    );
   }, [teamId]);
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const response = await fetch(
-        `/api/teams/${teamId}/integrations/zammad`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            apiKey: apiKey || undefined,
-            baseUrl: baseUrl || undefined,
-            webhookSecret: webhookSecret || undefined,
-            isEnabled,
-            testConnection: true,
-          }),
+      const response = await fetch(`/api/teams/${teamId}/integrations/zammad`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          apiKey: apiKey || undefined,
+          baseUrl: baseUrl || undefined,
+          webhookSecret: webhookSecret || undefined,
+          isEnabled,
+          testConnection: true,
+        }),
+      });
 
       const json = await response.json();
       if (!response.ok) {
@@ -307,7 +303,8 @@ export default function ZammadIntegration({ teamId }: ZammadIntegrationProps) {
         dotClass: "bg-amber-500",
         panelClass: "border-amber-200 bg-amber-50",
         badgeClass: "bg-amber-100 text-amber-900 border-amber-200",
-        description: "Add your Zammad base URL and API token to enable syncing.",
+        description:
+          "Add your Zammad base URL and API token to enable syncing.",
         icon: AlertTriangle,
       };
     }
@@ -411,7 +408,8 @@ export default function ZammadIntegration({ teamId }: ZammadIntegrationProps) {
               placeholder={
                 hasApiKey && apiKeyPreview
                   ? `Current token: ${apiKeyPreview}`
-                  : "Token from Zammad"}
+                  : "Token from Zammad"
+              }
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
               disabled={isLoading || isSaving}
@@ -425,11 +423,7 @@ export default function ZammadIntegration({ teamId }: ZammadIntegrationProps) {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="zammad-webhook-url">Webhook endpoint</Label>
-            <Input
-              id="zammad-webhook-url"
-              value={webhookUrl}
-              readOnly
-            />
+            <Input id="zammad-webhook-url" value={webhookUrl} readOnly />
             <p className="text-xs text-muted-foreground">
               Use this URL when configuring the Zammad webhook.
             </p>
@@ -523,7 +517,9 @@ export default function ZammadIntegration({ teamId }: ZammadIntegrationProps) {
             <Button
               variant="outline"
               onClick={handleSaveGroups}
-              disabled={isSavingGroups || isGroupsLoading || !groupSettings.length}
+              disabled={
+                isSavingGroups || isGroupsLoading || !groupSettings.length
+              }
             >
               {isSavingGroups && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

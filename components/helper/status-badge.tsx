@@ -120,13 +120,15 @@ export const getDonationPayoutStatus = ({
   return "not_disbursed";
 };
 
-export const donationPayoutStatusLabelMap: Record<DonationPayoutStatus, string> =
-  {
-    not_disbursed: "Not Disbursed",
-    in_disbursement: "In Disbursement",
-    partially_disbursed: "Partially Disbursed",
-    disbursed: "Disbursed",
-  };
+export const donationPayoutStatusLabelMap: Record<
+  DonationPayoutStatus,
+  string
+> = {
+  not_disbursed: "Not Disbursed",
+  in_disbursement: "In Disbursement",
+  partially_disbursed: "Partially Disbursed",
+  disbursed: "Disbursed",
+};
 
 export const DonationPayoutStatusBadge: React.FC<{
   status: DonationPayoutStatus;

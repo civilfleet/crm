@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
-import prisma from "@/lib/prisma";
 import { normalizeCountryCode } from "@/lib/countries";
 import { normalizePostalCode } from "@/lib/geo";
+import prisma from "@/lib/prisma";
 import { generateSlug } from "@/lib/slug";
 import {
   logContactCreation,
@@ -383,7 +383,8 @@ export const createEvent = async (input: CreateEventInput) => {
         location,
         eventTypeId: eventTypeId ?? null,
         isOnline,
-        expectedGuests: typeof expectedGuests === "number" ? expectedGuests : null,
+        expectedGuests:
+          typeof expectedGuests === "number" ? expectedGuests : null,
         hasRemuneration,
         address: address?.trim() || null,
         city: city?.trim() || null,
@@ -537,7 +538,7 @@ export const updateEvent = async (input: UpdateEventInput) => {
         eventTypeId: eventTypeId ?? null,
         isOnline: isOnline !== undefined ? isOnline : existingEvent.isOnline,
         expectedGuests: expectedGuestsProvided
-          ? expectedGuests ?? null
+          ? (expectedGuests ?? null)
           : existingEvent.expectedGuests,
         hasRemuneration:
           hasRemuneration !== undefined
@@ -545,7 +546,8 @@ export const updateEvent = async (input: UpdateEventInput) => {
             : existingEvent.hasRemuneration,
         address: address === undefined ? existingEvent.address : address,
         city: city === undefined ? existingEvent.city : city,
-        postalCode: postalCode === undefined ? existingEvent.postalCode : postalCode,
+        postalCode:
+          postalCode === undefined ? existingEvent.postalCode : postalCode,
         state: state === undefined ? existingEvent.state : state,
         timeZone: timeZone === undefined ? existingEvent.timeZone : timeZone,
         merchNeeded:

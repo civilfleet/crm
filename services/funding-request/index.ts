@@ -142,92 +142,98 @@ const updateFundingRequest = async (
   data: Partial<FundingRequestData>,
   teamId: string,
 ) => {
-    const team = await prisma.teams.findFirst({
-      where: {
-        id: teamId,
-      },
-    });
-    if (!team) {
-      throw new Error("Team not found.");
-    }
+  const team = await prisma.teams.findFirst({
+    where: {
+      id: teamId,
+    },
+  });
+  if (!team) {
+    throw new Error("Team not found.");
+  }
 
-    const { files: _files, organizationId: _organizationId, submittedBy: _submittedBy, id: _id, ...rest } = data;
-    void _files;
-    void _organizationId;
-    void _submittedBy;
-    void _id;
+  const {
+    files: _files,
+    organizationId: _organizationId,
+    submittedBy: _submittedBy,
+    id: _id,
+    ...rest
+  } = data;
+  void _files;
+  void _organizationId;
+  void _submittedBy;
+  void _id;
 
-    const updateData: Prisma.FundingRequestUpdateInput = {
-      ...(rest.name !== undefined && { name: rest.name }),
-      ...(rest.description !== undefined && { description: rest.description }),
-      ...(rest.purpose !== undefined && { purpose: rest.purpose }),
-      ...(rest.amountRequested !== undefined && {
-        amountRequested: rest.amountRequested,
-      }),
-      ...(rest.amountAgreed !== undefined && { amountAgreed: rest.amountAgreed }),
-      ...(rest.refinancingConcept !== undefined && {
-        refinancingConcept: rest.refinancingConcept,
-      }),
-      ...(rest.sustainability !== undefined && {
-        sustainability: rest.sustainability,
-      }),
-      ...(rest.expectedCompletionDate !== undefined && {
-        expectedCompletionDate: new Date(rest.expectedCompletionDate),
-      }),
-      ...(rest.status !== undefined && { status: rest.status }),
-      ...(rest.remainingAmount !== undefined && {
-        remainingAmount: rest.remainingAmount,
-      }),
-      ...(rest.customFields !== undefined && {
-        customFields: rest.customFields as Prisma.InputJsonValue,
-      }),
-    };
+  const updateData: Prisma.FundingRequestUpdateInput = {
+    ...(rest.name !== undefined && { name: rest.name }),
+    ...(rest.description !== undefined && { description: rest.description }),
+    ...(rest.purpose !== undefined && { purpose: rest.purpose }),
+    ...(rest.amountRequested !== undefined && {
+      amountRequested: rest.amountRequested,
+    }),
+    ...(rest.amountAgreed !== undefined && { amountAgreed: rest.amountAgreed }),
+    ...(rest.refinancingConcept !== undefined && {
+      refinancingConcept: rest.refinancingConcept,
+    }),
+    ...(rest.sustainability !== undefined && {
+      sustainability: rest.sustainability,
+    }),
+    ...(rest.expectedCompletionDate !== undefined && {
+      expectedCompletionDate: new Date(rest.expectedCompletionDate),
+    }),
+    ...(rest.status !== undefined && { status: rest.status }),
+    ...(rest.remainingAmount !== undefined && {
+      remainingAmount: rest.remainingAmount,
+    }),
+    ...(rest.customFields !== undefined && {
+      customFields: rest.customFields as Prisma.InputJsonValue,
+    }),
+  };
 
-    const fundingRequest = await prisma.fundingRequest.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        purpose: true,
-        amountRequested: true,
-        amountAgreed: true,
-        refinancingConcept: true,
-        sustainability: true,
-        expectedCompletionDate: true,
-        remainingAmount: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-        files: {
-          select: {
-            id: true,
-            name: true,
-            url: true,
-            type: true,
-          },
+  const fundingRequest = await prisma.fundingRequest.update({
+    where: { id },
+    data: updateData,
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      purpose: true,
+      amountRequested: true,
+      amountAgreed: true,
+      refinancingConcept: true,
+      sustainability: true,
+      expectedCompletionDate: true,
+      remainingAmount: true,
+      status: true,
+      createdAt: true,
+      updatedAt: true,
+      files: {
+        select: {
+          id: true,
+          name: true,
+          url: true,
+          type: true,
         },
-        organization: {
-          select: {
-            name: true,
-            email: true,
-            team: {
-              select: {
-                email: true,
-                name: true,
-              },
+      },
+      organization: {
+        select: {
+          name: true,
+          email: true,
+          team: {
+            select: {
+              email: true,
+              name: true,
             },
           },
         },
-        submittedBy: {
-          select: {
-            email: true,
-          },
+      },
+      submittedBy: {
+        select: {
+          email: true,
         },
       },
-    });
-    return fundingRequest;
+    },
+  });
+  return fundingRequest;
 };
 
 const updateFundingRequestStatus = async (
@@ -547,11 +553,11 @@ const getFundingRequestById = async (id: string) => {
 };
 
 export {
-  updateFundingRequest,
   createFundingRequest,
+  getFundingRequestById,
   getFundingRequests,
   getFundingRequestsByOrgId,
-  getFundingRequestById,
+  updateFundingRequest,
   updateFundingRequestStatus,
   uploadFundingRequestFile,
 };

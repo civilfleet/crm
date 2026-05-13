@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { signIn as authSignIn } from "next-auth/react";
-import {
-  resolveLoginStrategy,
-  sendMagicLoginLink,
-} from "@/app/actions/auth";
+import { useEffect, useMemo, useState } from "react";
+import { resolveLoginStrategy, sendMagicLoginLink } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 

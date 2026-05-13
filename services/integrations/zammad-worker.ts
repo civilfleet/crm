@@ -1,23 +1,23 @@
+import { type ZammadSyncJob, ZammadSyncJobType } from "@prisma/client";
 import os from "os";
-import { ZammadSyncJobType, type ZammadSyncJob } from "@prisma/client";
-import prisma from "@/lib/prisma";
 import logger from "@/lib/logger";
-import {
-  claimNextZammadSyncJob,
-  markZammadSyncJobFailed,
-  markZammadSyncJobSucceeded,
-  recoverStaleZammadSyncJobs,
-} from "@/services/integrations/zammad-queue";
-import {
-  syncZammadIntegration,
-  syncZammadTicket,
-} from "@/services/integrations/zammad";
+import prisma from "@/lib/prisma";
 import {
   claimNextEmailBatch,
   markEmailBatchFailed,
   processEmailBatch,
   recoverStaleEmailBatches,
 } from "@/services/integrations/scaleway-email";
+import {
+  syncZammadIntegration,
+  syncZammadTicket,
+} from "@/services/integrations/zammad";
+import {
+  claimNextZammadSyncJob,
+  markZammadSyncJobFailed,
+  markZammadSyncJobSucceeded,
+  recoverStaleZammadSyncJobs,
+} from "@/services/integrations/zammad-queue";
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_STALE_LOCK_MS = 60 * 60 * 1000;

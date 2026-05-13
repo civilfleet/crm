@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
+import { ZodError } from "zod";
 import { auth } from "@/auth";
-import prisma from "@/lib/prisma";
 import { normalizeLoginDomain } from "@/lib/auth-routing";
 import logger from "@/lib/logger";
+import prisma from "@/lib/prisma";
 import { getTeamAdminAccess } from "@/services/teams/access";
 import { updateTeamSchema } from "@/validations/team";
-import { ZodError } from "zod";
 
 const normalizeOptionalString = (value: unknown) => {
   if (typeof value !== "string") {
@@ -142,7 +142,9 @@ export async function PATCH(
           },
         });
         if (!defaultGroup) {
-          throw new Error("Selected default OIDC group does not belong to this team");
+          throw new Error(
+            "Selected default OIDC group does not belong to this team",
+          );
         }
       }
 
@@ -155,15 +157,13 @@ export async function PATCH(
           domainVerificationToken: true,
           oidcClientSecret: true,
         },
-      } as any)) as
-        | {
-            loginDomain?: string | null;
-            domainVerifiedAt?: Date | null;
-            domainLastCheckedAt?: Date | null;
-            domainVerificationToken?: string | null;
-            oidcClientSecret?: string | null;
-          }
-        | null;
+      } as any)) as {
+        loginDomain?: string | null;
+        domainVerifiedAt?: Date | null;
+        domainLastCheckedAt?: Date | null;
+        domainVerificationToken?: string | null;
+        oidcClientSecret?: string | null;
+      } | null;
       const normalizedExistingLoginDomain = normalizeLoginDomain(
         existingTeamAuth?.loginDomain ?? null,
       );
@@ -223,7 +223,9 @@ export async function PATCH(
           oidcClientId,
           oidcClientSecret: resolvedOidcClientSecret,
           ...(hasAutoProvisionUsersFromOidc
-            ? { autoProvisionUsersFromOidc: Boolean(autoProvisionUsersFromOidc) }
+            ? {
+                autoProvisionUsersFromOidc: Boolean(autoProvisionUsersFromOidc),
+              }
             : {}),
           ...(hasDefaultOidcGroupId
             ? { defaultOidcGroupId: defaultOidcGroupId ?? null }
@@ -309,10 +311,7 @@ export async function PATCH(
     }
     if (error instanceof Error) {
       if (error.message.includes("default OIDC group")) {
-        return NextResponse.json(
-          { error: error.message },
-          { status: 400 },
-        );
+        return NextResponse.json({ error: error.message }, { status: 400 });
       }
     }
     logger.error({ error }, "Error updating team");

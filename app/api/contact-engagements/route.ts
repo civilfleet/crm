@@ -1,22 +1,27 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import type { Session } from "next-auth";
+import { z } from "zod";
 import { auth } from "@/auth";
 import {
   CONTACT_SUBMODULE_FIELDS,
   CONTACT_SUBMODULES,
   type ContactSubmodule,
 } from "@/constants/contact-submodules";
-import prisma from "@/lib/prisma";
 import logger from "@/lib/logger";
+import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
-import { sendTagMentionNotifications } from "@/services/mentions";
 import {
   createEngagement,
   getContactEngagements,
   updateEngagement,
 } from "@/services/contact-engagements";
-import { EngagementDirection, EngagementSource, Roles, TodoStatus } from "@/types";
+import { sendTagMentionNotifications } from "@/services/mentions";
+import {
+  EngagementDirection,
+  EngagementSource,
+  Roles,
+  TodoStatus,
+} from "@/types";
 
 const resolveUserId = async (session: Session | null) => {
   let userId = session?.user?.userId ?? undefined;

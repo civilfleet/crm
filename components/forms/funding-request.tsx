@@ -408,7 +408,11 @@ export default function FundingRequest({
                             <FileUpload
                               placeholder="Upload document"
                               name={`file-${file.id}`}
-                              data={typeof field.value === "string" ? field.value : ""}
+                              data={
+                                typeof field.value === "string"
+                                  ? field.value
+                                  : ""
+                              }
                               onFileUpload={(url) => field.onChange(url)}
                             />
                           </FormControl>

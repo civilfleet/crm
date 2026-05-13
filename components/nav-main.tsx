@@ -51,75 +51,82 @@ export function NavMain({ items = [] }: { items?: NavItem[] }) {
       <SidebarMenu>
         {isAdminSection ? (
           items.map((item) => {
-              const key = item.url ?? item.title ?? item.label ?? item.type ?? "nav-separator";
-              if (item.type === "separator") {
-                return (
-                  <li key={key} className="px-2 py-2">
-                    {item.label && (
-                      <div className="px-2 pb-1 text-xs font-semibold text-muted-foreground">
-                        {item.label}
-                      </div>
-                    )}
-                    <Separator />
-                  </li>
-                );
-              }
-
-              const fullPath = `/admin/${item.url}`;
-              const isActive = pathname.startsWith(fullPath);
-
+            const key =
+              item.url ??
+              item.title ??
+              item.label ??
+              item.type ??
+              "nav-separator";
+            if (item.type === "separator") {
               return (
-                <SidebarMenuItem key={key}>
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={item.title}
-                    isActive={isActive}
-                  >
-                    <Link href={fullPath} onClick={handleNavigate}>
-                      {item.icon && <item.icon className="size-4" />}
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <li key={key} className="px-2 py-2">
+                  {item.label && (
+                    <div className="px-2 pb-1 text-xs font-semibold text-muted-foreground">
+                      {item.label}
+                    </div>
+                  )}
+                  <Separator />
+                </li>
               );
-            })
+            }
+
+            const fullPath = `/admin/${item.url}`;
+            const isActive = pathname.startsWith(fullPath);
+
+            return (
+              <SidebarMenuItem key={key}>
+                <SidebarMenuButton
+                  asChild
+                  tooltip={item.title}
+                  isActive={isActive}
+                >
+                  <Link href={fullPath} onClick={handleNavigate}>
+                    {item.icon && <item.icon className="size-4" />}
+                    <span>{item.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })
         ) : hasActiveContext ? (
           items.map((item) => {
-              const key =
-                [subUrl, id, item.url, item.title, item.label].filter(Boolean).join("-") ||
-                item.type ||
-                "nav-item";
-              if (item.type === "separator") {
-                return (
-                  <li key={key} className="px-2 py-2">
-                    {item.label && (
-                      <div className="px-2 pb-1 text-xs font-semibold text-muted-foreground">
-                        {item.label}
-                      </div>
-                    )}
-                    <Separator />
-                  </li>
-                );
-              }
-
-              const fullPath = `/${subUrl}/${id}/${item.url}/`;
-              const isActive = pathname.startsWith(fullPath);
-
+            const key =
+              [subUrl, id, item.url, item.title, item.label]
+                .filter(Boolean)
+                .join("-") ||
+              item.type ||
+              "nav-item";
+            if (item.type === "separator") {
               return (
-                <SidebarMenuItem key={key}>
-                  <SidebarMenuButton
-                    asChild
-                    tooltip={item.title}
-                    isActive={isActive}
-                  >
-                    <Link href={fullPath} onClick={handleNavigate}>
-                      {item.icon && <item.icon className="size-4" />}
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <li key={key} className="px-2 py-2">
+                  {item.label && (
+                    <div className="px-2 pb-1 text-xs font-semibold text-muted-foreground">
+                      {item.label}
+                    </div>
+                  )}
+                  <Separator />
+                </li>
               );
-            })
+            }
+
+            const fullPath = `/${subUrl}/${id}/${item.url}/`;
+            const isActive = pathname.startsWith(fullPath);
+
+            return (
+              <SidebarMenuItem key={key}>
+                <SidebarMenuButton
+                  asChild
+                  tooltip={item.title}
+                  isActive={isActive}
+                >
+                  <Link href={fullPath} onClick={handleNavigate}>
+                    {item.icon && <item.icon className="size-4" />}
+                    <span>{item.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })
         ) : (
           <SidebarMenuItem>
             <div className="px-3 py-2 text-sm text-muted-foreground">

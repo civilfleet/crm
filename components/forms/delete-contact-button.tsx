@@ -78,7 +78,9 @@ export default function DeleteContactButton({
           <AlertDialogTitle>Delete contact</AlertDialogTitle>
           <AlertDialogDescription>
             This will permanently remove{" "}
-            <span className="font-semibold">{contactName ?? "this contact"}</span>{" "}
+            <span className="font-semibold">
+              {contactName ?? "this contact"}
+            </span>{" "}
             and all related data. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>

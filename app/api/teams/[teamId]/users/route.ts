@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import { ensureTeamOwner } from "@/services/teams";
-import logger from "@/lib/logger";
 
 export async function GET(
   _request: Request,

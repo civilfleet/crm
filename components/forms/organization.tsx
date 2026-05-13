@@ -2,11 +2,11 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useMemo, useState } from "react";
-import useSWR from "swr";
 import { useForm } from "react-hook-form";
+import useSWR from "swr";
 import type { z } from "zod";
-import { Form } from "@/components/ui/form";
 import {
+  Form,
   FormControl,
   FormField,
   FormItem,
@@ -306,7 +306,9 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                           <SelectValue placeholder="Contact person" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">No contact person</SelectItem>
+                          <SelectItem value="none">
+                            No contact person
+                          </SelectItem>
                           {contacts.map((contact) => (
                             <SelectItem key={contact.id} value={contact.id}>
                               {contact.name || contact.email || "Unnamed"}
@@ -357,7 +359,9 @@ export default function OrganizationForm({ data }: { data: Organization }) {
               </div>
               {selectedType?.schema && selectedType.schema.length > 0 && (
                 <div className="space-y-4">
-                  <h4 className="text-lg font-semibold">Organization Details</h4>
+                  <h4 className="text-lg font-semibold">
+                    Organization Details
+                  </h4>
                   <CardDescription>
                     Custom fields for this organization type.
                   </CardDescription>
@@ -465,7 +469,9 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                               <FormLabel>
                                 {field.label}
                                 {field.required && (
-                                  <span className="ml-1 text-destructive">*</span>
+                                  <span className="ml-1 text-destructive">
+                                    *
+                                  </span>
                                 )}
                               </FormLabel>
                               <FormControl>

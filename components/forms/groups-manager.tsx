@@ -1,7 +1,14 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertCircle, Loader2, Pencil, Plus, Trash2, Users } from "lucide-react";
+import {
+  AlertCircle,
+  Loader2,
+  Pencil,
+  Plus,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -37,18 +44,14 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
 import {
-  CONTACT_SUBMODULE_LABELS,
   CONTACT_SUBMODULE_FIELDS,
+  CONTACT_SUBMODULE_LABELS,
   CONTACT_SUBMODULES,
   type ContactSubmodule,
 } from "@/constants/contact-submodules";
-import {
-  APP_MODULES,
-  DEFAULT_TEAM_MODULES,
-  type AppModule,
-} from "@/types";
+import { useToast } from "@/hooks/use-toast";
+import { APP_MODULES, type AppModule, DEFAULT_TEAM_MODULES } from "@/types";
 import { createGroupSchema } from "@/validations/groups";
 
 type Group = {
@@ -96,7 +99,10 @@ const MODULE_DESCRIPTIONS: Record<AppModule, string> = {
   ADMIN: "Manage settings, users, groups, and integrations.",
 };
 
-export default function GroupsManager({ teamId, teamModules }: GroupsManagerProps) {
+export default function GroupsManager({
+  teamId,
+  teamModules,
+}: GroupsManagerProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -751,10 +757,7 @@ export default function GroupsManager({ teamId, teamModules }: GroupsManagerProp
                                       ...filteredUsers.map((u) => u.id),
                                     ]),
                                   );
-                                  form.setValue(
-                                    "userIds",
-                                    mergedUserIds,
-                                  );
+                                  form.setValue("userIds", mergedUserIds);
                                 } else {
                                   form.setValue(
                                     "userIds",
@@ -836,7 +839,6 @@ export default function GroupsManager({ teamId, teamModules }: GroupsManagerProp
                     );
                   }}
                 />
-
               </div>
 
               <DialogFooter className="sticky bottom-0 border-t border-border bg-background pt-4">

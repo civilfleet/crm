@@ -7,6 +7,10 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import type { z } from "zod";
 import FileUpload from "@/components/file-uploader";
+import {
+  donationPayoutStatusLabelMap,
+  getDonationPayoutStatus,
+} from "@/components/helper/status-badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,10 +22,6 @@ import {
 } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
 import {
-  donationPayoutStatusLabelMap,
-  getDonationPayoutStatus,
-} from "@/components/helper/status-badge";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -30,10 +30,10 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import formatCurrency from "../helper/format-currency";
 import { type DonationAgreement, FundingStatus, Roles } from "@/types";
 import { updateDonationAgreementSchema as schema } from "@/validations/donation-agreement";
 import DetailItem from "../helper/detail-item";
+import formatCurrency from "../helper/format-currency";
 
 export default function SignDonationAgreement({
   data: initialData,
@@ -193,7 +193,9 @@ export default function SignDonationAgreement({
                     value={
                       data.fundingRequest?.amountAgreed !== undefined &&
                       data.fundingRequest?.amountAgreed !== null
-                        ? formatCurrency(Number(data.fundingRequest.amountAgreed))
+                        ? formatCurrency(
+                            Number(data.fundingRequest.amountAgreed),
+                          )
                         : "Not set"
                     }
                   />
@@ -310,7 +312,10 @@ export default function SignDonationAgreement({
                   )}
                   {isAdmin && (
                     <div className="mb-4">
-                      <label className="text-sm font-medium mb-2 block" htmlFor="sign-on-behalf">
+                      <label
+                        className="text-sm font-medium mb-2 block"
+                        htmlFor="sign-on-behalf"
+                      >
                         Sign on behalf of:
                       </label>
                       <Select

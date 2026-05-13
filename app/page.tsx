@@ -2,9 +2,9 @@ import { GalleryVerticalEnd } from "lucide-react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { LoginForm } from "@/components/login-form";
+import { APP_NAME } from "@/constants/app";
 import { getUserCurrent } from "@/services/users";
 import { Roles } from "@/types";
-import { APP_NAME } from "@/constants/app";
 
 export const dynamic = "force-dynamic";
 

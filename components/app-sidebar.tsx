@@ -11,7 +11,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { DEFAULT_TEAM_MODULES, type AppModule, type Roles } from "@/types";
+import { type AppModule, DEFAULT_TEAM_MODULES, type Roles } from "@/types";
 import navigationItems from "./nav-items";
 
 type NavigationKey = keyof typeof navigationItems;
@@ -62,8 +62,7 @@ export function AppSidebar({
     () =>
       initialTeams.map((team) => ({
         ...team,
-        modules:
-          team.modules ?? [...DEFAULT_TEAM_MODULES],
+        modules: team.modules ?? [...DEFAULT_TEAM_MODULES],
       })),
     [initialTeams],
   );

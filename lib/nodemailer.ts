@@ -1,10 +1,10 @@
 import fs from "node:fs";
+import path from "node:path";
 import handlebars from "handlebars";
 import nodemailer from "nodemailer";
-import path from "node:path";
+import logger from "@/lib/logger";
 import type { EMAIL_CONTENT } from "@/types";
 import config, { mailProvider } from "../config/mail";
-import logger from "@/lib/logger";
 
 const transporter = nodemailer.createTransport({
   ...config,
@@ -55,12 +55,15 @@ async function sendEmail(
       template: emailContent.template ?? "inline-content",
     };
 
-    logger.info({
-      to,
-      subject,
-      template,
-      hasContent: Boolean(emailContent.content),
-    }, "Dispatching email");
+    logger.info(
+      {
+        to,
+        subject,
+        template,
+        hasContent: Boolean(emailContent.content),
+      },
+      "Dispatching email",
+    );
 
     // Determine sender email
     const senderEmail =
@@ -73,12 +76,15 @@ async function sendEmail(
       html,
     });
 
-    logger.info({
-      to,
-      subject,
-      messageId: info.messageId,
-      response: info.response,
-    }, "Email dispatched");
+    logger.info(
+      {
+        to,
+        subject,
+        messageId: info.messageId,
+        response: info.response,
+      },
+      "Email dispatched",
+    );
 
     return info;
   } catch (error) {
@@ -96,14 +102,18 @@ async function sendEmail(
           }
         : undefined;
 
-    logger.error({
-      to: emailContent.to,
-      subject: emailContent.subject,
-      template: emailContent.template ?? "inline-content",
-      error,
-      errorDetails,
-    }, "Error sending email");
+    logger.error(
+      {
+        to: emailContent.to,
+        subject: emailContent.subject,
+        template: emailContent.template ?? "inline-content",
+        error,
+        errorDetails,
+      },
+      "Error sending email",
+    );
     throw error;
   }
 }
+
 export { sendEmail, transporter };

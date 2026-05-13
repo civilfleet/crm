@@ -1,10 +1,10 @@
 import "dotenv/config";
 import { createReadStream, createWriteStream, existsSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
+import https from "node:https";
 import { tmpdir } from "node:os";
 import { extname, join, resolve } from "node:path";
 import { pipeline } from "node:stream/promises";
-import https from "node:https";
 import { Client } from "pg";
 import { from as copyFrom } from "pg-copy-streams";
 import yauzl from "yauzl";
@@ -19,7 +19,9 @@ const downloadFile = async (url: string, destination: string) => {
     https
       .get(url, (response) => {
         if (response.statusCode && response.statusCode >= 400) {
-          reject(new Error(`Download failed (${response.statusCode}) from ${url}`));
+          reject(
+            new Error(`Download failed (${response.statusCode}) from ${url}`),
+          );
           response.resume();
           return;
         }
@@ -81,7 +83,10 @@ const extractPostalFile = async (zipPath: string, destination: string) => {
   });
 };
 
-const importPostalData = async (databaseUrl: string, postalFilePath: string) => {
+const importPostalData = async (
+  databaseUrl: string,
+  postalFilePath: string,
+) => {
   const client = new Client({ connectionString: databaseUrl });
   await client.connect();
 
@@ -175,7 +180,9 @@ const run = async () => {
   const extractedPath = join(tempRoot, EXTRACTED_NAME);
 
   const providedPostalFile = process.env.POSTAL_FILE;
-  const resolvedPostalFile = providedPostalFile ? resolve(providedPostalFile) : undefined;
+  const resolvedPostalFile = providedPostalFile
+    ? resolve(providedPostalFile)
+    : undefined;
   const postalFilePath = resolvedPostalFile ?? extractedPath;
   const isProvidedZip =
     resolvedPostalFile && extname(resolvedPostalFile).toLowerCase() === ".zip";

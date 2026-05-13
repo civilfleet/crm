@@ -2,9 +2,9 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Filter, Loader2, Mail, Plus, Send, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import useSWR from "swr";
 import { z } from "zod";
@@ -148,7 +148,11 @@ const FILTER_OPTIONS: FilterOption[] = [
   { type: "attribute", label: "Attribute", allowMultiple: true },
   { type: "group", label: "Group", allowMultiple: true },
   { type: "eventRole", label: "Event role", allowMultiple: true },
-  { type: "distance", label: "Within distance of postal code", allowMultiple: false },
+  {
+    type: "distance",
+    label: "Within distance of postal code",
+    allowMultiple: false,
+  },
   { type: "createdAt", label: "Created date", allowMultiple: false },
 ];
 
@@ -204,10 +208,12 @@ const isFilterComplete = (filter: ContactFilter) => {
     case "createdAt":
       return Boolean(filter.from) || Boolean(filter.to);
     case "distance":
-      return Boolean(filter.postalCode?.trim()) &&
+      return (
+        Boolean(filter.postalCode?.trim()) &&
         Boolean(filter.countryCode?.trim()) &&
         Number.isFinite(filter.radiusKm) &&
-        Number(filter.radiusKm) > 0;
+        Number(filter.radiusKm) > 0
+      );
     default:
       return true;
   }
@@ -259,17 +265,18 @@ export default function ContactTable({ teamId }: ContactTableProps) {
     fetcher,
   );
 
-  const { data: groupsData } = useSWR(
-    `/api/groups?teamId=${teamId}`,
-    fetcher,
-  );
+  const { data: groupsData } = useSWR(`/api/groups?teamId=${teamId}`, fetcher);
 
   const eventRoles = useMemo(() => {
     if (!rolesData?.data) {
       return [] as Array<{ id: string; name: string; color?: string }>;
     }
 
-    return rolesData.data as Array<{ id: string; name: string; color?: string }>;
+    return rolesData.data as Array<{
+      id: string;
+      name: string;
+      color?: string;
+    }>;
   }, [rolesData]);
 
   const groups = useMemo(() => {
@@ -424,9 +431,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
         case "contactField": {
           const field = option.field ?? "email";
           const operator =
-            field === "name" ||
-            field === "pronouns" ||
-            field === "city"
+            field === "name" || field === "pronouns" || field === "city"
               ? "contains"
               : "has";
           return {
@@ -626,7 +631,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                         operator: value as "has" | "missing" | "contains",
                         value:
                           value === "contains"
-                            ? current.value ?? ""
+                            ? (current.value ?? "")
                             : undefined,
                       }
                     : current,
@@ -671,7 +676,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
 
         const selectedKey = attributeKeyOptions.includes(filter.key)
           ? filter.key
-          : attributeKeyOptions[0] ?? "";
+          : (attributeKeyOptions[0] ?? "");
 
         return (
           <div className="flex flex-wrap items-center gap-2">
@@ -741,7 +746,9 @@ export default function ContactTable({ teamId }: ContactTableProps) {
             value={filter.groupId ?? ""}
             onValueChange={(value) =>
               updateFilter(index, (current) =>
-                current.type === "group" ? { ...current, groupId: value } : current,
+                current.type === "group"
+                  ? { ...current, groupId: value }
+                  : current,
               )
             }
           >
@@ -792,7 +799,10 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                 onChange={(event) =>
                   updateFilter(index, (current) =>
                     current.type === "createdAt"
-                      ? { ...current, from: event.currentTarget.value || undefined }
+                      ? {
+                          ...current,
+                          from: event.currentTarget.value || undefined,
+                        }
                       : current,
                   )
                 }
@@ -807,7 +817,10 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                 onChange={(event) =>
                   updateFilter(index, (current) =>
                     current.type === "createdAt"
-                      ? { ...current, to: event.currentTarget.value || undefined }
+                      ? {
+                          ...current,
+                          to: event.currentTarget.value || undefined,
+                        }
                       : current,
                   )
                 }
@@ -998,8 +1011,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
             const option = FILTER_OPTIONS.find(
               (item) =>
                 item.type === filter.type &&
-                (filter.type !== "contactField" ||
-                  item.field === filter.field),
+                (filter.type !== "contactField" || item.field === filter.field),
             );
             return (
               <div
@@ -1088,7 +1100,8 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                     disabled={
                       isDeleting ||
                       isSendingEmail ||
-                      selectedRows.filter((contact) => contact.email).length === 0
+                      selectedRows.filter((contact) => contact.email).length ===
+                        0
                     }
                     onClick={() => openEmailDialog(selectedRows)}
                   >

@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { auth } from "@/auth";
 import { handlePrismaError } from "@/lib/utils";
 import { createZammadTicket } from "@/services/integrations/zammad";
-import { auth } from "@/auth";
 
 const createTicketSchema = z.object({
   contactId: z.string().uuid(),

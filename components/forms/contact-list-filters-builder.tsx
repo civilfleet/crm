@@ -3,7 +3,6 @@
 import { Filter, Plus, Trash2 } from "lucide-react";
 import { useMemo, useRef } from "react";
 import useSWR from "swr";
-import type { ContactFilter, ContactFilterType } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { ContactFilter, ContactFilterType } from "@/types";
 
 type FilterOption = {
   type: ContactFilterType;
@@ -109,7 +109,11 @@ const FILTER_OPTIONS: FilterOption[] = [
   { type: "attribute", label: "Profile attribute", allowMultiple: true },
   { type: "group", label: "Group membership", allowMultiple: true },
   { type: "eventRole", label: "Event role participation", allowMultiple: true },
-  { type: "distance", label: "Within distance of postal code", allowMultiple: false },
+  {
+    type: "distance",
+    label: "Within distance of postal code",
+    allowMultiple: false,
+  },
   { type: "createdAt", label: "Created date range", allowMultiple: false },
 ];
 
@@ -165,10 +169,7 @@ export function ContactListFiltersBuilder({
     return key;
   };
 
-  const { data: groupsData } = useSWR(
-    `/api/groups?teamId=${teamId}`,
-    fetcher,
-  );
+  const { data: groupsData } = useSWR(`/api/groups?teamId=${teamId}`, fetcher);
 
   const { data: rolesData } = useSWR(
     `/api/event-roles?teamId=${teamId}`,
@@ -323,10 +324,7 @@ export function ContactListFiltersBuilder({
               case "contactField": {
                 const fieldLabel = CONTACT_FIELD_LABELS[filter.field];
                 return (
-                  <div
-                    key={filterKey}
-                    className="rounded-md border p-3"
-                  >
+                  <div key={filterKey} className="rounded-md border p-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <Badge variant="outline">{fieldLabel}</Badge>
@@ -346,7 +344,10 @@ export function ContactListFiltersBuilder({
                       <Select
                         value={filter.operator}
                         onValueChange={(value) => {
-                          const operator = value as "contains" | "has" | "missing";
+                          const operator = value as
+                            | "contains"
+                            | "has"
+                            | "missing";
                           updateFilter(index, {
                             ...filter,
                             operator,
@@ -360,7 +361,9 @@ export function ContactListFiltersBuilder({
                           <SelectValue placeholder="Select operator" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="contains">Contains value</SelectItem>
+                          <SelectItem value="contains">
+                            Contains value
+                          </SelectItem>
                           <SelectItem value="has">Is present</SelectItem>
                           <SelectItem value="missing">Is missing</SelectItem>
                         </SelectContent>
@@ -384,10 +387,7 @@ export function ContactListFiltersBuilder({
               }
               case "attribute":
                 return (
-                  <div
-                    key={filterKey}
-                    className="rounded-md border p-3"
-                  >
+                  <div key={filterKey} className="rounded-md border p-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <Badge variant="outline">Attribute</Badge>
@@ -427,7 +427,9 @@ export function ContactListFiltersBuilder({
                           <SelectValue placeholder="Select operator" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="contains">Contains value</SelectItem>
+                          <SelectItem value="contains">
+                            Contains value
+                          </SelectItem>
                           <SelectItem value="equals">Equals value</SelectItem>
                         </SelectContent>
                       </Select>
@@ -446,10 +448,7 @@ export function ContactListFiltersBuilder({
                 );
               case "group":
                 return (
-                  <div
-                    key={filterKey}
-                    className="rounded-md border p-3"
-                  >
+                  <div key={filterKey} className="rounded-md border p-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <Badge variant="outline">Group</Badge>
@@ -491,10 +490,7 @@ export function ContactListFiltersBuilder({
                 );
               case "eventRole":
                 return (
-                  <div
-                    key={filterKey}
-                    className="rounded-md border p-3"
-                  >
+                  <div key={filterKey} className="rounded-md border p-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <Badge variant="outline">Event role</Badge>
@@ -536,10 +532,7 @@ export function ContactListFiltersBuilder({
                 );
               case "createdAt":
                 return (
-                  <div
-                    key={filterKey}
-                    className="rounded-md border p-3"
-                  >
+                  <div key={filterKey} className="rounded-md border p-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <Badge variant="outline">Created at</Badge>
@@ -599,10 +592,7 @@ export function ContactListFiltersBuilder({
                 );
               case "distance":
                 return (
-                  <div
-                    key={filterKey}
-                    className="rounded-md border p-3"
-                  >
+                  <div key={filterKey} className="rounded-md border p-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <Badge variant="outline">Distance</Badge>
@@ -644,7 +634,11 @@ export function ContactListFiltersBuilder({
                         min={1}
                         step={1}
                         placeholder="Radius (km)"
-                        value={Number.isFinite(filter.radiusKm) ? filter.radiusKm : ""}
+                        value={
+                          Number.isFinite(filter.radiusKm)
+                            ? filter.radiusKm
+                            : ""
+                        }
                         onChange={(event) =>
                           updateFilter(index, {
                             ...filter,

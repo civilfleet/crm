@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
-import { getAllowedContactSubmodules } from "@/services/contacts";
 import { handlePrismaError } from "@/lib/utils";
+import { getAllowedContactSubmodules } from "@/services/contacts";
 
 export async function GET(req: Request) {
   try {
@@ -31,10 +31,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ data: [] }, { status: 200 });
     }
 
-    const allowedSubmodules = await getAllowedContactSubmodules(
-      teamId,
-      userId,
-    );
+    const allowedSubmodules = await getAllowedContactSubmodules(teamId, userId);
 
     return NextResponse.json({ data: allowedSubmodules }, { status: 200 });
   } catch (error) {

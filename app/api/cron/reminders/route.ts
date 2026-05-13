@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { sendEmail } from "@/lib/nodemailer";
 import logger from "@/lib/logger";
+import { sendEmail } from "@/lib/nodemailer";
 import {
   getDonationAgreementPastEightWeeks,
   getDonationAgreementPastSevenDays,

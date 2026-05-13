@@ -16,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Form,
   FormControl,
@@ -33,17 +34,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Combobox } from "@/components/ui/combobox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import type { ContactSubmodule } from "@/constants/contact-submodules";
 import { useToast } from "@/hooks/use-toast";
 import { EUROPEAN_COUNTRY_OPTIONS } from "@/lib/countries";
-import type { ContactSubmodule } from "@/constants/contact-submodules";
 import {
+  type Contact,
   ContactAttributeType,
   ContactGender,
   ContactRequestPreference,
-  type Contact,
 } from "@/types";
 import {
   createContactSchema,
@@ -161,7 +161,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
           gender: contact?.gender ?? null,
           genderRequestPreference: contact?.genderRequestPreference ?? null,
           isBipoc:
-            contact?.isBipoc === undefined ? null : contact?.isBipoc ?? null,
+            contact?.isBipoc === undefined ? null : (contact?.isBipoc ?? null),
           racismRequestPreference: contact?.racismRequestPreference ?? null,
           otherMargins: contact?.otherMargins ?? "",
           onboardingDate: formatDateForInput(contact?.onboardingDate),
@@ -175,10 +175,11 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
           phone: contact?.phone ?? "",
           signal: contact?.signal ?? "",
           website: contact?.website ?? "",
-          socialLinks: contact?.socialLinks?.map((link) => ({
-            platform: link.platform,
-            handle: link.handle,
-          })) ?? [],
+          socialLinks:
+            contact?.socialLinks?.map((link) => ({
+              platform: link.platform,
+              handle: link.handle,
+            })) ?? [],
           groupId: contact?.groupId ?? undefined,
           profileAttributes: (contact?.profileAttributes ??
             []) as CreateContactFormValues["profileAttributes"],
@@ -540,7 +541,11 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
             />
           )}
           <CardContent className="space-y-6 pt-6">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <Tabs
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="w-full"
+            >
               <div className="mb-4 mt-2 sm:hidden">
                 <Select value={activeTab} onValueChange={setActiveTab}>
                   <SelectTrigger>
@@ -597,7 +602,9 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                             value={field.value ?? ""}
                           />
                         </FormControl>
-                        <FormDescription>e.g., alex@example.com</FormDescription>
+                        <FormDescription>
+                          e.g., alex@example.com
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -712,8 +719,8 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                           />
                         </FormControl>
                         <FormDescription>
-                          Used together with country to place the contact on the map.
-                          Example: 10115
+                          Used together with country to place the contact on the
+                          map. Example: 10115
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -784,14 +791,18 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                               </SelectItem>
                             ) : null}
                             {countryOptions.map((option) => (
-                              <SelectItem key={option.code} value={option.value}>
+                              <SelectItem
+                                key={option.code}
+                                value={option.value}
+                              >
                                 {option.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                         <FormDescription>
-                          Combine with postal code to enable map and distance filters.
+                          Combine with postal code to enable map and distance
+                          filters.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -832,7 +843,9 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-base font-semibold">Social profiles</h3>
+                      <h3 className="text-base font-semibold">
+                        Social profiles
+                      </h3>
                       <p className="text-sm text-muted-foreground">
                         Add social media handles or profile URLs.
                       </p>

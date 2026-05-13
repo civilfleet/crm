@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm, type Resolver } from "react-hook-form";
+import { type Resolver, useForm } from "react-hook-form";
 import useSWR from "swr";
 import type { z } from "zod";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +33,6 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -83,9 +83,7 @@ const parseOptions = (value: string) =>
     .filter(Boolean)
     .map((option) => ({ label: option, value: option }));
 
-const formatOptions = (
-  options?: Array<{ label: string; value: string }>,
-) =>
+const formatOptions = (options?: Array<{ label: string; value: string }>) =>
   options && options.length > 0
     ? options.map((option) => option.value || option.label).join(", ")
     : "";
@@ -179,9 +177,7 @@ export default function OrganizationTypesManager({
 
       toast({
         title: editingType ? "Type updated" : "Type created",
-        description: `${values.name} has been ${
-          editingType ? "updated" : "added"
-        }.`,
+        description: `${values.name} has been ${editingType ? "updated" : "added"}.`,
       });
 
       mutate();
@@ -220,7 +216,9 @@ export default function OrganizationTypesManager({
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody.error || "Failed to delete organization type");
+        throw new Error(
+          errorBody.error || "Failed to delete organization type",
+        );
       }
 
       toast({
@@ -370,7 +368,11 @@ export default function OrganizationTypesManager({
               <OrganizationTypeFieldsEditor form={form} />
 
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={handleCloseDialog}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCloseDialog}
+                >
                   Cancel
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>
@@ -399,10 +401,12 @@ function OrganizationTypeFieldsEditor({
 }) {
   const { control, watch, setValue } = form;
   const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const fields =
-    (watch("schema") as OrganizationTypeField[] | undefined) || [];
+  const fields = (watch("schema") as OrganizationTypeField[] | undefined) || [];
 
-  const updateField = (index: number, update: Partial<OrganizationTypeField>) => {
+  const updateField = (
+    index: number,
+    update: Partial<OrganizationTypeField>,
+  ) => {
     const next = [...fields];
     next[index] = { ...next[index], ...update };
     setValue("schema", next, { shouldDirty: true });
@@ -458,9 +462,7 @@ function OrganizationTypeFieldsEditor({
           {fields.map((field, index) => (
             <div
               key={`${field.key}-${index}`}
-              className={`rounded-md border p-3 space-y-3 ${
-                dragIndex === index ? "bg-muted" : ""
-              }`}
+              className={`rounded-md border p-3 space-y-3 ${dragIndex === index ? "bg-muted" : ""}`}
               draggable
               onDragStart={() => setDragIndex(index)}
               onDragOver={(event) => {
@@ -502,7 +504,9 @@ function OrganizationTypeFieldsEditor({
                   <Select
                     value={field.type}
                     onValueChange={(value) =>
-                      updateField(index, { type: value as OrganizationTypeField["type"] })
+                      updateField(index, {
+                        type: value as OrganizationTypeField["type"],
+                      })
                     }
                   >
                     <SelectTrigger>
@@ -538,7 +542,9 @@ function OrganizationTypeFieldsEditor({
                       placeholder="Comma-separated options"
                       value={formatOptions(field.options)}
                       onChange={(event) =>
-                        updateField(index, { options: parseOptions(event.target.value) })
+                        updateField(index, {
+                          options: parseOptions(event.target.value),
+                        })
                       }
                     />
                   </FormControl>

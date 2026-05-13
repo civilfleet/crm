@@ -285,9 +285,7 @@ export default function PublicOrganizationRegistration({
                   <div className="space-y-4">
                     <FileUpload
                       label="Organization logo"
-                      onFileUpload={(fileUrl) =>
-                        form.setValue("logo", fileUrl)
-                      }
+                      onFileUpload={(fileUrl) => form.setValue("logo", fileUrl)}
                     />
                     <FileUpload
                       label="Tax exemption certificate"

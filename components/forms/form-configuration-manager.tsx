@@ -137,8 +137,11 @@ export default function FormConfigurationManager({
     },
   });
 
-  const { fields: sections, append: appendSection, remove: removeSection } =
-    useFieldArray({
+  const {
+    fields: sections,
+    append: appendSection,
+    remove: removeSection,
+  } = useFieldArray({
     control: form.control,
     name: "sections",
   });
@@ -252,7 +255,9 @@ export default function FormConfigurationManager({
 
   const addField = (sectionIndex: number) => {
     const currentFields = ensureFieldIds(
-      (form.getValues(`sections.${sectionIndex}.fields`) as ConfigField[] | undefined) ?? [],
+      (form.getValues(`sections.${sectionIndex}.fields`) as
+        | ConfigField[]
+        | undefined) ?? [],
     );
     const newField: ConfigField = {
       id: createId("field"),
@@ -271,9 +276,13 @@ export default function FormConfigurationManager({
 
   const removeField = (sectionIndex: number, fieldIndex: number) => {
     const currentFields = ensureFieldIds(
-      (form.getValues(`sections.${sectionIndex}.fields`) as ConfigField[] | undefined) ?? [],
+      (form.getValues(`sections.${sectionIndex}.fields`) as
+        | ConfigField[]
+        | undefined) ?? [],
     );
-    const updatedFields = currentFields.filter((_, index) => index !== fieldIndex);
+    const updatedFields = currentFields.filter(
+      (_, index) => index !== fieldIndex,
+    );
     form.setValue(`sections.${sectionIndex}.fields`, updatedFields);
   };
 

@@ -59,7 +59,9 @@ export const getFileColumns = (
     cell: ({ row }) => (
       <div className="text-left">
         <Button asChild size="sm" variant="outline">
-          <Link href={`${process.env.NEXT_PUBLIC_BASE_URL}/api/files/${row.original?.id}`}>
+          <Link
+            href={`${process.env.NEXT_PUBLIC_BASE_URL}/api/files/${row.original?.id}`}
+          >
             Download
           </Link>
         </Button>
@@ -70,7 +72,11 @@ export const getFileColumns = (
     id: "associatedResource",
     header: () => <div className="text-left w-64">Associated Resource</div>,
     cell: ({ row }) => {
-      const resource = getAssociatedResource(row.original, teamId, organizationId);
+      const resource = getAssociatedResource(
+        row.original,
+        teamId,
+        organizationId,
+      );
       if (!resource) {
         return <div className="text-left w-64">N/A</div>;
       }
@@ -88,7 +94,9 @@ export const getFileColumns = (
     accessorKey: "organization",
     header: () => <div className="text-left w-36">Organization</div>,
     cell: ({ row }) => (
-      <div className="text-left">{row.original?.organization?.name || "N/A"}</div>
+      <div className="text-left">
+        {row.original?.organization?.name || "N/A"}
+      </div>
     ),
   },
   {
@@ -125,7 +133,9 @@ export const getFileColumns = (
     header: () => <div className="text-left w-36">File</div>,
     cell: ({ row }) => (
       <div className="text-left text-blue-500">
-        <Link href={`${process.env.NEXT_PUBLIC_BASE_URL}/api/files/${row.original?.id}`}>
+        <Link
+          href={`${process.env.NEXT_PUBLIC_BASE_URL}/api/files/${row.original?.id}`}
+        >
           {row.original?.name || row.original?.url || "N/A"}
         </Link>
       </div>

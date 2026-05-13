@@ -62,10 +62,7 @@ const formatEventDate = (event: PublicEvent) => {
   const end = event.endDate ? new Date(event.endDate) : null;
 
   if (end && start.toDateString() === end.toDateString()) {
-    return `${format(start, "EEE, MMM d")} · ${format(start, "HH:mm")}–${format(
-      end,
-      "HH:mm",
-    )}`;
+    return `${format(start, "EEE, MMM d")} · ${format(start, "HH:mm")}–${format(end, "HH:mm")}`;
   }
 
   if (end) {
@@ -186,10 +183,7 @@ export default function PublicEventsExplorer({ teamId }: { teamId: string }) {
     fetcher,
   );
 
-  const { data: teamData } = useSWR(
-    `/api/public/teams/${teamId}`,
-    fetcher,
-  );
+  const { data: teamData } = useSWR(`/api/public/teams/${teamId}`, fetcher);
 
   const eventTypes: EventType[] = eventTypesData?.data || [];
   const events = eventsData?.data || [];
@@ -335,7 +329,8 @@ export default function PublicEventsExplorer({ teamId }: { teamId: string }) {
         <section className="flex flex-col gap-4">
           <div className="flex items-center justify-between text-sm text-emerald-950/70">
             <span>
-              {meta?.total ?? 0} public event{(meta?.total ?? 0) === 1 ? "" : "s"}
+              {meta?.total ?? 0} public event
+              {(meta?.total ?? 0) === 1 ? "" : "s"}
             </span>
             <span className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-emerald-600" />

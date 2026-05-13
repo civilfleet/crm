@@ -17,7 +17,11 @@ const teamSchemaBase = z.object({
   oidcClientId: z.string().optional(),
   oidcClientSecret: z.string().optional(),
   autoProvisionUsersFromOidc: z.boolean().optional(),
-  defaultOidcGroupId: z.string().uuid("Invalid default OIDC group").optional().nullable(),
+  defaultOidcGroupId: z
+    .string()
+    .uuid("Invalid default OIDC group")
+    .optional()
+    .nullable(),
   registrationPageLogoKey: z.string().optional(),
   bankDetails: z
     .object({
@@ -106,9 +110,9 @@ const requireOidcFields = (
 const createTeamSchema = teamSchemaBase.superRefine((value, ctx) =>
   requireOidcFields(value, ctx, { requireClientSecret: true }),
 );
-const updateTeamSchema = teamSchemaBase.partial().superRefine((value, ctx) =>
-  requireOidcFields(value, ctx),
-);
+const updateTeamSchema = teamSchemaBase
+  .partial()
+  .superRefine((value, ctx) => requireOidcFields(value, ctx));
 // Generate TypeScript type
 export type CreateTeamInput = z.infer<typeof createTeamSchema>;
 export { createTeamSchema, updateTeamSchema };

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { Loader2, Users } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -139,7 +139,8 @@ export function BulkInviteUsersDialog({ teamId }: BulkInviteUsersDialogProps) {
           />
           <div className="space-y-1 text-sm text-muted-foreground">
             <p>
-              {validEmails.length} valid {validEmails.length === 1 ? "email" : "emails"} detected.
+              {validEmails.length} valid{" "}
+              {validEmails.length === 1 ? "email" : "emails"} detected.
             </p>
             {invalidEntries.length > 0 && (
               <p className="text-destructive">
@@ -174,4 +175,3 @@ export function BulkInviteUsersDialog({ teamId }: BulkInviteUsersDialogProps) {
     </Dialog>
   );
 }
-

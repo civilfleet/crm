@@ -190,125 +190,226 @@ export default function CreateTransaction({
     }
   };
 
-  return (
-    inline ? (
-      <Card className="max-w-2xl">
-        <CardContent className="pt-6">
-          <div className="mb-4">
-            <h2 className="text-xl font-semibold">Create Transaction</h2>
-            <p className="text-sm text-muted-foreground">
-              Allocate funds to a funding request
-            </p>
+  return inline ? (
+    <Card className="max-w-2xl">
+      <CardContent className="pt-6">
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold">Create Transaction</h2>
+          <p className="text-sm text-muted-foreground">
+            Allocate funds to a funding request
+          </p>
+        </div>
+
+        {selectedRequestData && (
+          <Card className="mb-4">
+            <CardContent className="pt-4">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-medium">Request:</span>
+                <span>{selectedRequestData.name}</span>
+                <span className="font-medium">Requested Amount:</span>
+                <span>
+                  {formatCurrency(selectedRequestData.amountRequested || 0)}
+                </span>
+                <span className="font-medium">Approved Amount:</span>
+                <span>
+                  {formatCurrency(selectedRequestData.amountAgreed || 0)}
+                </span>
+                <span className="font-medium">Available Balance:</span>
+                <span
+                  className={
+                    remainingAmount < 0
+                      ? "text-destructive font-bold"
+                      : "text-green-600 font-bold"
+                  }
+                >
+                  {formatCurrency(remainingAmount)}
+                </span>
+                <span className="font-medium">Status:</span>
+                <span>
+                  <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                    {selectedRequestData.status}
+                  </span>
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          {!fundingRequest && !fundingRequestId && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="fundingRequestId" className="text-right">
+                Request
+              </Label>
+              <div className="col-span-3">
+                <Controller
+                  control={form.control}
+                  name="fundingRequestId"
+                  render={({ field, fieldState }) => (
+                    <div className="space-y-2">
+                      <DataSelectBox
+                        targetKey="id"
+                        url={`/api/funding-requests/?teamId=${teamId}&status=${FundingStatus.FundsDisbursing}`}
+                        attribute="name"
+                        label="Select Funding Request"
+                        value={field.value}
+                        onChange={async (value) => {
+                          field.onChange(value);
+                          form.setValue("amount", 0);
+                          await fetchFundingRequestDetails(value);
+                        }}
+                        disabled={isLoading}
+                      />
+                      {fieldState.error && (
+                        <p className="text-sm text-destructive">
+                          {fieldState.error.message}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="amount" className="text-right">
+              Amount
+            </Label>
+            <div className="col-span-3">
+              <Controller
+                control={form.control}
+                name="amount"
+                render={({ field, fieldState }) => (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2">
+                        €
+                      </span>
+                      <Input
+                        id="amount"
+                        type="number"
+                        step="0.01"
+                        className="pl-6"
+                        value={field.value}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          field.onChange(value);
+                          updateRemainingAmount(value);
+                        }}
+                        disabled={isLoading || !selectedRequestData}
+                      />
+                    </div>
+                    {fieldState.error && (
+                      <p className="text-sm text-destructive">
+                        {fieldState.error.message}
+                      </p>
+                    )}
+                    {remainingAmount < 0 && (
+                      <p className="text-sm text-destructive">
+                        Amount exceeds available funds
+                      </p>
+                    )}
+                  </div>
+                )}
+              />
+            </div>
           </div>
 
-          {selectedRequestData && (
-            <Card className="mb-4">
-              <CardContent className="pt-4">
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <span className="font-medium">Request:</span>
-                  <span>{selectedRequestData.name}</span>
-                  <span className="font-medium">Requested Amount:</span>
-                  <span>
-                    {formatCurrency(selectedRequestData.amountRequested || 0)}
-                  </span>
-                  <span className="font-medium">Approved Amount:</span>
-                  <span>
-                    {formatCurrency(selectedRequestData.amountAgreed || 0)}
-                  </span>
-                  <span className="font-medium">Available Balance:</span>
-                  <span
-                    className={
-                      remainingAmount < 0
-                        ? "text-destructive font-bold"
-                        : "text-green-600 font-bold"
-                    }
-                  >
-                    {formatCurrency(remainingAmount)}
-                  </span>
-                  <span className="font-medium">Status:</span>
-                  <span>
-                    <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
-                      {selectedRequestData.status}
-                    </span>
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          <div className="mt-6 flex justify-end gap-2">
+            {cancelHref ? (
+              <Button asChild type="button" variant="outline">
+                <Link href={cancelHref}>Cancel</Link>
+              </Button>
+            ) : null}
+            <Button
+              type="submit"
+              disabled={
+                isLoading || remainingAmount < 0 || !form.formState.isValid
+              }
+            >
+              {isLoading ? "Creating..." : "Create Transaction"}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  ) : (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline">Create Transaction</Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Create Transaction</DialogTitle>
+          <DialogDescription>
+            Allocate funds to a funding request
+          </DialogDescription>
+        </DialogHeader>
 
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {!fundingRequest && !fundingRequestId && (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="fundingRequestId" className="text-right">
-                  Request
-                </Label>
-                <div className="col-span-3">
-                  <Controller
-                    control={form.control}
-                    name="fundingRequestId"
-                    render={({ field, fieldState }) => (
-                      <div className="space-y-2">
-                        <DataSelectBox
-                          targetKey="id"
-                          url={`/api/funding-requests/?teamId=${teamId}&status=${FundingStatus.FundsDisbursing}`}
-                          attribute="name"
-                          label="Select Funding Request"
-                          value={field.value}
-                          onChange={async (value) => {
-                            field.onChange(value);
-                            form.setValue("amount", 0);
-                            await fetchFundingRequestDetails(value);
-                          }}
-                          disabled={isLoading}
-                        />
-                        {fieldState.error && (
-                          <p className="text-sm text-destructive">
-                            {fieldState.error.message}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  />
-                </div>
+        {selectedRequestData && (
+          <Card className="mb-4">
+            <CardContent className="pt-4">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-medium">Request:</span>
+                <span>{selectedRequestData.name}</span>
+                <span className="font-medium">Requested Amount:</span>
+                <span>
+                  {formatCurrency(selectedRequestData.amountRequested || 0)}
+                </span>
+                <span className="font-medium">Approved Amount:</span>
+                <span>
+                  {formatCurrency(selectedRequestData.amountAgreed || 0)}
+                </span>
+                <span className="font-medium">Available Balance:</span>
+                <span
+                  className={
+                    remainingAmount < 0
+                      ? "text-destructive font-bold"
+                      : "text-green-600 font-bold"
+                  }
+                >
+                  {formatCurrency(remainingAmount)}
+                </span>
+                <span className="font-medium">Status:</span>
+                <span>
+                  <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                    {selectedRequestData.status}
+                  </span>
+                </span>
               </div>
-            )}
+            </CardContent>
+          </Card>
+        )}
 
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          {!fundingRequest && !fundingRequestId && (
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="amount" className="text-right">
-                Amount
+              <Label htmlFor="fundingRequestId" className="text-right">
+                Request
               </Label>
               <div className="col-span-3">
                 <Controller
                   control={form.control}
-                  name="amount"
+                  name="fundingRequestId"
                   render={({ field, fieldState }) => (
                     <div className="space-y-2">
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2">
-                          €
-                        </span>
-                        <Input
-                          id="amount"
-                          type="number"
-                          step="0.01"
-                          className="pl-6"
-                          value={field.value}
-                          onChange={(e) => {
-                            const value = parseFloat(e.target.value) || 0;
-                            field.onChange(value);
-                            updateRemainingAmount(value);
-                          }}
-                          disabled={isLoading || !selectedRequestData}
-                        />
-                      </div>
+                      <DataSelectBox
+                        targetKey="id"
+                        url={`/api/funding-requests/?teamId=${teamId}&status=${FundingStatus.FundsDisbursing}`}
+                        attribute="name"
+                        label="Select Funding Request"
+                        value={field.value}
+                        onChange={async (value) => {
+                          field.onChange(value);
+                          form.setValue("amount", 0);
+                          await fetchFundingRequestDetails(value);
+                        }}
+                        disabled={isLoading}
+                      />
                       {fieldState.error && (
                         <p className="text-sm text-destructive">
                           {fieldState.error.message}
-                        </p>
-                      )}
-                      {remainingAmount < 0 && (
-                        <p className="text-sm text-destructive">
-                          Amount exceeds available funds
                         </p>
                       )}
                     </div>
@@ -316,175 +417,72 @@ export default function CreateTransaction({
                 />
               </div>
             </div>
-
-            <div className="mt-6 flex justify-end gap-2">
-              {cancelHref ? (
-                <Button asChild type="button" variant="outline">
-                  <Link href={cancelHref}>Cancel</Link>
-                </Button>
-              ) : null}
-              <Button
-                type="submit"
-                disabled={
-                  isLoading || remainingAmount < 0 || !form.formState.isValid
-                }
-              >
-                {isLoading ? "Creating..." : "Create Transaction"}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    ) : (
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogTrigger asChild>
-          <Button variant="outline">Create Transaction</Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="text-xl">Create Transaction</DialogTitle>
-            <DialogDescription>
-              Allocate funds to a funding request
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedRequestData && (
-            <Card className="mb-4">
-              <CardContent className="pt-4">
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <span className="font-medium">Request:</span>
-                  <span>{selectedRequestData.name}</span>
-                  <span className="font-medium">Requested Amount:</span>
-                  <span>
-                    {formatCurrency(selectedRequestData.amountRequested || 0)}
-                  </span>
-                  <span className="font-medium">Approved Amount:</span>
-                  <span>
-                    {formatCurrency(selectedRequestData.amountAgreed || 0)}
-                  </span>
-                  <span className="font-medium">Available Balance:</span>
-                  <span
-                    className={
-                      remainingAmount < 0
-                        ? "text-destructive font-bold"
-                        : "text-green-600 font-bold"
-                    }
-                  >
-                    {formatCurrency(remainingAmount)}
-                  </span>
-                  <span className="font-medium">Status:</span>
-                  <span>
-                    <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
-                      {selectedRequestData.status}
-                    </span>
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
           )}
 
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {!fundingRequest && !fundingRequestId && (
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="fundingRequestId" className="text-right">
-                  Request
-                </Label>
-                <div className="col-span-3">
-                  <Controller
-                    control={form.control}
-                    name="fundingRequestId"
-                    render={({ field, fieldState }) => (
-                      <div className="space-y-2">
-                        <DataSelectBox
-                          targetKey="id"
-                          url={`/api/funding-requests/?teamId=${teamId}&status=${FundingStatus.FundsDisbursing}`}
-                          attribute="name"
-                          label="Select Funding Request"
-                          value={field.value}
-                          onChange={async (value) => {
-                            field.onChange(value);
-                            form.setValue("amount", 0);
-                            await fetchFundingRequestDetails(value);
-                          }}
-                          disabled={isLoading}
-                        />
-                        {fieldState.error && (
-                          <p className="text-sm text-destructive">
-                            {fieldState.error.message}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="amount" className="text-right">
-                Amount
-              </Label>
-              <div className="col-span-3">
-                <Controller
-                  control={form.control}
-                  name="amount"
-                  render={({ field, fieldState }) => (
-                    <div className="space-y-2">
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2">
-                          €
-                        </span>
-                        <Input
-                          id="amount"
-                          type="number"
-                          step="0.01"
-                          className="pl-6"
-                          value={field.value}
-                          onChange={(e) => {
-                            const value = parseFloat(e.target.value) || 0;
-                            field.onChange(value);
-                            updateRemainingAmount(value);
-                          }}
-                          disabled={isLoading || !selectedRequestData}
-                        />
-                      </div>
-                      {fieldState.error && (
-                        <p className="text-sm text-destructive">
-                          {fieldState.error.message}
-                        </p>
-                      )}
-                      {remainingAmount < 0 && (
-                        <p className="text-sm text-destructive">
-                          Amount exceeds available funds
-                        </p>
-                      )}
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="amount" className="text-right">
+              Amount
+            </Label>
+            <div className="col-span-3">
+              <Controller
+                control={form.control}
+                name="amount"
+                render={({ field, fieldState }) => (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2">
+                        €
+                      </span>
+                      <Input
+                        id="amount"
+                        type="number"
+                        step="0.01"
+                        className="pl-6"
+                        value={field.value}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value) || 0;
+                          field.onChange(value);
+                          updateRemainingAmount(value);
+                        }}
+                        disabled={isLoading || !selectedRequestData}
+                      />
                     </div>
-                  )}
-                />
-              </div>
+                    {fieldState.error && (
+                      <p className="text-sm text-destructive">
+                        {fieldState.error.message}
+                      </p>
+                    )}
+                    {remainingAmount < 0 && (
+                      <p className="text-sm text-destructive">
+                        Amount exceeds available funds
+                      </p>
+                    )}
+                  </div>
+                )}
+              />
             </div>
+          </div>
 
-            <DialogFooter className="mt-6">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsOpen(false)}
-                disabled={isLoading}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={
-                  isLoading || remainingAmount < 0 || !form.formState.isValid
-                }
-              >
-                {isLoading ? "Creating..." : "Create Transaction"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    )
+          <DialogFooter className="mt-6">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsOpen(false)}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={
+                isLoading || remainingAmount < 0 || !form.formState.isValid
+              }
+            >
+              {isLoading ? "Creating..." : "Create Transaction"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -8,14 +8,14 @@ import {
   getTeamContacts,
   updateContact,
 } from "@/services/contacts";
+import type { Roles } from "@/types";
+import type { ContactFilterInput } from "@/validations/contacts";
 import {
+  contactFiltersSchema,
   createContactSchema,
   deleteContactsSchema,
-  contactFiltersSchema,
   updateContactSchema,
 } from "@/validations/contacts";
-import type { ContactFilterInput } from "@/validations/contacts";
-import type { Roles } from "@/types";
 
 export async function GET(req: Request) {
   try {
@@ -28,12 +28,12 @@ export async function GET(req: Request) {
     const hasPagination = hasPageParam || hasPageSizeParam;
     const pageParam = Number(searchParams.get("page") || "1");
     const pageSizeParam = Number(searchParams.get("pageSize") || "10");
-    const page = Number.isFinite(pageParam) && pageParam > 0
-      ? Math.floor(pageParam)
-      : 1;
-    const pageSize = Number.isFinite(pageSizeParam) && pageSizeParam > 0
-      ? Math.min(Math.floor(pageSizeParam), 100)
-      : 10;
+    const page =
+      Number.isFinite(pageParam) && pageParam > 0 ? Math.floor(pageParam) : 1;
+    const pageSize =
+      Number.isFinite(pageSizeParam) && pageSizeParam > 0
+        ? Math.min(Math.floor(pageSizeParam), 100)
+        : 10;
 
     if (!teamId) {
       return NextResponse.json(

@@ -32,8 +32,9 @@ export async function PUT(
       );
 
       const status = fundingRequest?.status;
-      let emailTemplate: Awaited<ReturnType<typeof getEmailTemplateByType>> | null =
-        null;
+      let emailTemplate: Awaited<
+        ReturnType<typeof getEmailTemplateByType>
+      > | null = null;
       if (status === FundingStatus.Accepted) {
         emailTemplate = await getEmailTemplateByType(
           teamId as string,

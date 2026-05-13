@@ -343,30 +343,24 @@ const FundingRequestOverview = ({ data }: { data: FundingRequest }) => {
             <div className="space-y-2">
               {data.files
                 .slice(0, 3)
-                .map(
-                  (
-                    file: { id: string; name: string; type: string }
-                  ) => (
-                    <Link
-                      href={`${process.env.NEXT_PUBLIC_BASE_URL}/api/files/${file.id}`}
-                      key={file.id}
-                    >
-                      <div
-                        className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50"
-                      >
-                        <div className="flex items-center gap-2">
-                          <FileIcon className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm font-medium truncate max-w-[180px]">
-                            {file.name || file.type}
-                          </span>
-                        </div>
-                        <Button variant="ghost" size="sm">
-                          <ChevronRight className="h-4 w-4" />
-                        </Button>
+                .map((file: { id: string; name: string; type: string }) => (
+                  <Link
+                    href={`${process.env.NEXT_PUBLIC_BASE_URL}/api/files/${file.id}`}
+                    key={file.id}
+                  >
+                    <div className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50">
+                      <div className="flex items-center gap-2">
+                        <FileIcon className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium truncate max-w-[180px]">
+                          {file.name || file.type}
+                        </span>
                       </div>
-                    </Link>
-                  ),
-                )}
+                      <Button variant="ghost" size="sm">
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </Link>
+                ))}
 
               {data.files.length > 3 && (
                 <Button variant="outline" size="sm" className="w-full mt-2">

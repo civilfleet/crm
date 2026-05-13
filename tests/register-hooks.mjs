@@ -38,7 +38,9 @@ const resolveRelativeSpecifier = (specifier, parentURL) => {
   }
 
   const parentPath = fileURLToPath(parentURL);
-  return resolveFileCandidate(path.resolve(path.dirname(parentPath), specifier));
+  return resolveFileCandidate(
+    path.resolve(path.dirname(parentPath), specifier),
+  );
 };
 
 registerHooks({
@@ -69,7 +71,10 @@ registerHooks({
   },
 
   load(url, context, nextLoad) {
-    if (url.startsWith("file:") && (url.endsWith(".ts") || url.endsWith(".tsx"))) {
+    if (
+      url.startsWith("file:") &&
+      (url.endsWith(".ts") || url.endsWith(".tsx"))
+    ) {
       const source = readFileSync(fileURLToPath(url), "utf8");
 
       return {

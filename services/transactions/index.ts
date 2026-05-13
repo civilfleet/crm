@@ -1,5 +1,5 @@
-import prisma from "@/lib/prisma";
 import logger from "@/lib/logger";
+import prisma from "@/lib/prisma";
 import { FundingStatus } from "@/types";
 
 type CreateTransaction = {
@@ -161,9 +161,10 @@ const updateTransactionReceipt = async (
   });
   return response;
 };
+
 export {
   createTransaction,
-  getTransactions,
   getTransactionById,
+  getTransactions,
   updateTransactionReceipt,
 };

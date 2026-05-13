@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CONTACT_SUBMODULES } from "@/constants/contact-submodules";
-import { DEFAULT_TEAM_MODULES, APP_MODULES } from "@/types";
+import { APP_MODULES, DEFAULT_TEAM_MODULES } from "@/types";
 
 export const createGroupSchema = z.object({
   teamId: z.string().uuid(),

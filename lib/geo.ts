@@ -8,4 +8,3 @@ export const normalizePostalCode = (value?: string) => {
   }
   return trimmed.toUpperCase().replace(/\s+/g, " ");
 };
-

@@ -68,7 +68,8 @@ const createEmptyFundingFile = (): FundingFile => ({
 
 const withFileIds = (files: Array<Partial<FundingFile>>): FundingFile[] =>
   files.map((file) => ({
-    id: file.id ?? `file-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id:
+      file.id ?? `file-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     name: file.name ?? "",
     url: file.url ?? "",
   }));
@@ -260,12 +261,19 @@ export default function DynamicFundingRequest({
     defaultValues: {},
   });
 
-  const files = withFileIds((form.watch("files") as Array<Partial<FundingFile>> | undefined) ?? []);
+  const files = withFileIds(
+    (form.watch("files") as Array<Partial<FundingFile>> | undefined) ?? [],
+  );
 
   useEffect(() => {
-    const currentFiles = (form.getValues("files") as Array<Partial<FundingFile>> | undefined) ?? [];
-    if (currentFiles.some((file) => !(file && 'id' in file))) {
-      form.setValue("files" as keyof Record<string, unknown>, withFileIds(currentFiles));
+    const currentFiles =
+      (form.getValues("files") as Array<Partial<FundingFile>> | undefined) ??
+      [];
+    if (currentFiles.some((file) => !(file && "id" in file))) {
+      form.setValue(
+        "files" as keyof Record<string, unknown>,
+        withFileIds(currentFiles),
+      );
     }
   }, [form]);
 
@@ -654,8 +662,7 @@ export default function DynamicFundingRequest({
                   Supporting Documents
                 </h3>
                 <Badge variant="outline" className="text-xs">
-                  {files.length}{" "}
-                  files
+                  {files.length} files
                 </Badge>
               </div>
 
@@ -709,7 +716,11 @@ export default function DynamicFundingRequest({
                             <FileUpload
                               placeholder="Upload document"
                               name={`file-${file.id}`}
-                              data={typeof field.value === "string" ? field.value : ""}
+                              data={
+                                typeof field.value === "string"
+                                  ? field.value
+                                  : ""
+                              }
                               onFileUpload={(url) => field.onChange(url)}
                             />
                           </FormControl>
@@ -724,12 +735,17 @@ export default function DynamicFundingRequest({
                       size="icon"
                       onClick={() => {
                         const currentFiles = withFileIds(
-                          (form.getValues("files") as Array<Partial<FundingFile>> | undefined) ?? [],
+                          (form.getValues("files") as
+                            | Array<Partial<FundingFile>>
+                            | undefined) ?? [],
                         );
                         const updatedFiles = currentFiles.filter(
                           (existing) => existing.id !== file.id,
                         );
-                        form.setValue("files" as keyof Record<string, unknown>, updatedFiles);
+                        form.setValue(
+                          "files" as keyof Record<string, unknown>,
+                          updatedFiles,
+                        );
                       }}
                       className="mt-2 sm:mt-0"
                       disabled={files.length <= 1}
@@ -746,7 +762,9 @@ export default function DynamicFundingRequest({
                   size="sm"
                   onClick={() => {
                     const currentFiles = withFileIds(
-                      (form.getValues("files") as Array<Partial<FundingFile>> | undefined) ?? [],
+                      (form.getValues("files") as
+                        | Array<Partial<FundingFile>>
+                        | undefined) ?? [],
                     );
                     form.setValue("files" as keyof Record<string, unknown>, [
                       ...currentFiles,

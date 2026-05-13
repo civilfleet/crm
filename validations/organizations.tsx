@@ -122,9 +122,15 @@ const createOrganizationSchema = z.object({
     .optional()
     .or(z.literal("")),
   logo: z.string().optional().or(z.literal("")),
-  orgTypeId: z.string().uuid("Organization type id must be a valid UUID").optional(),
+  orgTypeId: z
+    .string()
+    .uuid("Organization type id must be a valid UUID")
+    .optional(),
   profileData: z.record(z.string(), z.unknown()).optional(),
-  contactPersonId: z.string().uuid("Contact id must be a valid UUID").optional(),
+  contactPersonId: z
+    .string()
+    .uuid("Contact id must be a valid UUID")
+    .optional(),
   bankDetails: bankDetailsSchema,
   user: createUserSchema,
 });
@@ -132,8 +138,8 @@ const createOrganizationSchema = z.object({
 const updateOrganizationSchema = createOrganizationSchema;
 
 export {
+  bankDetailsSchema,
   createOrganizationSchema,
   createUserSchema,
-  bankDetailsSchema,
   updateOrganizationSchema,
 };

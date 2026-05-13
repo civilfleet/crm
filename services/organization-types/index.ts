@@ -104,7 +104,10 @@ export const updateOrganizationType = async (
   return mapOrganizationType(updated);
 };
 
-export const deleteOrganizationTypes = async (teamId: string, ids: string[]) => {
+export const deleteOrganizationTypes = async (
+  teamId: string,
+  ids: string[],
+) => {
   if (!ids.length) {
     return;
   }

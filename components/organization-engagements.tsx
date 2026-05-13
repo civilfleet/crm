@@ -76,10 +76,7 @@ export default function OrganizationEngagements({
     `/api/organization-engagements?organizationId=${organizationId}&teamId=${teamId}`,
     fetcher,
   );
-  const { data: teamUsersData } = useSWR(
-    `/api/teams/${teamId}/users`,
-    fetcher,
-  );
+  const { data: teamUsersData } = useSWR(`/api/teams/${teamId}/users`, fetcher);
 
   const engagements = useMemo<OrganizationEngagement[]>(
     () => engagementsData?.data || [],
@@ -90,8 +87,7 @@ export default function OrganizationEngagements({
     [teamUsersData],
   );
   const teamUsersByEmail = useMemo(
-    () =>
-      new Map(teamUsers.map((user) => [user.email.toLowerCase(), user])),
+    () => new Map(teamUsers.map((user) => [user.email.toLowerCase(), user])),
     [teamUsers],
   );
   const mentionSuggestions = useMemo(() => {

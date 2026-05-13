@@ -152,8 +152,8 @@ const distanceFilterSchema = z.object({
     .string()
     .trim()
     .length(2, "Country code must be a 2-letter ISO code"),
-  radiusKm: z
-    .coerce.number()
+  radiusKm: z.coerce
+    .number()
     .finite()
     .min(1, "Radius must be greater than 0")
     .max(2000),
@@ -166,21 +166,21 @@ export const contactFilterSchema: z.ZodType<ContactFilter> =
     z.object({
       type: z.literal("group"),
       groupId: z.string().uuid("Group id must be a valid UUID"),
-  }),
-  z.object({
-    type: z.literal("eventRole"),
-    eventRoleId: z.string().uuid("Event role id must be a valid UUID"),
-  }),
-  distanceFilterSchema,
-  z
-    .object({
-      type: z.literal("createdAt"),
-      from: z.string().optional(),
-      to: z.string().optional(),
-    })
-    .refine((value) => Boolean(value.from) || Boolean(value.to), {
-      message: "Provide at least a start or end date",
     }),
+    z.object({
+      type: z.literal("eventRole"),
+      eventRoleId: z.string().uuid("Event role id must be a valid UUID"),
+    }),
+    distanceFilterSchema,
+    z
+      .object({
+        type: z.literal("createdAt"),
+        from: z.string().optional(),
+        to: z.string().optional(),
+      })
+      .refine((value) => Boolean(value.from) || Boolean(value.to), {
+        message: "Provide at least a start or end date",
+      }),
   ]);
 
 export const contactFiltersSchema: z.ZodType<ContactFilter[]> = z

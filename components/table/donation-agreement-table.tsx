@@ -66,9 +66,7 @@ export default function DonationAgreementTable({
         </form>
       </Form>
 
-      <div
-        className="relative rounded-md border my-2 flex justify-center items-center grow h-full"
-      >
+      <div className="relative rounded-md border my-2 flex justify-center items-center grow h-full">
         {isValidating && !loading ? (
           <p className="absolute right-4 top-4 text-xs text-muted-foreground">
             Refreshing...

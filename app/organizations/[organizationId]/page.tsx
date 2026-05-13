@@ -1,9 +1,4 @@
-import {
-  CreditCard,
-  DollarSign,
-  FileText,
-  Users,
-} from "lucide-react";
+import { CreditCard, DollarSign, FileText, Users } from "lucide-react";
 import Link from "next/link";
 import RecentActivity from "@/components/recent-activity";
 import {

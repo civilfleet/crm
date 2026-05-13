@@ -3,8 +3,8 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import Link from "next/link";
-import { useToast } from "@/hooks/use-toast";
 import { DataTableColumnHeader } from "@/components/table/data-table-column-header";
+import { useToast } from "@/hooks/use-toast";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 
@@ -159,7 +159,9 @@ export const columns = (
           <Badge
             variant="outline"
             className="text-xs"
-            style={type.color ? { borderColor: type.color, color: type.color } : {}}
+            style={
+              type.color ? { borderColor: type.color, color: type.color } : {}
+            }
           >
             {type.color && (
               <span

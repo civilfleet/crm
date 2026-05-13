@@ -7,7 +7,12 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
@@ -86,16 +91,18 @@ const SidebarProvider = React.forwardRef<
         if (typeof document !== "undefined") {
           const value = openState ? "1" : "0";
           if ("cookieStore" in document) {
-            void (document as typeof document & {
-              cookieStore?: {
-                set: (options: {
-                  name: string;
-                  value: string;
-                  expires: Date;
-                  path: string;
-                }) => Promise<void>;
-              };
-            }).cookieStore?.set({
+            void (
+              document as typeof document & {
+                cookieStore?: {
+                  set: (options: {
+                    name: string;
+                    value: string;
+                    expires: Date;
+                    path: string;
+                  }) => Promise<void>;
+                };
+              }
+            ).cookieStore?.set({
               name: SIDEBAR_COOKIE_NAME,
               value,
               expires: new Date(Date.now() + SIDEBAR_COOKIE_MAX_AGE * 1000),
@@ -146,14 +153,7 @@ const SidebarProvider = React.forwardRef<
         setOpenMobile,
         toggleSidebar,
       }),
-      [
-        state, 
-        open, 
-        setOpen, 
-        isMobile, 
-        openMobile, 
-        toggleSidebar
-      ],
+      [state, open, setOpen, isMobile, openMobile, toggleSidebar],
     );
 
     return (

@@ -5,8 +5,8 @@ import {
   flexRender,
   getCoreRowModel,
   getPaginationRowModel,
-  type PaginationState,
   getSortedRowModel,
+  type PaginationState,
   type RowSelectionState,
   type SortingState,
   useReactTable,
@@ -100,9 +100,9 @@ export function DataTable<TData, TValue>({
     isMobile ? "card" : resolvedInitialView,
   );
   const [mobileView, setMobileView] = React.useState<"card" | "map">("card");
-  const [desktopView, setDesktopView] = React.useState<"table" | "card" | "map">(
-    resolvedInitialView,
-  );
+  const [desktopView, setDesktopView] = React.useState<
+    "table" | "card" | "map"
+  >(resolvedInitialView);
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [pagination, setPagination] = React.useState<PaginationState>({
@@ -245,7 +245,7 @@ export function DataTable<TData, TValue>({
   const showDesktopBatchActions = showBatchActions && !isMobile;
   const showMobileBatchActions = showBatchActions && isMobile;
   const pageCount = isServerPagination
-    ? controlledPageCount ?? 1
+    ? (controlledPageCount ?? 1)
     : table.getPageCount();
   const canPaginate = pageCount > 1;
   const currentPageRows = isServerPagination
@@ -253,7 +253,9 @@ export function DataTable<TData, TValue>({
     : table.getRowModel().rows.length;
   const currentFrom = paginationState.pageIndex * paginationState.pageSize + 1;
   const currentTo = currentFrom + currentPageRows - 1;
-  const totalItems = isServerPagination ? serverPagination?.total ?? 0 : data.length;
+  const totalItems = isServerPagination
+    ? (serverPagination?.total ?? 0)
+    : data.length;
 
   return (
     <div className="w-full">
@@ -455,7 +457,8 @@ export function DataTable<TData, TValue>({
       {effectiveView !== "map" && totalItems > 0 ? (
         <div className="flex flex-col gap-2 border-t px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-muted-foreground">
-            Showing {currentPageRows === 0 ? 0 : currentFrom}-{currentTo} of {totalItems}
+            Showing {currentPageRows === 0 ? 0 : currentFrom}-{currentTo} of{" "}
+            {totalItems}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2">

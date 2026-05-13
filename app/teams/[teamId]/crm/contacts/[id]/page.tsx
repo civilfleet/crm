@@ -502,9 +502,9 @@ export default async function ContactDetailPage({
                       {contactEvent.participationTypes.includes("linked") && (
                         <Badge variant="outline">Linked contact</Badge>
                       )}
-                      {contactEvent.participationTypes.includes("registered") && (
-                        <Badge variant="outline">Registered attendee</Badge>
-                      )}
+                      {contactEvent.participationTypes.includes(
+                        "registered",
+                      ) && <Badge variant="outline">Registered attendee</Badge>}
                     </div>
                   ) : null}
 
@@ -548,7 +548,10 @@ export default async function ContactDetailPage({
                   {contactEvent.registration && (
                     <p className="text-xs text-muted-foreground">
                       Registered on{" "}
-                      {format(new Date(contactEvent.registration.createdAt), "PPpp")}
+                      {format(
+                        new Date(contactEvent.registration.createdAt),
+                        "PPpp",
+                      )}
                     </p>
                   )}
                 </div>
@@ -556,7 +559,9 @@ export default async function ContactDetailPage({
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">No associated events yet.</p>
+          <p className="text-sm text-muted-foreground">
+            No associated events yet.
+          </p>
         )}
       </CardContent>
     </Card>
@@ -691,7 +696,10 @@ export default async function ContactDetailPage({
               </CardHeader>
 
               <CardContent className="pt-6">
-                <ContactResponsiveTabs defaultValue="general" items={tabItems} />
+                <ContactResponsiveTabs
+                  defaultValue="general"
+                  items={tabItems}
+                />
               </CardContent>
             </Card>
           </div>

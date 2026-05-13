@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import logger from "@/lib/logger";
 import { handlePrismaError } from "@/lib/utils";
 import { deleteUser, getUserById } from "@/services/users";
-import logger from "@/lib/logger";
 
 export async function GET(
   _req: Request,

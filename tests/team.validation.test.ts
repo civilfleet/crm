@@ -37,8 +37,9 @@ test("createTeamSchema requires OIDC settings when OIDC login is enabled", () =>
       }),
     (error: unknown) => {
       assert.equal(typeof error, "object");
-      const issues = (error as { issues?: Array<{ path: string[]; message: string }> })
-        .issues;
+      const issues = (
+        error as { issues?: Array<{ path: string[]; message: string }> }
+      ).issues;
       assert.ok(issues);
       assert.deepEqual(
         issues?.map((issue) => issue.path.join(".")),

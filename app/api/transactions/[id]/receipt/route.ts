@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import logger from "@/lib/logger";
 import { handlePrismaError } from "@/lib/utils";
 import { updateTransactionReceipt } from "@/services/transactions";
-import logger from "@/lib/logger";
 
 export async function PATCH(
   request: Request,

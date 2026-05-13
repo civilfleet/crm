@@ -6,9 +6,9 @@ import { Check, Copy } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
+import { DataTableColumnHeader } from "@/components/table/data-table-column-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DataTableColumnHeader } from "@/components/table/data-table-column-header";
 
 export type EventRow = {
   id: string;
@@ -248,7 +248,9 @@ export const eventColumns: ColumnDef<EventRow>[] = [
         <Badge
           variant="outline"
           className="text-xs"
-          style={type.color ? { borderColor: type.color, color: type.color } : {}}
+          style={
+            type.color ? { borderColor: type.color, color: type.color } : {}
+          }
         >
           {type.color && (
             <span
@@ -311,7 +313,10 @@ export const renderEventCard = (event: EventRow) => {
             className="mt-2 text-xs"
             style={
               event.eventType.color
-                ? { borderColor: event.eventType.color, color: event.eventType.color }
+                ? {
+                    borderColor: event.eventType.color,
+                    color: event.eventType.color,
+                  }
                 : {}
             }
           >
@@ -337,14 +342,15 @@ export const renderEventCard = (event: EventRow) => {
             <span className="font-medium">Location:</span> {event.location}
           </p>
         )}
-        {!event.isOnline && (event.address || event.city || event.postalCode) && (
-          <p className="text-muted-foreground">
-            <span className="font-medium">Address:</span>{" "}
-            {[event.address, event.postalCode, event.city, event.state]
-              .filter(Boolean)
-              .join(", ")}
-          </p>
-        )}
+        {!event.isOnline &&
+          (event.address || event.city || event.postalCode) && (
+            <p className="text-muted-foreground">
+              <span className="font-medium">Address:</span>{" "}
+              {[event.address, event.postalCode, event.city, event.state]
+                .filter(Boolean)
+                .join(", ")}
+            </p>
+          )}
         <p className="text-muted-foreground">
           <span className="font-medium">Start:</span>{" "}
           {formatDateTime(event.startDate)}

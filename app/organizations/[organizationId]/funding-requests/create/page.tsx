@@ -1,6 +1,6 @@
+import { auth } from "@/auth";
 import HybridFundingRequestForm from "@/components/forms/hybrid-funding-request-form";
 import prisma from "@/lib/prisma";
-import { auth } from "@/auth";
 
 export default async function Page({
   params,

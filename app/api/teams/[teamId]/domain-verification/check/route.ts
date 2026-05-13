@@ -38,12 +38,10 @@ export async function POST(
         loginDomain: true,
         domainVerificationToken: true,
       },
-    } as any)) as
-      | {
-          loginDomain?: string | null;
-          domainVerificationToken?: string | null;
-        }
-      | null;
+    } as any)) as {
+      loginDomain?: string | null;
+      domainVerificationToken?: string | null;
+    } | null;
 
     if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });

@@ -4,12 +4,12 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
 import { DataTableColumnHeader } from "@/components/table/data-table-column-header";
+import { Badge } from "@/components/ui/badge";
 import {
   ContactAttributeType,
-  type ContactGender,
   type ContactEvent,
+  type ContactGender,
   type ContactProfileAttribute,
   type ContactRequestPreference,
 } from "@/types";

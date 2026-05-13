@@ -22,9 +22,10 @@ export async function GET(
     return NextResponse.json({ error: "Logo not found" }, { status: 404 });
   }
 
-  const teamModules = team.modules && team.modules.length > 0
-    ? team.modules
-    : [...DEFAULT_TEAM_MODULES];
+  const teamModules =
+    team.modules && team.modules.length > 0
+      ? team.modules
+      : [...DEFAULT_TEAM_MODULES];
 
   if (!teamModules.includes("FUNDING")) {
     return NextResponse.json({ error: "Logo not found" }, { status: 404 });

@@ -277,7 +277,9 @@ export default function EventCalendar({ teamId }: EventCalendarProps) {
                 <div className="flex items-center justify-between">
                   <span
                     className={`text-xs ${
-                      isToday ? "rounded-full bg-primary px-2 py-0.5 text-primary-foreground" : ""
+                      isToday
+                        ? "rounded-full bg-primary px-2 py-0.5 text-primary-foreground"
+                        : ""
                     }`}
                   >
                     {format(day, "d")}
@@ -298,7 +300,9 @@ export default function EventCalendar({ teamId }: EventCalendarProps) {
                         {eventItem.eventType?.color && (
                           <span
                             className="inline-block h-2 w-2 rounded-full"
-                            style={{ backgroundColor: eventItem.eventType.color }}
+                            style={{
+                              backgroundColor: eventItem.eventType.color,
+                            }}
                           />
                         )}
                         <span>{eventItem.title}</span>
@@ -365,14 +369,21 @@ export default function EventCalendar({ teamId }: EventCalendarProps) {
                   </p>
                   {!eventItem.isOnline && (
                     <p className="text-xs text-muted-foreground">
-                      {[eventItem.address, eventItem.postalCode, eventItem.city, eventItem.state]
+                      {[
+                        eventItem.address,
+                        eventItem.postalCode,
+                        eventItem.city,
+                        eventItem.state,
+                      ]
                         .filter(Boolean)
                         .join(", ")}
                     </p>
                   )}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {eventItem.isOnline ? "Online" : eventItem.location || "On site"}
+                  {eventItem.isOnline
+                    ? "Online"
+                    : eventItem.location || "On site"}
                 </div>
               </div>
             ))

@@ -5,10 +5,10 @@ import { AlertTriangle, Download, Loader2, Save, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
 import type { FieldErrors } from "react-hook-form";
-import type { z } from "zod";
+import { useForm } from "react-hook-form";
 import useSWR from "swr";
+import type { z } from "zod";
 import { ContactListFiltersBuilder } from "@/components/forms/contact-list-filters-builder";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +41,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useToast } from "@/hooks/use-toast";
-import { ContactListType, type ContactFilter } from "@/types";
+import { type ContactFilter, ContactListType } from "@/types";
 import { createContactListSchema } from "@/validations/contact-lists";
 
 type Contact = {
@@ -81,7 +81,9 @@ const buildFormValues = (
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
-const getFirstErrorMessage = (errors: FieldErrors<FormValues>): string | null => {
+const getFirstErrorMessage = (
+  errors: FieldErrors<FormValues>,
+): string | null => {
   const queue: unknown[] = [errors];
 
   while (queue.length > 0) {
@@ -141,7 +143,8 @@ export function ContactListDetail({ teamId, listId }: ContactListDetailProps) {
   );
 
   const fallbackValues = useMemo<FormValues>(
-    () => (isNewList || !list ? newListDefaults : buildFormValues(teamId, list)),
+    () =>
+      isNewList || !list ? newListDefaults : buildFormValues(teamId, list),
     [isNewList, list, newListDefaults, teamId],
   );
 
@@ -194,17 +197,17 @@ export function ContactListDetail({ teamId, listId }: ContactListDetailProps) {
   const watchedListType = form.watch("type");
   const fallbackListType = fallbackValues.type ?? ContactListType.MANUAL;
   const effectiveListType = isFormSynced
-    ? watchedListType ?? fallbackListType
+    ? (watchedListType ?? fallbackListType)
     : fallbackListType;
 
   const watchedFilters = form.watch("filters");
   const watchedContactIds = form.watch("contactIds");
-  const filtersValue: ContactFilter[] = (isFormSynced
-    ? watchedFilters ?? []
-    : fallbackValues.filters ?? []) as ContactFilter[];
+  const filtersValue: ContactFilter[] = (
+    isFormSynced ? (watchedFilters ?? []) : (fallbackValues.filters ?? [])
+  ) as ContactFilter[];
   const contactIdsValue = isFormSynced
-    ? watchedContactIds ?? []
-    : fallbackValues.contactIds ?? [];
+    ? (watchedContactIds ?? [])
+    : (fallbackValues.contactIds ?? []);
   const isSmartList = effectiveListType === ContactListType.SMART;
 
   const contactQueryParam = debouncedQuery.trim()
@@ -215,12 +218,13 @@ export function ContactListDetail({ teamId, listId }: ContactListDetailProps) {
     : "";
   const contactsKey = `/api/contacts?teamId=${teamId}${contactQueryParam}${filtersQueryParam}`;
 
-  const {
-    data: contactsData,
-    isValidating: isLoadingContacts,
-  } = useSWR(contactsKey, fetcher, {
-    keepPreviousData: true,
-  });
+  const { data: contactsData, isValidating: isLoadingContacts } = useSWR(
+    contactsKey,
+    fetcher,
+    {
+      keepPreviousData: true,
+    },
+  );
 
   const contacts: Contact[] = useMemo(
     () => (contactsData?.data as Contact[] | undefined) ?? [],
@@ -448,10 +452,10 @@ export function ContactListDetail({ teamId, listId }: ContactListDetailProps) {
     );
   }
 
-  const headerTitle = isNewList ? "Create contact list" : list?.name ?? "";
+  const headerTitle = isNewList ? "Create contact list" : (list?.name ?? "");
   const headerDescription = isNewList
     ? "Set up the name, description, and list behaviour."
-    : list?.description ?? "";
+    : (list?.description ?? "");
 
   const currentListType = effectiveListType;
   const currentContactsCount = list?.contacts.length ?? 0;
@@ -587,7 +591,7 @@ export function ContactListDetail({ teamId, listId }: ContactListDetailProps) {
                 name="type"
                 render={({ field }) => {
                   const selectValue = isFormSynced
-                    ? field.value ?? fallbackListType
+                    ? (field.value ?? fallbackListType)
                     : fallbackListType;
 
                   return (
@@ -684,7 +688,9 @@ export function ContactListDetail({ teamId, listId }: ContactListDetailProps) {
                                 <FormItem className="flex min-w-0 flex-row items-start space-x-3 space-y-0">
                                   <FormControl>
                                     <Checkbox
-                                      checked={field.value?.includes(contact.id)}
+                                      checked={field.value?.includes(
+                                        contact.id,
+                                      )}
                                       onCheckedChange={(checked) => {
                                         if (checked) {
                                           field.onChange([
@@ -703,7 +709,9 @@ export function ContactListDetail({ teamId, listId }: ContactListDetailProps) {
                                     />
                                   </FormControl>
                                   <FormLabel className="flex min-w-0 flex-col gap-0.5 font-normal">
-                                    <span className="break-words">{contact.name}</span>
+                                    <span className="break-words">
+                                      {contact.name}
+                                    </span>
                                     <span className="break-all text-xs text-muted-foreground">
                                       {[contact.email, contact.phone]
                                         .filter(Boolean)
@@ -860,7 +868,9 @@ export function ContactListDetail({ teamId, listId }: ContactListDetailProps) {
                     </div>
                     <div className="flex shrink-0 items-center gap-2 self-start sm:self-auto">
                       <Button asChild variant="outline" size="sm">
-                        <Link href={`/teams/${teamId}/crm/contacts/${contact.id}/edit`}>
+                        <Link
+                          href={`/teams/${teamId}/crm/contacts/${contact.id}/edit`}
+                        >
                           Edit
                         </Link>
                       </Button>

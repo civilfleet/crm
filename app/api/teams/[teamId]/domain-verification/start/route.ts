@@ -5,8 +5,8 @@ import {
   buildDomainVerificationRecordValue,
   generateDomainVerificationToken,
 } from "@/lib/domain-verification";
-import prisma from "@/lib/prisma";
 import logger from "@/lib/logger";
+import prisma from "@/lib/prisma";
 import { getTeamAdminAccess } from "@/services/teams/access";
 
 export const runtime = "nodejs";
@@ -74,7 +74,9 @@ export async function POST(
     return NextResponse.json({
       data: {
         ...updatedTeam,
-        recordName: buildDomainVerificationRecordName(updatedTeam.loginDomain || ""),
+        recordName: buildDomainVerificationRecordName(
+          updatedTeam.loginDomain || "",
+        ),
         recordValue: buildDomainVerificationRecordValue(token),
       },
     });

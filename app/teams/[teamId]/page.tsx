@@ -57,11 +57,10 @@ export default async function TeamPage({ params }: TeamPageProps) {
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-3xl font-bold">
-          {team?.name || "Team"} Dashboard
-        </h1>
+        <h1 className="text-3xl font-bold">{team?.name || "Team"} Dashboard</h1>
         <p className="mt-2 text-muted-foreground">
-          Jump into your team tools from the sidebar or review the latest activity below.
+          Jump into your team tools from the sidebar or review the latest
+          activity below.
         </p>
       </div>
       {crmStats && (

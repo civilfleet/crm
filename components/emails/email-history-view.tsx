@@ -445,7 +445,9 @@ const EmailBatchDetails = ({
                       href={`/teams/${teamId}/crm/contacts/${recipient.contactId}`}
                       className="font-medium hover:underline"
                     >
-                      {recipient.contactName || recipient.name || recipient.email}
+                      {recipient.contactName ||
+                        recipient.name ||
+                        recipient.email}
                     </Link>
                   ) : (
                     <span>{recipient.name || "-"}</span>

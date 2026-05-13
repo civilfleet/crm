@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
-import prisma from "@/lib/prisma";
 import type { ContactSubmodule } from "@/constants/contact-submodules";
+import prisma from "@/lib/prisma";
 import type {
   ContactEngagement,
   EngagementDirection,
@@ -147,8 +147,8 @@ const deleteEngagement = async (id: string, teamId: string) => {
 };
 
 export {
-  getContactEngagements,
   createEngagement,
-  updateEngagement,
   deleteEngagement,
+  getContactEngagements,
+  updateEngagement,
 };

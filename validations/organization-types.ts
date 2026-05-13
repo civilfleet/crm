@@ -23,10 +23,7 @@ const orgTypeFieldSchema = z.object({
     .optional(),
 });
 
-const schemaValue = z.union([
-  z.array(orgTypeFieldSchema),
-  z.string(),
-]);
+const schemaValue = z.union([z.array(orgTypeFieldSchema), z.string()]);
 
 export const createOrganizationTypeSchema = z.object({
   teamId: z.string().uuid("Team id must be a valid UUID"),

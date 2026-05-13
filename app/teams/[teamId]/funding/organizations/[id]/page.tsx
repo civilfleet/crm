@@ -14,9 +14,6 @@ export default async function FundingOrganizationDetailPage({
     session?.user?.roles?.includes(Roles.Team);
 
   return (
-    <TeamOrganizationDetail
-      organizationId={id}
-      isAdminOrTeam={isAdminOrTeam}
-    />
+    <TeamOrganizationDetail organizationId={id} isAdminOrTeam={isAdminOrTeam} />
   );
 }

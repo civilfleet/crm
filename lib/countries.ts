@@ -33,7 +33,10 @@ export const EUROPEAN_COUNTRIES: CountryEntry[] = [
   { code: "MD", names: ["Moldova", "Republic of Moldova"] },
   { code: "MC", names: ["Monaco"] },
   { code: "ME", names: ["Montenegro", "Crna Gora"] },
-  { code: "NL", names: ["Netherlands", "Nederland", "The Netherlands", "Holland"] },
+  {
+    code: "NL",
+    names: ["Netherlands", "Nederland", "The Netherlands", "Holland"],
+  },
   { code: "MK", names: ["North Macedonia", "Macedonia", "Severna Makedonija"] },
   { code: "NO", names: ["Norway", "Norge", "Noreg"] },
   { code: "PL", names: ["Poland", "Polska"] },

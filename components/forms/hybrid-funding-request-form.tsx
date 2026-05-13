@@ -53,7 +53,7 @@ type UploadedFile = { id: string; name: string; url: string };
 
 const createUploadedFile = (fileUrl: string): UploadedFile => ({
   id: `uploaded-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-  name: fileUrl.split('/').pop() || 'Uploaded File',
+  name: fileUrl.split("/").pop() || "Uploaded File",
   url: fileUrl,
 });
 
@@ -253,7 +253,10 @@ export default function HybridFundingRequestForm({
     const newFile = createUploadedFile(fileUrl);
     const updatedFiles = [...files, newFile];
     setFiles(updatedFiles);
-    form.setValue("files", updatedFiles.map(({ name, url }) => ({ name, url })));
+    form.setValue(
+      "files",
+      updatedFiles.map(({ name, url }) => ({ name, url })),
+    );
   };
 
   // Dynamic field renderer
@@ -597,7 +600,10 @@ export default function HybridFundingRequestForm({
                           (item) => item.id !== file.id,
                         );
                         setFiles(updatedFiles);
-                        form.setValue("files", updatedFiles.map(({ name, url }) => ({ name, url })));
+                        form.setValue(
+                          "files",
+                          updatedFiles.map(({ name, url }) => ({ name, url })),
+                        );
                       }}
                     >
                       Remove
@@ -625,7 +631,8 @@ export default function HybridFundingRequestForm({
               className="w-full sm:w-auto"
               type="submit"
               disabled={
-                isSubmitting || (!organizationId && !form.watch("organizationId"))
+                isSubmitting ||
+                (!organizationId && !form.watch("organizationId"))
               }
             >
               {isSubmitting && (

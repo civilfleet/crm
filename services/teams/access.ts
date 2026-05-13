@@ -1,5 +1,5 @@
-import { ensureTeamOwner } from "@/services/teams";
 import { getUserModuleAccess } from "@/services/groups";
+import { ensureTeamOwner } from "@/services/teams";
 import { Roles } from "@/types";
 
 export const getTeamAdminAccess = async (

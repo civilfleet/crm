@@ -33,7 +33,10 @@ export async function resolveLoginStrategy(
       };
     }
 
-    logger.debug({ emailDomain }, "Resolved magic-link login strategy for email domain");
+    logger.debug(
+      { emailDomain },
+      "Resolved magic-link login strategy for email domain",
+    );
     return {
       strategy: "EMAIL_MAGIC_LINK",
     };

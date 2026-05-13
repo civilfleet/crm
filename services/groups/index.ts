@@ -1,13 +1,13 @@
 import type { Prisma } from "@prisma/client";
-import prisma from "@/lib/prisma";
 import {
   CONTACT_SUBMODULE_FIELDS,
   type ContactSubmodule,
 } from "@/constants/contact-submodules";
+import prisma from "@/lib/prisma";
 import {
   APP_MODULES,
-  DEFAULT_TEAM_MODULES,
   type AppModule,
+  DEFAULT_TEAM_MODULES,
   type Group,
 } from "@/types";
 
@@ -242,13 +242,9 @@ const getSubmoduleFieldKeys = (submodules: ContactSubmodule[]) => {
 };
 
 const getAllSubmoduleFieldKeys = () =>
-  Array.from(
-    new Set(Object.values(CONTACT_SUBMODULE_FIELDS).flat()),
-  );
+  Array.from(new Set(Object.values(CONTACT_SUBMODULE_FIELDS).flat()));
 
-const computeGroupSubmodules = (
-  fieldKeys: Set<string>,
-): ContactSubmodule[] =>
+const computeGroupSubmodules = (fieldKeys: Set<string>): ContactSubmodule[] =>
   (Object.keys(CONTACT_SUBMODULE_FIELDS) as ContactSubmodule[]).filter(
     (submodule) => {
       const requiredKeys = CONTACT_SUBMODULE_FIELDS[submodule];
@@ -475,12 +471,7 @@ const createGroup = async (input: CreateGroupInput) => {
       },
     });
 
-    await syncContactFieldAccess(
-      tx,
-      teamId,
-      created.id,
-      contactSubmodules,
-    );
+    await syncContactFieldAccess(tx, teamId, created.id, contactSubmodules);
 
     await ensureDefaultGroup(teamId, tx);
 
@@ -699,9 +690,7 @@ const getUserModuleAccess = async (
     );
 
     if (team?.ownerId === userId) {
-      return Array.from(
-        new Set<AppModule>([...cappedBaseModules, "ADMIN"]),
-      );
+      return Array.from(new Set<AppModule>([...cappedBaseModules, "ADMIN"]));
     }
 
     return cappedBaseModules;
@@ -725,16 +714,16 @@ const getUserModuleAccess = async (
 };
 
 export {
-  getTeamGroups,
+  addUsersToGroup,
+  createGroup,
+  deleteGroups,
+  ensureDefaultGroup,
   getGroupById,
   getGroupWithUsers,
-  createGroup,
-  updateGroup,
-  deleteGroups,
-  addUsersToGroup,
-  removeUsersFromGroup,
+  getTeamGroups,
   getUserGroups,
-  ensureDefaultGroup,
   getUserModuleAccess,
   mapGroup,
+  removeUsersFromGroup,
+  updateGroup,
 };

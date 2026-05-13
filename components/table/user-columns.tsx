@@ -87,10 +87,7 @@ export const columns: ColumnDef<UserRow>[] = [
       <DataTableColumnHeader column={column} title="Name" />
     ),
     cell: ({ row }) => (
-      <NavigableCell
-        id={row.original.id}
-        className="flex items-center gap-2"
-      >
+      <NavigableCell id={row.original.id} className="flex items-center gap-2">
         <span>{row.original?.name || "N/A"}</span>
         {row.original.isOwner ? (
           <Badge variant="secondary" className="flex items-center gap-1">
@@ -165,8 +162,8 @@ export const columns: ColumnDef<UserRow>[] = [
     cell: ({ row }) => (
       <NavigableCell id={row.original.id}>
         {Array.isArray(row.original?.roles)
-          ? row.original.roles.join(', ')
-          : row.original?.roles || 'N/A'}
+          ? row.original.roles.join(", ")
+          : row.original?.roles || "N/A"}
       </NavigableCell>
     ),
   },
@@ -178,9 +175,7 @@ export const columns: ColumnDef<UserRow>[] = [
     cell: ({ row }) => {
       const groups = row.original?.groups;
       if (!groups || groups.length === 0) {
-        return (
-          <NavigableCell id={row.original.id}>No groups</NavigableCell>
-        );
+        return <NavigableCell id={row.original.id}>No groups</NavigableCell>;
       }
       return (
         <NavigableCell id={row.original.id} className="flex flex-wrap gap-1">

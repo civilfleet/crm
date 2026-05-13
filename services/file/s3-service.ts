@@ -2,8 +2,8 @@
 
 import { DeleteObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import s3Client, { s3PresignClient } from "@/lib/s3-client";
 import logger from "@/lib/logger";
+import s3Client, { s3PresignClient } from "@/lib/s3-client";
 
 import { cleanFileName } from "@/lib/utils";
 

@@ -1,7 +1,7 @@
-import { Prisma, Roles } from "@prisma/client";
+import { type Prisma, Roles } from "@prisma/client";
 import { auth } from "@/auth";
-import prisma from "@/lib/prisma";
 import logger from "@/lib/logger";
+import prisma from "@/lib/prisma";
 import type { OrganizationFieldFilter } from "@/validations/organization-filters";
 
 type Organization = {
@@ -56,10 +56,11 @@ const syncOrganizationFieldValues = async (
     where: { id: orgTypeId },
     select: { schema: true },
   });
-  const schema = (orgType?.schema as Array<{
-    key: string;
-    type: string;
-  }>) ?? [];
+  const schema =
+    (orgType?.schema as Array<{
+      key: string;
+      type: string;
+    }>) ?? [];
 
   const keys = new Set(schema.map((field) => field.key));
 
@@ -225,18 +226,18 @@ const createOrUpdateOrganization = async (formData: Organization) => {
     // Organization update/create logic
     const organization = formData.teamId
       ? await prisma.organization.create({
-        data: {
-          ...organizationData,
-          email: formData.email.toLowerCase(),
-          team: { connect: { id: formData.teamId } },
-          ...(formData.orgTypeId
-            ? { orgType: { connect: { id: formData.orgTypeId } } }
-            : {}),
-          ...(formData.contactPersonId
-            ? { contactPerson: { connect: { id: formData.contactPersonId } } }
-            : {}),
-        },
-      })
+          data: {
+            ...organizationData,
+            email: formData.email.toLowerCase(),
+            team: { connect: { id: formData.teamId } },
+            ...(formData.orgTypeId
+              ? { orgType: { connect: { id: formData.orgTypeId } } }
+              : {}),
+            ...(formData.contactPersonId
+              ? { contactPerson: { connect: { id: formData.contactPersonId } } }
+              : {}),
+          },
+        })
       : await prisma.organization.update({
           where: { email: formData.email },
           data: {
@@ -254,7 +255,9 @@ const createOrUpdateOrganization = async (formData: Organization) => {
       prisma,
       organization.id,
       formData.orgTypeId ?? null,
-      typeof profileData === "object" && profileData !== null && !Array.isArray(profileData)
+      typeof profileData === "object" &&
+        profileData !== null &&
+        !Array.isArray(profileData)
         ? (profileData as Record<string, unknown>)
         : undefined,
     );
@@ -657,9 +660,9 @@ const deleteOrganization = async (id: string) => {
 
 export {
   createOrUpdateOrganization,
+  deleteOrganization,
   getOrganizationByEmail,
+  getOrganizationById,
   getOrganizations,
   updateOrganization,
-  getOrganizationById,
-  deleteOrganization,
 };

@@ -1,9 +1,10 @@
 "use client";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useForm } from "react-hook-form";
 import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
 import useSWR from "swr";
 import { z } from "zod";
 import { DataTable } from "@/components/data-table";
@@ -14,7 +15,6 @@ import {
 } from "@/components/table/organization-columns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -23,9 +23,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import { useToast } from "@/hooks/use-toast";
-import ButtonControl from "../helper/button-control";
-import FormInputControl from "../helper/form-input-control";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -33,7 +31,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trash2, Plus, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import ButtonControl from "../helper/button-control";
+import FormInputControl from "../helper/form-input-control";
 
 const querySchema = z.object({
   query: z.string(),
@@ -86,17 +86,18 @@ export default function OrganizationTable({
   const orgTypes = orgTypesData?.data || [];
 
   const fieldOptions = useMemo(() => {
-    const map = new Map<
-      string,
-      { key: string; label: string; type: string }
-    >();
-    orgTypes.forEach((type: { schema?: Array<{ key: string; label: string; type: string }> }) => {
-      (type.schema || []).forEach((field) => {
-        if (!map.has(field.key)) {
-          map.set(field.key, field);
-        }
-      });
-    });
+    const map = new Map<string, { key: string; label: string; type: string }>();
+    orgTypes.forEach(
+      (type: {
+        schema?: Array<{ key: string; label: string; type: string }>;
+      }) => {
+        (type.schema || []).forEach((field) => {
+          if (!map.has(field.key)) {
+            map.set(field.key, field);
+          }
+        });
+      },
+    );
     return Array.from(map.values());
   }, [orgTypes]);
 
@@ -128,7 +129,10 @@ export default function OrganizationTable({
         { value: "isTrue", label: "is true" },
         { value: "isFalse", label: "is false" },
       ],
-    } as Record<string, Array<{ value: FieldFilter["operator"]; label: string }>>;
+    } as Record<
+      string,
+      Array<{ value: FieldFilter["operator"]; label: string }>
+    >;
   }, []);
 
   const filtersQuery = useMemo(() => {
@@ -147,7 +151,7 @@ export default function OrganizationTable({
     fetcher,
   );
   const loading = isLoading || !data;
-  const totalOrganizations = Number(data?.total ?? (data?.data?.length ?? 0));
+  const totalOrganizations = Number(data?.total ?? data?.data?.length ?? 0);
 
   if (error) {
     toast({
@@ -218,7 +222,8 @@ export default function OrganizationTable({
     } catch (_deleteError) {
       toast({
         title: "Unable to delete organizations",
-        description: "An unexpected error occurred while deleting organizations.",
+        description:
+          "An unexpected error occurred while deleting organizations.",
         variant: "destructive",
       });
     } finally {
@@ -317,7 +322,10 @@ export default function OrganizationTable({
                         setFieldFilters((prev) =>
                           prev.map((item, i) =>
                             i === index
-                              ? { ...item, operator: value as FieldFilter["operator"] }
+                              ? {
+                                  ...item,
+                                  operator: value as FieldFilter["operator"],
+                                }
                               : item,
                           ),
                         )
@@ -340,7 +348,13 @@ export default function OrganizationTable({
                         <Input
                           className="min-w-[200px]"
                           placeholder="Value"
-                          type={fieldType === "NUMBER" ? "number" : fieldType === "DATE" ? "date" : "text"}
+                          type={
+                            fieldType === "NUMBER"
+                              ? "number"
+                              : fieldType === "DATE"
+                                ? "date"
+                                : "text"
+                          }
                           value={filter.value ?? ""}
                           onChange={(event) =>
                             setFieldFilters((prev) =>
@@ -488,9 +502,7 @@ export default function OrganizationTable({
                         <div className="text-xs text-muted-foreground">
                           Phone
                         </div>
-                        <div className="font-medium">
-                          {org.phone || "N/A"}
-                        </div>
+                        <div className="font-medium">{org.phone || "N/A"}</div>
                       </div>
                       <div>
                         <div className="text-xs text-muted-foreground">

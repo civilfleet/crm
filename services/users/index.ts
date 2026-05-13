@@ -1,7 +1,7 @@
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { ensureDefaultGroup } from "@/services/groups";
-import { DEFAULT_TEAM_MODULES, type AppModule, type Roles } from "@/types";
+import { type AppModule, DEFAULT_TEAM_MODULES, type Roles } from "@/types";
 
 export interface User {
   name?: string;
@@ -17,9 +17,7 @@ export interface User {
   roles: Roles[];
 }
 
-const resolveTeamModules = (
-  modules?: AppModule[] | null,
-): AppModule[] =>
+const resolveTeamModules = (modules?: AppModule[] | null): AppModule[] =>
   modules && modules.length > 0 ? modules : [...DEFAULT_TEAM_MODULES];
 
 const getAdminUser = async (userId: string) => {
@@ -163,8 +161,9 @@ const getUserCurrent = async (userId: string) => {
 
     for (const membership of memberships) {
       const teamId = membership.group.teamId;
-      const teamModules: AppModule[] =
-        teamModulesByTeam.get(teamId) ?? [...DEFAULT_TEAM_MODULES];
+      const teamModules: AppModule[] = teamModulesByTeam.get(teamId) ?? [
+        ...DEFAULT_TEAM_MODULES,
+      ];
       const allowedModules = new Set<AppModule>([...teamModules, "ADMIN"]);
       const set = modulesByTeam.get(teamId) ?? new Set<AppModule>();
 
@@ -190,8 +189,9 @@ const getUserCurrent = async (userId: string) => {
   if (teamIds.length > 0) {
     defaultGroupsByTeam = new Map(
       defaultGroups.map((group) => {
-        const teamModules: AppModule[] =
-          teamModulesByTeam.get(group.teamId) ?? [...DEFAULT_TEAM_MODULES];
+        const teamModules: AppModule[] = teamModulesByTeam.get(
+          group.teamId,
+        ) ?? [...DEFAULT_TEAM_MODULES];
         const baseModules = group.modulePermissions.length
           ? group.modulePermissions.map(
               (permission) => permission.module as AppModule,
@@ -206,8 +206,9 @@ const getUserCurrent = async (userId: string) => {
   }
 
   const teamsWithModules = user.teams.map((team) => {
-    const teamModules: AppModule[] =
-      teamModulesByTeam.get(team.id) ?? [...DEFAULT_TEAM_MODULES];
+    const teamModules: AppModule[] = teamModulesByTeam.get(team.id) ?? [
+      ...DEFAULT_TEAM_MODULES,
+    ];
     const allowedModules = new Set<AppModule>([...teamModules, "ADMIN"]);
     const set = modulesByTeam.get(team.id);
 
@@ -465,7 +466,11 @@ const createUser = async (user: User) => {
     return updatedUser;
   }
 
-  const { organizationId: _organizationId, teamId: _teamId, ...userData } = user;
+  const {
+    organizationId: _organizationId,
+    teamId: _teamId,
+    ...userData
+  } = user;
   void _organizationId;
   void _teamId;
   const newUser = await prisma.user.create({
@@ -485,13 +490,13 @@ const createUser = async (user: User) => {
 };
 
 const getUserById = async (id: string) => {
-    const user = await prisma.user.findUnique({
-      where: {
-        id,
-      },
-    });
+  const user = await prisma.user.findUnique({
+    where: {
+      id,
+    },
+  });
 
-    return user;
+  return user;
 };
 
 const getTeamsUsers = async (teamId: string) => {
@@ -516,49 +521,49 @@ const deleteUser = async (
   organizationId?: string,
   teamId?: string,
 ) => {
-    if (organizationId) {
-      // Remove user from organization
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          organizations: {
-            disconnect: { id: organizationId },
-          },
+  if (organizationId) {
+    // Remove user from organization
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        organizations: {
+          disconnect: { id: organizationId },
         },
-      });
-    }
+      },
+    });
+  }
 
-    if (teamId) {
-      await prisma.userGroup.deleteMany({
-        where: {
-          userId,
-          group: {
-            teamId,
-          },
+  if (teamId) {
+    await prisma.userGroup.deleteMany({
+      where: {
+        userId,
+        group: {
+          teamId,
         },
-      });
+      },
+    });
 
-      // Remove user from team
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          teams: {
-            disconnect: { id: teamId },
-          },
+    // Remove user from team
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        teams: {
+          disconnect: { id: teamId },
         },
-      });
-    }
+      },
+    });
+  }
 
-    return true;
+  return true;
 };
 
 export {
-  getUsers,
-  getUserCurrent,
   createUser,
-  getUserById,
-  getTeamsUsers,
-  getUsersForDonation,
-  getAdminUser,
   deleteUser,
+  getAdminUser,
+  getTeamsUsers,
+  getUserById,
+  getUserCurrent,
+  getUsers,
+  getUsersForDonation,
 };

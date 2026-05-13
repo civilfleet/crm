@@ -4,8 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { AlertCircle, CheckCircle2, Loader2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import useSWR from "swr";
 import { Controller, useForm, useWatch } from "react-hook-form";
+import useSWR from "swr";
 import type { z } from "zod";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -86,10 +86,7 @@ export default function DonationAgreement({ teamId }: { teamId: string }) {
     setUsers(users.filter((u) => u !== userToRemove));
   };
 
-  const {
-    error: fundingRequestError,
-    isLoading,
-  } = useSWR(
+  const { error: fundingRequestError, isLoading } = useSWR(
     fundingRequestId ? `/api/funding-requests/${fundingRequestId}` : null,
     fetcher,
   );
@@ -357,7 +354,9 @@ export default function DonationAgreement({ teamId }: { teamId: string }) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.push(`/teams/${teamId}/funding/donation-agreements`)}
+              onClick={() =>
+                router.push(`/teams/${teamId}/funding/donation-agreements`)
+              }
               disabled={isSubmitting || isUploadingFile}
             >
               Cancel
