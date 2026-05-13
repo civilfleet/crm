@@ -106,8 +106,8 @@ const getAllowedSubmodules = async (
 };
 
 const createEngagementSchema = z.object({
-  contactId: z.string().uuid(),
-  teamId: z.string().uuid(),
+  contactId: z.uuid(),
+  teamId: z.uuid(),
   direction: z.enum([
     EngagementDirection.INBOUND,
     EngagementDirection.OUTBOUND,
@@ -149,8 +149,8 @@ const createEngagementSchema = z.object({
 });
 
 const updateEngagementSchema = z.object({
-  id: z.string().uuid(),
-  teamId: z.string().uuid(),
+  id: z.uuid(),
+  teamId: z.uuid(),
   subject: z.string().optional(),
   message: z.string().min(1).optional(),
   assignedToUserId: z.string().optional(),

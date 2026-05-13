@@ -185,7 +185,7 @@ export default function HybridFundingRequestForm({
   const combinedSchema = staticFundingRequestSchema
     .merge(
       z.object({
-        organizationId: z.string().uuid(),
+        organizationId: z.uuid(),
         submittedBy: z.string().email().optional().or(z.literal("")),
         files: z
           .array(

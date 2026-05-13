@@ -5,7 +5,7 @@ import { handlePrismaError } from "@/lib/utils";
 import { createZammadTicket } from "@/services/integrations/zammad";
 
 const createTicketSchema = z.object({
-  contactId: z.string().uuid(),
+  contactId: z.uuid(),
   groupId: z.number().int().positive(),
   subject: z.string().trim().min(1, "Subject is required"),
   message: z.string().trim().min(1, "Message is required"),

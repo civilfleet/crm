@@ -6,7 +6,7 @@ import { handlePrismaError } from "@/lib/utils";
 import { ensureTeamOwner, transferTeamOwnership } from "@/services/teams";
 
 const transferSchema = z.object({
-  newOwnerId: z.string().uuid(),
+  newOwnerId: z.uuid(),
 });
 
 export async function GET(

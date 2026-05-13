@@ -76,7 +76,7 @@ export async function POST(req: Request) {
       "Organization create request received",
     );
     const validatedData = createOrganizationSchema
-      .and(z.object({ teamId: z.string().uuid() }))
+      .and(z.object({ teamId: z.uuid() }))
       .and(z.object({ isFilledByOrg: z.boolean() }))
       .parse({ ...organizationData });
 

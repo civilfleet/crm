@@ -31,13 +31,13 @@ export async function POST(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const team = (await prisma.teams.findUnique({
+    const team = await prisma.teams.findUnique({
       where: { id: teamId },
       select: {
         id: true,
         loginDomain: true,
       },
-    } as any)) as { id: string; loginDomain?: string | null } | null;
+    });
 
     if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
@@ -51,7 +51,7 @@ export async function POST(
     }
 
     const token = generateDomainVerificationToken();
-    const updatedTeam = (await prisma.teams.update({
+    const updatedTeam = await prisma.teams.update({
       where: { id: teamId },
       data: {
         domainVerificationToken: token,
@@ -64,12 +64,7 @@ export async function POST(
         domainVerifiedAt: true,
         domainLastCheckedAt: true,
       },
-    } as any)) as {
-      loginDomain?: string | null;
-      domainVerificationToken?: string | null;
-      domainVerifiedAt?: Date | null;
-      domainLastCheckedAt?: Date | null;
-    };
+    });
 
     return NextResponse.json({
       data: {

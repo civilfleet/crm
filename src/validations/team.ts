@@ -4,7 +4,7 @@ const teamLoginMethods = ["EMAIL_MAGIC_LINK", "OIDC"] as const;
 
 const teamSchemaBase = z.object({
   name: z.string().min(1, "Name is required"),
-  email: z.string().email("Invalid email address"),
+  email: z.email("Invalid email address"),
   loginDomain: z
     .string()
     .regex(
@@ -40,7 +40,7 @@ const teamSchemaBase = z.object({
   strategicPriorities: z.string().optional(),
   user: z.object({
     name: z.string().min(1, "Name is required"),
-    email: z.string().email("Invalid email address"),
+    email: z.email("Invalid email address"),
     phone: z.string().optional(),
     address: z.string().optional(),
   }),
@@ -65,7 +65,7 @@ const requireOidcFields = (
 
   if (value.loginMethod === "OIDC" && !hasDomain) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       path: ["loginDomain"],
       message: "Login domain is required when login method is OIDC",
     });
@@ -73,14 +73,14 @@ const requireOidcFields = (
 
   if (value.loginMethod === "OIDC" && !value.oidcIssuer?.trim()) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       path: ["oidcIssuer"],
       message: "OIDC issuer is required when login method is OIDC",
     });
   }
   if (value.loginMethod === "OIDC" && hasOidcIssuer && !isOidcIssuerValid) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       path: ["oidcIssuer"],
       message: "OIDC issuer must be a valid URL",
     });
@@ -88,7 +88,7 @@ const requireOidcFields = (
 
   if (value.loginMethod === "OIDC" && !value.oidcClientId?.trim()) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       path: ["oidcClientId"],
       message: "OIDC client ID is required when login method is OIDC",
     });
@@ -100,7 +100,7 @@ const requireOidcFields = (
     !value.oidcClientSecret?.trim()
   ) {
     ctx.addIssue({
-      code: z.ZodIssueCode.custom,
+      code: "custom",
       path: ["oidcClientSecret"],
       message: "OIDC client secret is required when login method is OIDC",
     });

@@ -26,7 +26,7 @@ const orgTypeFieldSchema = z.object({
 const schemaValue = z.union([z.array(orgTypeFieldSchema), z.string()]);
 
 export const createOrganizationTypeSchema = z.object({
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   name: z
     .string()
     .min(1, "Type name is required")
@@ -40,8 +40,8 @@ export type CreateOrganizationTypeInput = z.infer<
 >;
 
 export const updateOrganizationTypeSchema = z.object({
-  id: z.string().uuid("Organization type id must be a valid UUID"),
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  id: z.uuid("Organization type id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   name: z
     .string()
     .min(1, "Type name is required")
@@ -55,9 +55,9 @@ export type UpdateOrganizationTypeInput = z.infer<
 >;
 
 export const deleteOrganizationTypesSchema = z.object({
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   ids: z
-    .array(z.string().uuid("Organization type id must be a valid UUID"))
+    .array(z.uuid("Organization type id must be a valid UUID"))
     .min(1, "Select at least one type"),
 });
 

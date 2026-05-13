@@ -31,7 +31,7 @@ const dynamicFieldsSchema = z.record(z.string(), z.unknown());
 const createFundingRequestSchema = staticFundingRequestSchema.merge(
   z.object({
     // System fields
-    organizationId: z.string().uuid().optional(),
+    organizationId: z.uuid().optional(),
     submittedBy: z.string().email().optional().or(z.literal("")),
     // File uploads
     files: z

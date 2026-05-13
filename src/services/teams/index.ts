@@ -26,7 +26,7 @@ const createTeam = async (teamData: CreateTeamInput) => {
   void _user;
   void _bankDetails;
 
-  const query: any = {
+  const query = {
     data: {
       ...sanitizedTeamData,
       loginDomain: normalizeLoginDomain(loginDomain),
@@ -81,7 +81,8 @@ const createTeam = async (teamData: CreateTeamInput) => {
     };
   }
 
-  const team = (await prisma.teams.create(query)) as any;
+  const team = await prisma.teams.create(query);
+
   const ownerId = user?.id ?? team.users?.[0]?.id;
   if (ownerId) {
     await prisma.teams.update({

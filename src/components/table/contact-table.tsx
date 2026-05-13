@@ -393,9 +393,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
 
       toast({
         title: "Contacts deleted",
-        description: `${selectedRows.length} contact${
-          selectedRows.length > 1 ? "s" : ""
-        } removed successfully.`,
+        description: `${selectedRows.length} contact${selectedRows.length > 1 ? "s" : ""} removed successfully.`,
       });
 
       clearSelection();

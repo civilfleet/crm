@@ -8,7 +8,7 @@ const replySchema = z.object({
   ticketId: z.coerce.number().int().positive(),
   message: z.string().trim().min(1, "Message is required"),
   subject: z.string().trim().optional(),
-  contactId: z.string().uuid().optional(),
+  contactId: z.uuid().optional(),
 });
 
 export async function POST(

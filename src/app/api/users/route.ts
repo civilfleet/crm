@@ -70,9 +70,7 @@ export async function POST(req: Request) {
     const user = await req.json();
     const teamId = user.teamId;
     const organizationId = user.organizationId;
-    const validatedData = createUserSchema.parse({
-      ...user,
-    }) as { email: string; name: string } & typeof user;
+    const validatedData = createUserSchema.parse(user);
 
     if (!teamId) {
       await createUser({

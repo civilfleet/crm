@@ -12,20 +12,16 @@ const preprocessEmptyString = (value: unknown) =>
 const optionalText = (schema: z.ZodString) =>
   z.preprocess(preprocessEmptyString, schema.optional());
 
-const requiredEmail = z
-  .string()
-  .trim()
-  .min(1, "Email is required")
-  .email("Invalid email address");
+const requiredEmail = z.email("Invalid email address");
 
 const optionalEmail = z.preprocess(
   preprocessEmptyString,
-  z.string().trim().email("Invalid email address").optional(),
+  z.email("Invalid email address").optional(),
 );
 
 const optionalWebsite = z.preprocess(
   preprocessEmptyString,
-  z.string().trim().url("Invalid website URL").optional(),
+  z.url("Invalid website URL").optional(),
 );
 
 const optionalDate = z.preprocess(
@@ -50,7 +46,7 @@ const numberValue = z.preprocess((value) => {
     return Number.isNaN(parsed) ? value : parsed;
   }
   return value;
-}, z.number().finite());
+}, z.number());
 
 const contactLocationSchema = z
   .object({
@@ -152,11 +148,7 @@ const distanceFilterSchema = z.object({
     .string()
     .trim()
     .length(2, "Country code must be a 2-letter ISO code"),
-  radiusKm: z.coerce
-    .number()
-    .finite()
-    .min(1, "Radius must be greater than 0")
-    .max(2000),
+  radiusKm: z.coerce.number().min(1, "Radius must be greater than 0").max(2000),
 });
 
 export const contactFilterSchema: z.ZodType<ContactFilter> =
@@ -165,11 +157,11 @@ export const contactFilterSchema: z.ZodType<ContactFilter> =
     attributeFilterSchema,
     z.object({
       type: z.literal("group"),
-      groupId: z.string().uuid("Group id must be a valid UUID"),
+      groupId: z.uuid("Group id must be a valid UUID"),
     }),
     z.object({
       type: z.literal("eventRole"),
-      eventRoleId: z.string().uuid("Event role id must be a valid UUID"),
+      eventRoleId: z.uuid("Event role id must be a valid UUID"),
     }),
     distanceFilterSchema,
     z
@@ -188,17 +180,17 @@ export const contactFiltersSchema: z.ZodType<ContactFilter[]> = z
   .default([]);
 
 export const createContactSchema = z.object({
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   name: z.string().trim().min(1, "Name is required"),
   pronouns: optionalText(z.string()),
-  gender: z.nativeEnum(ContactGender).nullable().optional(),
+  gender: z.enum(ContactGender).nullable().optional(),
   genderRequestPreference: z
-    .nativeEnum(ContactRequestPreference)
+    .enum(ContactRequestPreference)
     .nullable()
     .optional(),
   isBipoc: z.boolean().nullable().optional(),
   racismRequestPreference: z
-    .nativeEnum(ContactRequestPreference)
+    .enum(ContactRequestPreference)
     .nullable()
     .optional(),
   otherMargins: optionalText(z.string()),
@@ -217,7 +209,7 @@ export const createContactSchema = z.object({
   profileAttributes: z.array(contactAttributeSchema).default([]),
   groupId: z.preprocess(
     preprocessEmptyString,
-    z.string().uuid("Group id must be a valid UUID").optional(),
+    z.uuid("Group id must be a valid UUID").optional(),
   ),
 });
 
@@ -226,18 +218,18 @@ export type CreateContactInput = z.infer<typeof createContactSchema>;
 export type ContactFilterInput = z.infer<typeof contactFilterSchema>;
 
 export const updateContactSchema = z.object({
-  contactId: z.string().uuid("Contact id must be a valid UUID"),
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  contactId: z.uuid("Contact id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   name: z.string().min(1, "Name is required").optional(),
   pronouns: optionalText(z.string()),
-  gender: z.nativeEnum(ContactGender).nullable().optional(),
+  gender: z.enum(ContactGender).nullable().optional(),
   genderRequestPreference: z
-    .nativeEnum(ContactRequestPreference)
+    .enum(ContactRequestPreference)
     .nullable()
     .optional(),
   isBipoc: z.boolean().nullable().optional(),
   racismRequestPreference: z
-    .nativeEnum(ContactRequestPreference)
+    .enum(ContactRequestPreference)
     .nullable()
     .optional(),
   otherMargins: optionalText(z.string()),
@@ -256,16 +248,16 @@ export const updateContactSchema = z.object({
   profileAttributes: z.array(contactAttributeSchema).optional(),
   groupId: z.preprocess(
     preprocessEmptyString,
-    z.string().uuid("Group id must be a valid UUID").optional(),
+    z.uuid("Group id must be a valid UUID").optional(),
   ),
 });
 
 export type UpdateContactInput = z.infer<typeof updateContactSchema>;
 
 export const deleteContactsSchema = z.object({
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   ids: z
-    .array(z.string().uuid("Contact id must be a valid UUID"))
+    .array(z.uuid("Contact id must be a valid UUID"))
     .min(1, "Select at least one contact"),
 });
 

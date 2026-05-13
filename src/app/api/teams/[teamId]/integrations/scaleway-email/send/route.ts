@@ -6,7 +6,7 @@ import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 const sendMassEmailSchema = z.object({
   contactIds: z
-    .array(z.string().uuid("Contact ID must be a valid UUID"))
+    .array(z.uuid("Contact ID must be a valid UUID"))
     .min(1, "Select at least one contact")
     .max(100, "You can send to at most 100 contacts at once"),
   subject: z.string().trim().min(1, "Subject is required").max(500),

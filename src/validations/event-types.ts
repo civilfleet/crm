@@ -7,7 +7,7 @@ const optionalText = (schema: z.ZodString) =>
   z.preprocess(preprocessEmptyString, schema.optional());
 
 export const createEventTypeSchema = z.object({
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   name: z
     .string()
     .min(1, "Type name is required")
@@ -18,8 +18,8 @@ export const createEventTypeSchema = z.object({
 export type CreateEventTypeInput = z.infer<typeof createEventTypeSchema>;
 
 export const updateEventTypeSchema = z.object({
-  id: z.string().uuid("Event type id must be a valid UUID"),
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  id: z.uuid("Event type id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   name: z
     .string()
     .min(1, "Type name is required")
@@ -30,9 +30,9 @@ export const updateEventTypeSchema = z.object({
 export type UpdateEventTypeInput = z.infer<typeof updateEventTypeSchema>;
 
 export const deleteEventTypesSchema = z.object({
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   ids: z
-    .array(z.string().uuid("Event type id must be a valid UUID"))
+    .array(z.uuid("Event type id must be a valid UUID"))
     .min(1, "Select at least one type"),
 });
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const createDonationAgreementSchema = z.object({
-  fundingRequestId: z.string().uuid(),
+  fundingRequestId: z.uuid(),
   users: z.array(z.string()).optional(),
   user: z.string().optional(),
   file: z.string().min(1, "File is required"),

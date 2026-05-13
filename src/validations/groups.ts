@@ -3,11 +3,11 @@ import { CONTACT_SUBMODULES } from "@/constants/contact-submodules";
 import { APP_MODULES, DEFAULT_TEAM_MODULES } from "@/types";
 
 export const createGroupSchema = z.object({
-  teamId: z.string().uuid(),
+  teamId: z.uuid(),
   name: z.string().min(1, "Name is required").max(255),
   description: z.string().optional(),
   canAccessAllContacts: z.boolean().optional().default(false),
-  userIds: z.array(z.string().uuid()).optional(),
+  userIds: z.array(z.uuid()).optional(),
   modules: z
     .array(z.enum(APP_MODULES))
     .optional()
@@ -22,8 +22,8 @@ export const createGroupSchema = z.object({
 export type CreateGroupInput = z.infer<typeof createGroupSchema>;
 
 export const updateGroupSchema = z.object({
-  id: z.string().uuid(),
-  teamId: z.string().uuid(),
+  id: z.uuid(),
+  teamId: z.uuid(),
   name: z.string().min(1, "Name is required").max(255).optional(),
   description: z.string().optional(),
   canAccessAllContacts: z.boolean().optional(),
@@ -40,16 +40,16 @@ export const updateGroupSchema = z.object({
 export type UpdateGroupInput = z.infer<typeof updateGroupSchema>;
 
 export const deleteGroupsSchema = z.object({
-  teamId: z.string().uuid(),
-  ids: z.array(z.string().uuid()).min(1, "At least one group ID is required"),
+  teamId: z.uuid(),
+  ids: z.array(z.uuid()).min(1, "At least one group ID is required"),
 });
 
 export type DeleteGroupsInput = z.infer<typeof deleteGroupsSchema>;
 
 export const manageGroupUsersSchema = z.object({
-  groupId: z.string().uuid(),
-  teamId: z.string().uuid(),
-  userIds: z.array(z.string().uuid()),
+  groupId: z.uuid(),
+  teamId: z.uuid(),
+  userIds: z.array(z.uuid()),
 });
 
 export type ManageGroupUsersInput = z.infer<typeof manageGroupUsersSchema>;

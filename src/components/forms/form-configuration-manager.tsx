@@ -72,7 +72,7 @@ const formFieldSchema = z.object({
     ),
   label: z.string().min(1, "Label is required"),
   description: z.string().nullish(),
-  type: z.nativeEnum(FieldType),
+  type: z.enum(FieldType),
   placeholder: z.string().nullish(),
   defaultValue: z.string().nullish(),
   isRequired: z.boolean().default(false),

@@ -148,7 +148,7 @@ export async function PATCH(
         }
       }
 
-      const existingTeamAuth = (await tx.teams.findUnique({
+      const existingTeamAuth = await tx.teams.findUnique({
         where: { id: teamId },
         select: {
           loginDomain: true,
@@ -157,13 +157,8 @@ export async function PATCH(
           domainVerificationToken: true,
           oidcClientSecret: true,
         },
-      } as any)) as {
-        loginDomain?: string | null;
-        domainVerifiedAt?: Date | null;
-        domainLastCheckedAt?: Date | null;
-        domainVerificationToken?: string | null;
-        oidcClientSecret?: string | null;
-      } | null;
+      });
+
       const normalizedExistingLoginDomain = normalizeLoginDomain(
         existingTeamAuth?.loginDomain ?? null,
       );
@@ -247,7 +242,7 @@ export async function PATCH(
               }
             : {}),
           ...(hasLoginDomain ? { loginDomain } : {}),
-        } as any,
+        },
         include: {
           bankDetails: true,
           users: true,

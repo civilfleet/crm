@@ -35,7 +35,7 @@ const createUserSchema = z.object({
     })
     .optional()
     .or(z.literal("")),
-  email: z.string().email({
+  email: z.email({
     message: "Invalid email address format.",
   }),
   phone: z
@@ -55,7 +55,7 @@ const createOrganizationSchema = z.object({
     })
     .optional()
     .or(z.literal("")),
-  email: z.string().email({
+  email: z.email({
     message: "Invalid email address format.",
   }),
   address: z
@@ -122,15 +122,9 @@ const createOrganizationSchema = z.object({
     .optional()
     .or(z.literal("")),
   logo: z.string().optional().or(z.literal("")),
-  orgTypeId: z
-    .string()
-    .uuid("Organization type id must be a valid UUID")
-    .optional(),
+  orgTypeId: z.uuid("Organization type id must be a valid UUID").optional(),
   profileData: z.record(z.string(), z.unknown()).optional(),
-  contactPersonId: z
-    .string()
-    .uuid("Contact id must be a valid UUID")
-    .optional(),
+  contactPersonId: z.uuid("Contact id must be a valid UUID").optional(),
   bankDetails: bankDetailsSchema,
   user: createUserSchema,
 });

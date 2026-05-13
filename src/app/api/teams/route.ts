@@ -114,7 +114,7 @@ export async function POST(request: Request) {
           city,
           country,
           website,
-        } as any,
+        },
         include: {
           users: true,
         },

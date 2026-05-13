@@ -18,22 +18,22 @@ const numberValue = z.preprocess((value) => {
     return Number.isNaN(parsed) ? value : parsed;
   }
   return value;
-}, z.number().finite());
+}, z.number());
 
 const eventContactSchema = z.object({
-  contactId: z.string().uuid("Contact id must be a valid UUID"),
-  roleIds: z.array(z.string().uuid("Role id must be a valid UUID")).default([]),
+  contactId: z.uuid("Contact id must be a valid UUID"),
+  roleIds: z.array(z.uuid("Role id must be a valid UUID")).default([]),
 });
 
 export const createEventSchema = z.object({
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   title: z.string().min(1, "Title is required"),
   slug: optionalText(z.string()),
   description: optionalText(z.string()),
   location: optionalText(z.string()),
   eventTypeId: z.preprocess(
     preprocessEmptyString,
-    z.string().uuid("Event type id must be a valid UUID").optional(),
+    z.uuid("Event type id must be a valid UUID").optional(),
   ),
   isOnline: z
     .preprocess((val) => val === true || val === "true", z.boolean())
@@ -67,21 +67,21 @@ export const createEventSchema = z.object({
     .preprocess((val) => val === true || val === "true", z.boolean())
     .default(false),
   contacts: z.array(eventContactSchema).default([]),
-  listIds: z.array(z.string().uuid("List id must be a valid UUID")).default([]),
+  listIds: z.array(z.uuid("List id must be a valid UUID")).default([]),
 });
 
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 
 export const updateEventSchema = z.object({
-  id: z.string().uuid("Event id must be a valid UUID"),
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  id: z.uuid("Event id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   title: z.string().min(1, "Title is required"),
   slug: optionalText(z.string()),
   description: optionalText(z.string()),
   location: optionalText(z.string()),
   eventTypeId: z.preprocess(
     preprocessEmptyString,
-    z.string().uuid("Event type id must be a valid UUID").optional(),
+    z.uuid("Event type id must be a valid UUID").optional(),
   ),
   isOnline: z
     .preprocess((val) => val === true || val === "true", z.boolean())
@@ -115,15 +115,15 @@ export const updateEventSchema = z.object({
     .preprocess((val) => val === true || val === "true", z.boolean())
     .default(false),
   contacts: z.array(eventContactSchema).default([]),
-  listIds: z.array(z.string().uuid("List id must be a valid UUID")).default([]),
+  listIds: z.array(z.uuid("List id must be a valid UUID")).default([]),
 });
 
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 
 export const deleteEventsSchema = z.object({
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   ids: z
-    .array(z.string().uuid("Event id must be a valid UUID"))
+    .array(z.uuid("Event id must be a valid UUID"))
     .min(1, "Select at least one event"),
 });
 
@@ -131,7 +131,7 @@ export type DeleteEventsInput = z.infer<typeof deleteEventsSchema>;
 
 // Event registration validation schemas
 export const createEventRegistrationSchema = z.object({
-  eventId: z.string().uuid("Event id must be a valid UUID"),
+  eventId: z.uuid("Event id must be a valid UUID"),
   name: z.string().trim().min(1, "Name is required"),
   email: z.string().trim().email("Valid email is required"),
   phone: optionalText(z.string()),

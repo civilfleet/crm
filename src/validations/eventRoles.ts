@@ -7,7 +7,7 @@ const optionalText = (schema: z.ZodString) =>
   z.preprocess(preprocessEmptyString, schema.optional());
 
 export const createEventRoleSchema = z.object({
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   name: z
     .string()
     .min(1, "Role name is required")
@@ -18,8 +18,8 @@ export const createEventRoleSchema = z.object({
 export type CreateEventRoleInput = z.infer<typeof createEventRoleSchema>;
 
 export const updateEventRoleSchema = z.object({
-  id: z.string().uuid("Event role id must be a valid UUID"),
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  id: z.uuid("Event role id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   name: z
     .string()
     .min(1, "Role name is required")
@@ -30,9 +30,9 @@ export const updateEventRoleSchema = z.object({
 export type UpdateEventRoleInput = z.infer<typeof updateEventRoleSchema>;
 
 export const deleteEventRolesSchema = z.object({
-  teamId: z.string().uuid("Team id must be a valid UUID"),
+  teamId: z.uuid("Team id must be a valid UUID"),
   ids: z
-    .array(z.string().uuid("Event role id must be a valid UUID"))
+    .array(z.uuid("Event role id must be a valid UUID"))
     .min(1, "Select at least one role"),
 });
 

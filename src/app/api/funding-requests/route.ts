@@ -48,7 +48,7 @@ export async function POST(req: Request) {
     const validatedData = createFundingRequestSchema
       .and(
         z.object({
-          organizationId: z.string().uuid(),
+          organizationId: z.uuid(),
           submittedBy: z.string().email().optional().or(z.literal("")),
         }),
       )
