@@ -21,7 +21,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "auth": ["./auth"]
+      "auth": ["./src/auth"]
     }
   },
   "include": [

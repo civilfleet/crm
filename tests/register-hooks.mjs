@@ -30,7 +30,7 @@ const resolveFileCandidate = (basePath) => {
 };
 
 const resolveAliasSpecifier = (specifier) =>
-  resolveFileCandidate(path.join(repoRoot, specifier.slice(2)));
+  resolveFileCandidate(path.join(repoRoot, "src", specifier.slice(2)));
 
 const resolveRelativeSpecifier = (specifier, parentURL) => {
   if (!parentURL?.startsWith("file:")) {

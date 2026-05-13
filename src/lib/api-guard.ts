@@ -36,7 +36,11 @@ export const verifyTeamAccess = async (
   options: { requireAdmin?: boolean; requireSuperAdmin?: boolean } = {},
 ) => {
   const session = await getAuthenticatedSession();
-  const userId = session.user.userId!;
+  const userId = session.user.userId;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized - Please sign in");
+  }
 
   // Global Admin bypass
   const isSuperAdmin = session.user.roles?.includes(Roles.Admin);
