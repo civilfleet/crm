@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { handlePrismaError } from "@/lib/utils";
 import { createEvent, deleteEvents, getTeamEvents } from "@/services/events";
 import { createEventSchema, deleteEventsSchema } from "@/validations/events";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 export async function GET(req: Request) {
   try {
@@ -20,6 +21,8 @@ export async function GET(req: Request) {
       );
     }
 
+    await verifyTeamAccess(teamId);
+
     const events = await getTeamEvents(teamId, query || undefined, {
       eventTypeId: eventTypeId || undefined,
       from: from || undefined,
@@ -28,6 +31,9 @@ export async function GET(req: Request) {
     });
     return NextResponse.json({ data: events }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
+
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -40,11 +46,15 @@ export async function POST(req: Request) {
   try {
     const payload = await req.json();
     const validated = createEventSchema.parse(payload);
+    await verifyTeamAccess(validated.teamId);
 
     const event = await createEvent(validated);
 
     return NextResponse.json({ data: event }, { status: 201 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
+
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -57,11 +67,15 @@ export async function DELETE(req: Request) {
   try {
     const payload = await req.json();
     const validated = deleteEventsSchema.parse(payload);
+    await verifyTeamAccess(validated.teamId);
 
     await deleteEvents(validated.teamId, validated.ids);
 
     return NextResponse.json({ data: "success" }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
+
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },

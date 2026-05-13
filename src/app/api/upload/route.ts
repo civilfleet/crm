@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { handlePrismaError } from "@/lib/utils";
 import { uploadFile } from "@/services/file/s3-service";
+import { getAuthenticatedSession, handleApiError } from "@/lib/api-guard";
 
 export async function POST(req: Request) {
-  const values = await req.json();
   try {
+    await getAuthenticatedSession();
+    const values = await req.json();
     const putUrl = await uploadFile({
       fileName: values.fileName,
       fileType: values.fileType,
@@ -22,6 +24,9 @@ export async function POST(req: Request) {
       },
     );
   } catch (error) {
+    const apiError = handleApiError(error);
+    if (apiError) return apiError;
+
     const { message } = handlePrismaError(error);
     return NextResponse.json({ error: message }, { status: 400 });
   }

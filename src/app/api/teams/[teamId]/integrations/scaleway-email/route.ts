@@ -5,6 +5,7 @@ import {
   getScalewayEmailIntegration,
   saveScalewayEmailIntegration,
 } from "@/services/integrations/scaleway-email";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 const updateIntegrationSchema = z.object({
   apiKey: z
@@ -29,10 +30,15 @@ export async function GET(
 ) {
   try {
     const { teamId } = await params;
+    await verifyTeamAccess(teamId, { requireAdmin: true });
+
     const integration = await getScalewayEmailIntegration(teamId);
 
     return NextResponse.json({ data: integration }, { status: 200 });
   } catch (error) {
+    const apiError = handleApiError(error);
+    if (apiError) return apiError;
+
     const { message } = handlePrismaError(error);
     return NextResponse.json(
       { error: message },
@@ -47,6 +53,8 @@ export async function POST(
 ) {
   try {
     const { teamId } = await params;
+    await verifyTeamAccess(teamId, { requireAdmin: true });
+
     const payload = await request.json();
     const validated = updateIntegrationSchema.parse(payload);
 
@@ -62,6 +70,9 @@ export async function POST(
 
     return NextResponse.json({ data: integration }, { status: 200 });
   } catch (error) {
+    const apiError = handleApiError(error);
+    if (apiError) return apiError;
+
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: error.issues },

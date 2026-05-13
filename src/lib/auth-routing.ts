@@ -40,13 +40,13 @@ type TeamAuthConfig = {
 const getTeamByEmailDomain = async (
   domain: string,
 ): Promise<TeamAuthConfig | null> => {
-  const team = (await prisma.teams.findFirst({
+  const team = await prisma.teams.findFirst({
     where: {
       loginDomain: domain,
       domainVerifiedAt: {
         not: null,
       },
-    } as any,
+    },
     select: {
       id: true,
       loginMethod: true,
@@ -55,8 +55,8 @@ const getTeamByEmailDomain = async (
       oidcIssuer: true,
       oidcClientId: true,
       oidcClientSecret: true,
-    } as any,
-  })) as TeamAuthConfig | null;
+    },
+  });
 
   return team;
 };
@@ -110,7 +110,7 @@ export const resolveExpectedProviderByEmail = async (
 export const loadTeamOidcProviders = async (): Promise<
   OAuthConfig<Record<string, unknown>>[]
 > => {
-  const teams = (await prisma.teams.findMany({
+  const teams = await prisma.teams.findMany({
     where: {
       loginMethod: OIDC_LOGIN_METHOD,
       domainVerifiedAt: {
@@ -125,20 +125,15 @@ export const loadTeamOidcProviders = async (): Promise<
       oidcClientSecret: {
         not: null,
       },
-    } as any,
+    },
     select: {
       id: true,
       domainVerifiedAt: true,
       oidcIssuer: true,
       oidcClientId: true,
       oidcClientSecret: true,
-    } as any,
-  })) as unknown as Array<{
-    id: string;
-    oidcIssuer: string;
-    oidcClientId: string;
-    oidcClientSecret: string;
-  }>;
+    },
+  });
 
   logger.info(
     {
@@ -153,9 +148,9 @@ export const loadTeamOidcProviders = async (): Promise<
     name: `OIDC (${team.id})`,
     type: "oidc",
     allowDangerousEmailAccountLinking: true,
-    issuer: team.oidcIssuer,
-    clientId: team.oidcClientId,
-    clientSecret: team.oidcClientSecret,
+    issuer: team.oidcIssuer ?? undefined,
+    clientId: team.oidcClientId ?? undefined,
+    clientSecret: team.oidcClientSecret ?? undefined,
     checks: ["pkce", "state"],
     authorization: {
       params: {

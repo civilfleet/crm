@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
 import { handlePrismaError } from "@/lib/utils";
 import { sendMassEmailToContacts } from "@/services/integrations/scaleway-email";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 const sendMassEmailSchema = z.object({
   contactIds: z
@@ -19,7 +19,7 @@ export async function POST(
 ) {
   try {
     const { teamId } = await params;
-    const session = await auth();
+    const session = await verifyTeamAccess(teamId);
     const payload = await request.json();
     const validated = sendMassEmailSchema.parse(payload);
 
@@ -28,12 +28,15 @@ export async function POST(
       contactIds: validated.contactIds,
       subject: validated.subject,
       html: validated.html,
-      userId: session?.user?.userId,
-      userName: session?.user?.name ?? session?.user?.email ?? undefined,
+      userId: session.user.userId,
+      userName: session.user.name ?? session.user.email ?? undefined,
     });
 
     return NextResponse.json({ data: result }, { status: 200 });
   } catch (error) {
+    const apiError = handleApiError(error);
+    if (apiError) return apiError;
+
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: error.issues },

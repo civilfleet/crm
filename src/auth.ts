@@ -1,5 +1,5 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import NextAuth, { type DefaultSession } from "next-auth";
+import NextAuth, { type DefaultSession, type NextAuthConfig } from "next-auth";
 import Nodemailer from "next-auth/providers/nodemailer";
 import authConfig from "./config/auth";
 import mailConfig from "./config/mail";
@@ -22,24 +22,21 @@ declare module "next-auth" {
       roles?: Roles[];
       organizationId?: string;
       teamId?: string;
-
       userId?: string;
     } & DefaultSession["user"];
   }
 }
 
-const buildAuth = async () => {
-  let teamOidcProviders = [] as Awaited<
-    ReturnType<typeof loadTeamOidcProviders>
-  >;
+export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
+  let teamOidcProviders: Awaited<ReturnType<typeof loadTeamOidcProviders>> = [];
+
   try {
     teamOidcProviders = await loadTeamOidcProviders();
   } catch (error) {
     logger.error({ error }, "Failed to load team OIDC providers");
-    throw error;
   }
 
-  return NextAuth({
+  const config: NextAuthConfig = {
     ...authConfig,
     adapter: PrismaAdapter(prisma),
     providers: [
@@ -58,6 +55,7 @@ const buildAuth = async () => {
         let userExist = await prisma.user.findFirst({
           where: { email: user.email as string },
         });
+
         if (!userExist) {
           const providerId = account.provider;
           if (!providerId.startsWith("oidc-")) {
@@ -69,7 +67,7 @@ const buildAuth = async () => {
           }
 
           const teamId = providerId.replace("oidc-", "");
-          const team = (await prisma.teams.findUnique({
+          const team = await prisma.teams.findUnique({
             where: { id: teamId },
             select: {
               id: true,
@@ -79,14 +77,7 @@ const buildAuth = async () => {
               autoProvisionUsersFromOidc: true,
               defaultOidcGroupId: true,
             },
-          } as any)) as {
-            id: string;
-            loginMethod?: string | null;
-            loginDomain?: string | null;
-            domainVerifiedAt?: Date | null;
-            autoProvisionUsersFromOidc?: boolean | null;
-            defaultOidcGroupId?: string | null;
-          } | null;
+          });
 
           const userEmailDomain = extractEmailDomain(user.email);
           const teamLoginDomain = normalizeLoginDomain(team?.loginDomain);
@@ -193,6 +184,7 @@ const buildAuth = async () => {
             return false;
           }
         }
+
         try {
           const expectedProvider = await resolveExpectedProviderByEmail(
             user.email,
@@ -253,56 +245,7 @@ const buildAuth = async () => {
         return session;
       },
     },
-  });
-};
+  };
 
-export const handlers = {
-  GET: async (...args: any[]) => {
-    try {
-      const authInstance = await buildAuth();
-      return (authInstance.handlers.GET as any)(...args);
-    } catch (error) {
-      logger.error({ error }, "Auth GET handler failed");
-      throw error;
-    }
-  },
-  POST: async (...args: any[]) => {
-    try {
-      const authInstance = await buildAuth();
-      return (authInstance.handlers.POST as any)(...args);
-    } catch (error) {
-      logger.error({ error }, "Auth POST handler failed");
-      throw error;
-    }
-  },
-};
-
-export const auth = async (...args: any[]) => {
-  try {
-    const authInstance = await buildAuth();
-    return (authInstance.auth as any)(...args);
-  } catch (error) {
-    logger.error({ error }, "Auth session resolver failed");
-    throw error;
-  }
-};
-
-export const signIn = async (...args: any[]) => {
-  try {
-    const authInstance = await buildAuth();
-    return (authInstance.signIn as any)(...args);
-  } catch (error) {
-    logger.error({ error }, "Auth signIn helper failed");
-    throw error;
-  }
-};
-
-export const signOut = async (...args: any[]) => {
-  try {
-    const authInstance = await buildAuth();
-    return (authInstance.signOut as any)(...args);
-  } catch (error) {
-    logger.error({ error }, "Auth signOut helper failed");
-    throw error;
-  }
-};
+  return config;
+});

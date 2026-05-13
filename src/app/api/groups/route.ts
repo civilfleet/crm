@@ -3,6 +3,7 @@ import { z } from "zod";
 import { handlePrismaError } from "@/lib/utils";
 import { createGroup, deleteGroups, getTeamGroups } from "@/services/groups";
 import { createGroupSchema, deleteGroupsSchema } from "@/validations/groups";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,10 +17,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    await verifyTeamAccess(teamId);
+
     const groups = await getTeamGroups(teamId);
 
     return NextResponse.json({ data: groups }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
+
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -32,11 +38,15 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const validated = createGroupSchema.parse(body);
+    await verifyTeamAccess(validated.teamId);
 
     const group = await createGroup(validated);
 
     return NextResponse.json({ data: group }, { status: 201 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
+
     if (e instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: e.issues },
@@ -56,11 +66,15 @@ export async function DELETE(request: NextRequest) {
   try {
     const body = await request.json();
     const validated = deleteGroupsSchema.parse(body);
+    await verifyTeamAccess(validated.teamId);
 
     await deleteGroups(validated.teamId, validated.ids);
 
     return NextResponse.json({ data: "success" }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
+
     if (e instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: e.issues },

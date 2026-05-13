@@ -6,6 +6,7 @@ import {
   getEmailTemplates,
   updateEmailTemplate,
 } from "@/services/email-templates";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 const emailTemplateSchema = z.object({
   name: z.string(),
@@ -21,9 +22,13 @@ export async function GET(
 ) {
   try {
     const { teamId } = await params;
+    await verifyTeamAccess(teamId);
     const templates = await getEmailTemplates(teamId);
     return NextResponse.json(templates);
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
+
     const { message } = handlePrismaError(e);
     return NextResponse.json({ error: message }, { status: 400 });
   }
@@ -35,6 +40,7 @@ export async function POST(
 ) {
   try {
     const { teamId } = await params;
+    await verifyTeamAccess(teamId);
     const data = await req.json();
     const validatedData = emailTemplateSchema.parse(data);
     const template = await createEmailTemplate(teamId, {
@@ -43,6 +49,9 @@ export async function POST(
     });
     return NextResponse.json(template, { status: 201 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
+
     const { message } = handlePrismaError(e);
     return NextResponse.json({ error: message }, { status: 400 });
   }
@@ -54,6 +63,7 @@ export async function PUT(
 ) {
   try {
     const { teamId } = await params;
+    await verifyTeamAccess(teamId);
     const data = await req.json();
     const validatedData = emailTemplateSchema.parse(data);
 
@@ -65,6 +75,9 @@ export async function PUT(
 
     return NextResponse.json(template);
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
+
     const { message } = handlePrismaError(e);
     return NextResponse.json({ error: message }, { status: 400 });
   }

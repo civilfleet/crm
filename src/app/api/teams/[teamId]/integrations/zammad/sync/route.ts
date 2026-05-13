@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { handlePrismaError } from "@/lib/utils";
 import { getZammadIntegration } from "@/services/integrations/zammad";
 import { enqueueZammadSyncJob } from "@/services/integrations/zammad-queue";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 export async function POST(
   request: Request,
@@ -9,6 +10,7 @@ export async function POST(
 ) {
   try {
     const { teamId } = await params;
+    await verifyTeamAccess(teamId, { requireAdmin: true });
     const { searchParams } = new URL(request.url);
     const fullSyncParam = searchParams.get("fullSync");
     const fullSync =
@@ -36,6 +38,9 @@ export async function POST(
       { status: 202 },
     );
   } catch (error) {
+    const apiError = handleApiError(error);
+    if (apiError) return apiError;
+
     const { message } = handlePrismaError(error);
     return NextResponse.json(
       { error: message },
