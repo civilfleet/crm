@@ -2,8 +2,8 @@ import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import { getTeamAdminAccess } from "@/services/teams/access";
 import prisma from "@/lib/prisma";
-import { Roles } from "@/types";
-
+import { type AppModule, Roles } from "@/types";
+import { hasModuleAccess } from "@/lib/permissions";
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -33,7 +33,11 @@ export const getAuthenticatedSession = async () => {
  */
 export const verifyTeamAccess = async (
   teamId: string,
-  options: { requireAdmin?: boolean; requireSuperAdmin?: boolean } = {},
+  options: {
+    requireAdmin?: boolean;
+    requireSuperAdmin?: boolean;
+    requireModule?: AppModule;
+  } = {},
 ) => {
   const session = await getAuthenticatedSession();
   const userId = session.user.userId;
@@ -80,6 +84,19 @@ export const verifyTeamAccess = async (
 
   if (!isMember) {
     throw new ApiError(403, "Forbidden - You are not a member of this team");
+  }
+
+  if (options.requireModule) {
+    const hasAccess = await hasModuleAccess(
+      { teamId, userId, roles: session.user.roles },
+      options.requireModule,
+    );
+    if (!hasAccess) {
+      throw new ApiError(
+        403,
+        `Forbidden - ${options.requireModule} module access required`,
+      );
+    }
   }
 
   return session;

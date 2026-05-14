@@ -21,7 +21,7 @@ export async function GET(req: Request) {
       );
     }
 
-    await verifyTeamAccess(teamId);
+    await verifyTeamAccess(teamId, { requireModule: "CRM" });
 
     const events = await getTeamEvents(teamId, query || undefined, {
       eventTypeId: eventTypeId || undefined,
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
   try {
     const payload = await req.json();
     const validated = createEventSchema.parse(payload);
-    await verifyTeamAccess(validated.teamId);
+    await verifyTeamAccess(validated.teamId, { requireModule: "CRM" });
 
     const event = await createEvent(validated);
 
@@ -67,7 +67,7 @@ export async function DELETE(req: Request) {
   try {
     const payload = await req.json();
     const validated = deleteEventsSchema.parse(payload);
-    await verifyTeamAccess(validated.teamId);
+    await verifyTeamAccess(validated.teamId, { requireModule: "CRM" });
 
     await deleteEvents(validated.teamId, validated.ids);
 

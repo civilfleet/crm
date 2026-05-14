@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const validated = createGroupSchema.parse(body);
-    await verifyTeamAccess(validated.teamId);
+    await verifyTeamAccess(validated.teamId, { requireAdmin: true });
 
     const group = await createGroup(validated);
 
@@ -66,7 +66,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const body = await request.json();
     const validated = deleteGroupsSchema.parse(body);
-    await verifyTeamAccess(validated.teamId);
+    await verifyTeamAccess(validated.teamId, { requireAdmin: true });
 
     await deleteGroups(validated.teamId, validated.ids);
 
