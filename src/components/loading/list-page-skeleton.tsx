@@ -15,6 +15,11 @@ export default function ListPageSkeleton({
   actionCount = 0,
   showSearchRow = true,
 }: ListPageSkeletonProps) {
+  const actionSkeletonKeys = Array.from(
+    { length: actionCount },
+    (_, index) => `action-skeleton-${index + 1}`,
+  );
+
   return (
     <div className="space-y-6 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -26,8 +31,8 @@ export default function ListPageSkeleton({
         </div>
         {actionCount > 0 ? (
           <div className="flex items-center gap-2">
-            {Array.from({ length: actionCount }).map((_, index) => (
-              <Skeleton key={index} className="h-9 w-32" />
+            {actionSkeletonKeys.map((key) => (
+              <Skeleton key={key} className="h-9 w-32" />
             ))}
           </div>
         ) : null}

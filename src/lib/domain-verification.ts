@@ -1,5 +1,5 @@
-import { randomUUID } from "crypto";
-import { resolveTxt } from "dns/promises";
+import { randomUUID } from "node:crypto";
+import { resolveTxt } from "node:dns/promises";
 
 export const buildDomainVerificationRecordName = (domain: string) =>
   `_fm-sso.${domain}`;

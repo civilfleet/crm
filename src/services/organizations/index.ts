@@ -116,9 +116,6 @@ const syncOrganizationFieldValues = async (
                 : null;
         break;
       }
-      case "SELECT":
-      case "MULTISELECT":
-      case "STRING":
       default: {
         if (Array.isArray(rawValue)) {
           data.stringValue = rawValue.join(", ");

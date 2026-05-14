@@ -632,7 +632,7 @@ export const syncKlaviyoIntegration = async (
     },
   });
 
-  if (!integration || !integration.apiKey) {
+  if (!integration?.apiKey) {
     throw new Error("Klaviyo integration is not configured for this team.");
   }
 

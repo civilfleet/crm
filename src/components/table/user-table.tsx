@@ -1,7 +1,7 @@
 "use client";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useForm } from "react-hook-form";
 import useSWR from "swr";
@@ -45,10 +45,15 @@ export default function UserTable({ teamId, organizationId }: UserTableProps) {
   const loading = isLoading || !data;
   const ownerId = data?.ownerId as string | undefined;
   const totalUsers = Number(data?.total ?? data?.data?.length ?? 0);
+  const previousQueryRef = useRef(query);
 
   useEffect(() => {
+    if (previousQueryRef.current === query) {
+      return;
+    }
+    previousQueryRef.current = query;
     setPage(1);
-  }, [query]);
+  });
 
   const onSubmit = (values: z.infer<typeof querySchema>) => {
     form.setValue("query", values.query);

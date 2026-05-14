@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
 import { DataTable } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
@@ -83,7 +83,6 @@ export default function ContactListsManager({
           (a, b) =>
             new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime(),
         );
-      case "updated-desc":
       default:
         return sortable.sort(
           (a, b) =>
@@ -93,7 +92,7 @@ export default function ContactListsManager({
   }, [lists, sortKey]);
   const isLoading = !listsData;
 
-  const handleDelete = async (listId: string, listName: string) => {
+  const handleDelete = useCallback(async (listId: string, listName: string) => {
     if (!confirm(`Are you sure you want to delete "${listName}"?`)) {
       return;
     }
@@ -135,9 +134,9 @@ export default function ContactListsManager({
     } finally {
       setDeletingId(null);
     }
-  };
+  }, [mutate, router, teamId, toast]);
 
-  const handleCopyContacts = async (list: ContactList) => {
+  const handleCopyContacts = useCallback(async (list: ContactList) => {
     if (!list.contacts?.length) {
       toast({
         title: "No contacts to copy",
@@ -204,9 +203,9 @@ export default function ContactListsManager({
         variant: "destructive",
       });
     }
-  };
+  }, [toast]);
 
-  const buildEmailExport = (list: ContactList) => {
+  const buildEmailExport = useCallback((list: ContactList) => {
     const emails = Array.from(
       new Set(
         list.contacts
@@ -216,9 +215,9 @@ export default function ContactListsManager({
     );
 
     return emails.length > 0 ? ["email", ...emails].join("\n") : "";
-  };
+  }, []);
 
-  const handleExportEmails = (list: ContactList) => {
+  const handleExportEmails = useCallback((list: ContactList) => {
     const csvContent = buildEmailExport(list);
     if (!csvContent) {
       toast({
@@ -235,7 +234,7 @@ export default function ContactListsManager({
     link.download = `${list.name.replace(/\s+/g, "-").toLowerCase()}-emails.csv`;
     link.click();
     URL.revokeObjectURL(url);
-  };
+  }, [buildEmailExport, toast]);
 
   const handleDeleteSelected = async (
     selectedRows: ContactList[],
@@ -397,6 +396,7 @@ export default function ContactListsManager({
       handleCopyContacts,
       handleExportEmails,
       handleDelete,
+      isBulkDeleting,
     ],
   );
 

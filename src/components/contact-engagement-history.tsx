@@ -87,27 +87,6 @@ type ZammadGroupsResponse = {
   error?: string;
 };
 
-const getSourceColor = (source: EngagementSource) => {
-  switch (source) {
-    case EngagementSource.EMAIL:
-      return "bg-blue-100 text-blue-800 border-blue-200";
-    case EngagementSource.PHONE:
-      return "bg-green-100 text-green-800 border-green-200";
-    case EngagementSource.SMS:
-      return "bg-purple-100 text-purple-800 border-purple-200";
-    case EngagementSource.MEETING:
-      return "bg-orange-100 text-orange-800 border-orange-200";
-    case EngagementSource.EVENT:
-      return "bg-pink-100 text-pink-800 border-pink-200";
-    case EngagementSource.TODO:
-      return "bg-amber-100 text-amber-800 border-amber-200";
-    case EngagementSource.NOTE:
-      return "bg-emerald-100 text-emerald-800 border-emerald-200";
-    default:
-      return "bg-gray-100 text-gray-800 border-gray-200";
-  }
-};
-
 const getSourceLabel = (source: EngagementSource, externalSource?: string) => {
   const normalizedExternal = externalSource?.toUpperCase() ?? "";
   switch (source) {
@@ -1013,19 +992,12 @@ export default function ContactEngagementHistory({
                   key={`thread-${item.ticketId}`}
                   className="rounded-xl border bg-white shadow-sm"
                 >
-                  <div
-                    role="button"
-                    tabIndex={0}
-                    className="w-full text-left px-4 py-3 border-b bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer"
-                    onClick={() => toggleThread(item.ticketId)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        toggleThread(item.ticketId);
-                      }
-                    }}
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-3 border-b bg-muted/10 px-4 py-3 transition-colors hover:bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
+                    <button
+                      type="button"
+                      className="flex-1 text-left"
+                      onClick={() => toggleThread(item.ticketId)}
+                    >
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 uppercase tracking-wide">
@@ -1048,10 +1020,8 @@ export default function ContactEngagementHistory({
                           </p>
                         )}
                       </div>
-                      <div
-                        className="flex items-center gap-2"
-                        onClick={(event) => event.stopPropagation()}
-                      >
+                    </button>
+                      <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -1071,7 +1041,6 @@ export default function ContactEngagementHistory({
                           </Button>
                         ) : null}
                       </div>
-                    </div>
                   </div>
                   {isExpanded && (
                     <div className="space-y-4 p-4">

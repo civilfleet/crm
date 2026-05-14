@@ -11,7 +11,7 @@ import {
   type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { LayoutGrid, List, Map } from "lucide-react";
+import { LayoutGrid, List, Map as MapIcon } from "lucide-react";
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -109,6 +109,7 @@ export function DataTable<TData, TValue>({
     pageIndex: 0,
     pageSize: 10,
   });
+  const previousDataRef = React.useRef(data);
   const isServerPagination = Boolean(serverPagination);
   const paginationState = isServerPagination
     ? {
@@ -217,13 +218,17 @@ export function DataTable<TData, TValue>({
     if (isServerPagination) {
       return;
     }
+    if (previousDataRef.current === data) {
+      return;
+    }
+    previousDataRef.current = data;
     setPagination((previous) => {
       if (previous.pageIndex === 0) {
         return previous;
       }
       return { ...previous, pageIndex: 0 };
     });
-  }, [data, isServerPagination]);
+  });
 
   React.useEffect(() => {
     if (isServerPagination) {
@@ -236,7 +241,7 @@ export function DataTable<TData, TValue>({
       }
       return { ...previous, pageIndex: pageCount - 1 };
     });
-  }, [table, data, pagination.pageSize, isServerPagination]);
+  }, [table, isServerPagination]);
 
   const effectiveView = isMobile ? mobileView : view;
   const showMapToggle = Boolean(renderMap);
@@ -277,7 +282,7 @@ export function DataTable<TData, TValue>({
               variant={effectiveView === "map" ? "default" : "outline"}
               onClick={() => setMobileView("map")}
             >
-              <Map className="mr-2" /> Map
+              <MapIcon className="mr-2" /> Map
             </Button>
           </div>
         )}
@@ -315,7 +320,7 @@ export function DataTable<TData, TValue>({
                   setDesktopView("map");
                 }}
               >
-                <Map className="mr-2" /> Map
+                <MapIcon className="mr-2" /> Map
               </Button>
             )}
           </div>

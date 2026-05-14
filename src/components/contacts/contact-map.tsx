@@ -56,14 +56,6 @@ export default function ContactMap({ contacts }: ContactMapProps) {
         postalCode: contact.postalCode,
       }));
   }, [contacts]);
-  const mapKey = useMemo(() => {
-    const ids = points
-      .map((point) => point.id)
-      .sort()
-      .join("|");
-    return ids || "empty";
-  }, [points]);
-
   useEffect(() => {
     const container = containerRef.current;
     if (!container || mapRef.current) {
@@ -103,18 +95,9 @@ export default function ContactMap({ contacts }: ContactMapProps) {
     };
   }, []);
 
-  if (points.length === 0) {
-    return (
-      <Card className="flex min-h-[360px] items-center justify-center border-dashed">
-        <div className="space-y-2 text-center text-sm text-muted-foreground">
-          <div>No contacts with location data yet.</div>
-          <div>Add postal code and country on a contact to show them here.</div>
-        </div>
-      </Card>
-    );
-  }
-
-  const bounds = getBounds(points);
+  const bounds = useMemo(() => {
+    return points.length > 0 ? getBounds(points) : null;
+  }, [points]);
   const popupLocations = useMemo(() => {
     return new Map(
       points.map((point) => [
@@ -128,7 +111,7 @@ export default function ContactMap({ contacts }: ContactMapProps) {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) {
+    if (!map || !bounds || points.length === 0) {
       return;
     }
 
@@ -163,7 +146,18 @@ export default function ContactMap({ contacts }: ContactMapProps) {
     group.addTo(map);
     layerRef.current = group;
     map.fitBounds(bounds, { padding: [32, 32] });
-  }, [bounds, mapKey, points, popupLocations]);
+  }, [bounds, points, popupLocations]);
+
+  if (points.length === 0) {
+    return (
+      <Card className="flex min-h-[360px] items-center justify-center border-dashed">
+        <div className="space-y-2 text-center text-sm text-muted-foreground">
+          <div>No contacts with location data yet.</div>
+          <div>Add postal code and country on a contact to show them here.</div>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <div className="overflow-hidden rounded-xl border bg-muted/20">

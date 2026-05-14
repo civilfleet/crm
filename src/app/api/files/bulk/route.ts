@@ -14,7 +14,10 @@ import { FileDownloadType } from "@/types";
 const normalizePathSegment = (value: string) =>
   value
     .trim()
-    .replace(/[<>:"\\|?*\u0000-\u001F]/g, "_")
+    .replace(/[<>:"\\|?*]/g, "_")
+    .split("")
+    .map((character) => (character.charCodeAt(0) < 32 ? "_" : character))
+    .join("")
     .replace(/\s+/g, "_")
     .slice(0, 80) || "unknown";
 

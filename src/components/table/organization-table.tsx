@@ -3,7 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import useSWR from "swr";
 import { z } from "zod";
@@ -141,10 +141,18 @@ export default function OrganizationTable({
     }
     return `&filters=${encodeURIComponent(JSON.stringify(fieldFilters.map((filter) => ({ type: "field", ...filter }))))}`;
   }, [fieldFilters]);
+  const previousQueryStateRef = useRef({ query, filtersQuery });
 
   useEffect(() => {
+    if (
+      previousQueryStateRef.current.query === query &&
+      previousQueryStateRef.current.filtersQuery === filtersQuery
+    ) {
+      return;
+    }
+    previousQueryStateRef.current = { query, filtersQuery };
     setPage(1);
-  }, [query, filtersQuery]);
+  });
 
   const { data, error, isLoading, isValidating, mutate } = useSWR(
     `/api/organizations?${isAdmin ? "" : `teamId=${teamId}&`}query=${query}${filtersQuery}&page=${page}&pageSize=${pageSize}`,
@@ -293,7 +301,7 @@ export default function OrganizationTable({
                 }
                 return (
                   <div
-                    key={`${filter.key}-${index}`}
+                    key={`${filter.key}-${filter.operator}-${filter.value}`}
                     className="flex flex-wrap items-center gap-2"
                   >
                     <Select

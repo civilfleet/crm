@@ -399,7 +399,7 @@ function OrganizationTypeFieldsEditor({
 }: {
   form: ReturnType<typeof useForm<FormValues>>;
 }) {
-  const { control, watch, setValue } = form;
+  const { watch, setValue } = form;
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const fields = (watch("schema") as OrganizationTypeField[] | undefined) || [];
 
@@ -458,10 +458,10 @@ function OrganizationTypeFieldsEditor({
           No fields defined yet. Add one to start.
         </p>
       ) : (
-        <div className="space-y-3">
+        <ul className="space-y-3">
           {fields.map((field, index) => (
-            <div
-              key={`${field.key}-${index}`}
+            <li
+              key={field.key}
               className={`rounded-md border p-3 space-y-3 ${dragIndex === index ? "bg-muted" : ""}`}
               draggable
               onDragStart={() => setDragIndex(index)}
@@ -562,9 +562,9 @@ function OrganizationTypeFieldsEditor({
                   Remove field
                 </Button>
               </div>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );

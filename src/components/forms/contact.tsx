@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, PlusCircle, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import useSWR from "swr";
 import type { z } from "zod";
@@ -124,8 +124,10 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
 
   const groups: Group[] = groupsData?.data || [];
   const allowedSubmodules: ContactSubmodule[] = submodulesData?.data || [];
-  const canAccessSubmodule = (submodule: ContactSubmodule) =>
-    allowedSubmodules.includes(submodule);
+  const canAccessSubmodule = useCallback(
+    (submodule: ContactSubmodule) => allowedSubmodules.includes(submodule),
+    [allowedSubmodules],
+  );
   const tabOptions = useMemo(
     () => [
       { value: "general", label: "General" },
@@ -138,7 +140,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
       ...(canAccessSubmodule("SHOP") ? [{ value: "shop", label: "Shop" }] : []),
       { value: "attributes", label: "Attributes" },
     ],
-    [allowedSubmodules],
+    [canAccessSubmodule],
   );
   const [activeTab, setActiveTab] = useState("general");
 

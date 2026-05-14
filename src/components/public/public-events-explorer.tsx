@@ -3,7 +3,7 @@
 import { format } from "date-fns";
 import { Calendar, MapPin, Search, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -127,10 +127,15 @@ export default function PublicEventsExplorer({ teamId }: { teamId: string }) {
       radiusKm,
     ],
   );
+  const previousFiltersKeyRef = useRef(filtersKey);
 
   useEffect(() => {
+    if (previousFiltersKeyRef.current === filtersKey) {
+      return;
+    }
+    previousFiltersKeyRef.current = filtersKey;
     setPage(1);
-  }, [filtersKey]);
+  });
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams();

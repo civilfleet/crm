@@ -1339,7 +1339,7 @@ export default function EventForm({
                 {filteredLists.map((list) => {
                   const isSelected = selectedListIds.includes(list.id);
                   return (
-                    <label
+                    <div
                       key={list.id}
                       className="flex items-start gap-3 rounded-md border p-3 text-sm hover:bg-muted/30"
                     >
@@ -1362,7 +1362,7 @@ export default function EventForm({
                           </p>
                         )}
                       </div>
-                    </label>
+                    </div>
                   );
                 })}
               </div>

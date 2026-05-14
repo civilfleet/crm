@@ -1,5 +1,5 @@
 import { IntegrationProvider as PrismaIntegrationProvider } from "@prisma/client";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import { enqueueZammadTicketSyncJob } from "@/services/integrations/zammad-queue";
@@ -545,7 +545,7 @@ export const syncZammadIntegration = async (
     },
   });
 
-  if (!integration || !integration.apiKey || !integration.baseUrl) {
+  if (!integration?.apiKey || !integration.baseUrl) {
     logger.error({ teamId }, "[Zammad] Sync missing integration settings");
     throw new Error("Zammad integration is not configured for this team.");
   }
@@ -688,7 +688,7 @@ export const syncZammadTicket = async (teamId: string, ticketId: number) => {
     },
   });
 
-  if (!integration || !integration.apiKey || !integration.baseUrl) {
+  if (!integration?.apiKey || !integration.baseUrl) {
     logger.error(
       { teamId },
       "[Zammad] Ticket sync missing integration settings",
@@ -765,7 +765,7 @@ export const handleZammadWebhook = async ({
     },
   });
 
-  if (!integration || !integration.apiKey || !integration.baseUrl) {
+  if (!integration?.apiKey || !integration.baseUrl) {
     logger.error({ teamId }, "[Zammad] Webhook missing integration settings");
     throw new Error("Zammad integration is not configured for this team.");
   }
@@ -860,7 +860,7 @@ export const replyToZammadTicket = async ({
     },
   });
 
-  if (!integration || !integration.apiKey || !integration.baseUrl) {
+  if (!integration?.apiKey || !integration.baseUrl) {
     throw new Error("Zammad integration is not configured for this team.");
   }
 
@@ -949,7 +949,7 @@ export const createZammadTicket = async ({
     },
   });
 
-  if (!integration || !integration.apiKey || !integration.baseUrl) {
+  if (!integration?.apiKey || !integration.baseUrl) {
     throw new Error("Zammad integration is not configured for this team.");
   }
 
@@ -1032,7 +1032,7 @@ export const getZammadGroups = async (teamId: string) => {
     },
   });
 
-  if (!integration || !integration.apiKey || !integration.baseUrl) {
+  if (!integration?.apiKey || !integration.baseUrl) {
     throw new Error("Zammad integration is not configured for this team.");
   }
 

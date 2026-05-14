@@ -23,9 +23,9 @@ export default function MentionText({
 }: MentionTextProps) {
   const segments: ReactNode[] = [];
   let lastIndex = 0;
-  let match: RegExpExecArray | null;
+  let match = MENTION_EMAIL_REGEX.exec(text);
 
-  while ((match = MENTION_EMAIL_REGEX.exec(text)) !== null) {
+  while (match !== null) {
     const matchedText = match[0] ?? "";
     const mentionedEmail = match[1] ?? "";
     const mentionStart = match.index + matchedText.lastIndexOf("@");
@@ -62,6 +62,7 @@ export default function MentionText({
     }
 
     lastIndex = mentionEnd;
+    match = MENTION_EMAIL_REGEX.exec(text);
   }
 
   if (lastIndex < text.length) {

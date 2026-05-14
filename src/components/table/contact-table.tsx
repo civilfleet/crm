@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Filter, Loader2, Mail, Plus, Send, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import useSWR from "swr";
 import { z } from "zod";
@@ -219,6 +219,25 @@ const isFilterComplete = (filter: ContactFilter) => {
   }
 };
 
+const getContactFilterKey = (filter: ContactFilter) => {
+  switch (filter.type) {
+    case "contactField":
+      return `${filter.type}-${filter.field}-${filter.operator}-${filter.value ?? ""}`;
+    case "attribute":
+      return `${filter.type}-${filter.key}-${filter.operator}-${filter.value}`;
+    case "group":
+      return `${filter.type}-${filter.groupId}`;
+    case "eventRole":
+      return `${filter.type}-${filter.eventRoleId}`;
+    case "createdAt":
+      return `${filter.type}-${filter.from ?? ""}-${filter.to ?? ""}`;
+    case "distance":
+      return `${filter.type}-${filter.postalCode}-${filter.countryCode}-${filter.radiusKm}`;
+    default:
+      return "contact-filter";
+  }
+};
+
 export default function ContactTable({ teamId }: ContactTableProps) {
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -306,10 +325,18 @@ export default function ContactTable({ teamId }: ContactTableProps) {
     return data.data as ContactRow[];
   }, [data]);
   const totalContacts = Number(data?.total ?? contacts.length);
+  const previousQueryStateRef = useRef({ query, filtersQuery });
 
   useEffect(() => {
+    if (
+      previousQueryStateRef.current.query === query &&
+      previousQueryStateRef.current.filtersQuery === filtersQuery
+    ) {
+      return;
+    }
+    previousQueryStateRef.current = { query, filtersQuery };
     setPage(1);
-  }, [query, filtersQuery]);
+  });
 
   const [attributeKeyOptions, setAttributeKeyOptions] = useState<string[]>([]);
 
@@ -1013,7 +1040,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
             );
             return (
               <div
-                key={`${filter.type}-${index}`}
+                key={getContactFilterKey(filter)}
                 className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 p-3"
               >
                 <span className="text-sm font-medium">
@@ -1036,8 +1063,11 @@ export default function ContactTable({ teamId }: ContactTableProps) {
 
       {activeFilters.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          {activeFilters.map((filter, index) => (
-            <Badge key={`active-${filter.type}-${index}`} variant="secondary">
+          {activeFilters.map((filter) => (
+            <Badge
+              key={`active-${getContactFilterKey(filter)}`}
+              variant="secondary"
+            >
               {summarizeFilter(filter)}
             </Badge>
           ))}
