@@ -65,6 +65,8 @@ interface ContactListsManagerProps {
   teamId: string;
 }
 
+type SenderLabelMode = "default" | "user";
+
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function ContactListsManager({
@@ -81,6 +83,8 @@ export default function ContactListsManager({
   );
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
+  const [emailSenderLabelMode, setEmailSenderLabelMode] =
+    useState<SenderLabelMode>("default");
   const [copiedListId, setCopiedListId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<string>("updated-desc");
 
@@ -374,6 +378,7 @@ export default function ContactListsManager({
             contactIds,
             subject: emailSubject,
             html: emailBody,
+            senderLabelMode: emailSenderLabelMode,
           }),
         },
       );
@@ -399,6 +404,7 @@ export default function ContactListsManager({
       setEmailRecipients([]);
       setEmailSubject("");
       setEmailBody("");
+      setEmailSenderLabelMode("default");
       clearSelection();
     } catch (error) {
       toast({
@@ -674,10 +680,12 @@ export default function ContactListsManager({
                   recipients={emailRecipients}
                   subject={emailSubject}
                   body={emailBody}
+                  senderLabelMode={emailSenderLabelMode}
                   isSending={isSendingEmail}
                   onOpenChange={setIsEmailDialogOpen}
                   onSubjectChange={setEmailSubject}
                   onBodyChange={setEmailBody}
+                  onSenderLabelModeChange={setEmailSenderLabelMode}
                   onSend={() => handleSendEmail(clearSelection)}
                 />
               </div>
@@ -740,10 +748,12 @@ type ListEmailDialogProps = {
   recipients: ListEmailRecipient[];
   subject: string;
   body: string;
+  senderLabelMode: SenderLabelMode;
   isSending: boolean;
   onOpenChange: (open: boolean) => void;
   onSubjectChange: (value: string) => void;
   onBodyChange: (value: string) => void;
+  onSenderLabelModeChange: (value: SenderLabelMode) => void;
   onSend: () => void;
 };
 
@@ -752,10 +762,12 @@ const ListEmailDialog = ({
   recipients,
   subject,
   body,
+  senderLabelMode,
   isSending,
   onOpenChange,
   onSubjectChange,
   onBodyChange,
+  onSenderLabelModeChange,
   onSend,
 }: ListEmailDialogProps) => {
   const canSend =
@@ -783,6 +795,31 @@ const ListEmailDialog = ({
             {recipients.length > 100
               ? ". Reduce the selection to 100 recipients or fewer."
               : "."}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="list-email-sender">Sender</Label>
+            <Select
+              value={senderLabelMode}
+              onValueChange={(value) =>
+                onSenderLabelModeChange(value as SenderLabelMode)
+              }
+              disabled={isSending}
+            >
+              <SelectTrigger id="list-email-sender">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">
+                  Default sender label
+                </SelectItem>
+                <SelectItem value="user">My user name</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              The sender address stays the default address configured for
+              Transactional Email.
+            </p>
           </div>
 
           <div className="space-y-2">

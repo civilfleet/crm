@@ -11,6 +11,7 @@ const sendMassEmailSchema = z.object({
     .max(100, "You can send to at most 100 contacts at once"),
   subject: z.string().trim().min(1, "Subject is required").max(500),
   html: z.string().trim().min(1, "Email body is required"),
+  senderLabelMode: z.enum(["default", "user"]).default("default"),
 });
 
 export async function POST(
@@ -30,6 +31,7 @@ export async function POST(
       html: validated.html,
       userId: session.user.userId,
       userName: session.user.name ?? session.user.email ?? undefined,
+      senderLabelMode: validated.senderLabelMode,
     });
 
     return NextResponse.json({ data: result }, { status: 200 });

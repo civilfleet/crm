@@ -18,6 +18,9 @@ const EXTERNAL_SOURCE = "SCALEWAY_TEM";
 const MAX_RECIPIENTS = 100;
 const DEFAULT_RETRY_DELAY_SECONDS = 30;
 const MAX_RETRY_DELAY_SECONDS = 15 * 60;
+const SENDER_LABEL_MODES = ["default", "user"] as const;
+
+export type SenderLabelMode = (typeof SENDER_LABEL_MODES)[number];
 
 type ScalewayEmailRecord = {
   id?: string;
@@ -40,6 +43,7 @@ export type SendMassEmailInput = {
   html: string;
   userId?: string;
   userName?: string;
+  senderLabelMode?: SenderLabelMode;
 };
 
 export type SendMassEmailResult = {
@@ -296,6 +300,7 @@ export const sendMassEmailToContacts = async ({
   html,
   userId,
   userName,
+  senderLabelMode = "default",
 }: SendMassEmailInput): Promise<SendMassEmailResult> => {
   const uniqueContactIds = Array.from(new Set(contactIds));
   if (uniqueContactIds.length > MAX_RECIPIENTS) {
@@ -332,7 +337,13 @@ export const sendMassEmailToContacts = async ({
     },
   });
 
-  const from = buildSender(integration);
+  const from = buildSender({
+    senderEmail: integration.senderEmail,
+    senderName:
+      senderLabelMode === "user"
+        ? userName?.trim() || integration.senderName
+        : integration.senderName,
+  });
   const batch = await prisma.emailBatch.create({
     data: {
       teamId,

@@ -61,6 +61,8 @@ interface ContactTableProps {
   teamId: string;
 }
 
+type SenderLabelMode = "default" | "user";
+
 type FilterOption = {
   type: ContactFilterType;
   label: string;
@@ -365,6 +367,8 @@ export default function ContactTable({ teamId }: ContactTableProps) {
   const [emailRecipients, setEmailRecipients] = useState<ContactRow[]>([]);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
+  const [emailSenderLabelMode, setEmailSenderLabelMode] =
+    useState<SenderLabelMode>("default");
   const [filters, setFilters] = useState<ContactFilter[]>([]);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [page, setPage] = useState(1);
@@ -1049,6 +1053,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
             contactIds,
             subject: emailSubject,
             html: emailBody,
+            senderLabelMode: emailSenderLabelMode,
           }),
         },
       );
@@ -1077,6 +1082,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
       setEmailRecipients([]);
       setEmailSubject("");
       setEmailBody("");
+      setEmailSenderLabelMode("default");
       clearSelection();
       await mutate();
     } catch (sendError) {
@@ -1399,10 +1405,12 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                   recipients={emailRecipients}
                   subject={emailSubject}
                   body={emailBody}
+                  senderLabelMode={emailSenderLabelMode}
                   isSending={isSendingEmail}
                   onOpenChange={setIsEmailDialogOpen}
                   onSubjectChange={setEmailSubject}
                   onBodyChange={setEmailBody}
+                  onSenderLabelModeChange={setEmailSenderLabelMode}
                   onSend={() => handleSendEmail(clearSelection)}
                 />
               </div>
@@ -1637,10 +1645,12 @@ type MassEmailDialogProps = {
   recipients: ContactRow[];
   subject: string;
   body: string;
+  senderLabelMode: SenderLabelMode;
   isSending: boolean;
   onOpenChange: (open: boolean) => void;
   onSubjectChange: (value: string) => void;
   onBodyChange: (value: string) => void;
+  onSenderLabelModeChange: (value: SenderLabelMode) => void;
   onSend: () => void;
 };
 
@@ -1649,10 +1659,12 @@ const MassEmailDialog = ({
   recipients,
   subject,
   body,
+  senderLabelMode,
   isSending,
   onOpenChange,
   onSubjectChange,
   onBodyChange,
+  onSenderLabelModeChange,
   onSend,
 }: MassEmailDialogProps) => {
   const recipientsWithEmail = recipients.filter((contact) => contact.email);
@@ -1682,6 +1694,31 @@ const MassEmailDialog = ({
               ? `, ${missingEmailCount} without email will be skipped`
               : ""}
             .
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="mass-email-sender">Sender</Label>
+            <Select
+              value={senderLabelMode}
+              onValueChange={(value) =>
+                onSenderLabelModeChange(value as SenderLabelMode)
+              }
+              disabled={isSending}
+            >
+              <SelectTrigger id="mass-email-sender">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">
+                  Default sender label
+                </SelectItem>
+                <SelectItem value="user">My user name</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              The sender address stays the default address configured for
+              Transactional Email.
+            </p>
           </div>
 
           <div className="space-y-2">
