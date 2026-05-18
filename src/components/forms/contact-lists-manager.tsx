@@ -6,8 +6,10 @@ import {
   Copy,
   Download,
   Loader2,
+  Mail,
   Pencil,
   Plus,
+  Send,
   Trash2,
   Users,
 } from "lucide-react";
@@ -19,12 +21,23 @@ import { DataTable } from "@/components/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { ContactListType } from "@/types";
 
@@ -42,6 +55,12 @@ type ContactList = {
   }[];
 };
 
+type ListEmailRecipient = {
+  id: string;
+  name: string | null;
+  email: string;
+};
+
 interface ContactListsManagerProps {
   teamId: string;
 }
@@ -55,6 +74,13 @@ export default function ContactListsManager({
   const { toast } = useToast();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [emailRecipients, setEmailRecipients] = useState<ListEmailRecipient[]>(
+    [],
+  );
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
   const [copiedListId, setCopiedListId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<string>("updated-desc");
 
@@ -292,6 +318,102 @@ export default function ContactListsManager({
     }
   };
 
+  const getEmailRecipientsFromLists = useCallback((selectedRows: ContactList[]) => {
+    const recipientsById = new Map<string, ListEmailRecipient>();
+
+    selectedRows.forEach((list) => {
+      list.contacts.forEach((contact) => {
+        const email = contact.email?.trim();
+        if (!email || recipientsById.has(contact.id)) {
+          return;
+        }
+
+        recipientsById.set(contact.id, {
+          id: contact.id,
+          name: contact.name,
+          email,
+        });
+      });
+    });
+
+    return Array.from(recipientsById.values());
+  }, []);
+
+  const openEmailDialog = (selectedRows: ContactList[]) => {
+    const recipients = getEmailRecipientsFromLists(selectedRows);
+
+    if (recipients.length === 0) {
+      toast({
+        title: "No email recipients",
+        description:
+          "The selected lists do not contain contacts with email addresses.",
+      });
+      return;
+    }
+
+    setEmailRecipients(recipients);
+    setIsEmailDialogOpen(true);
+  };
+
+  const handleSendEmail = async (clearSelection: () => void) => {
+    const contactIds = emailRecipients.map((contact) => contact.id);
+    if (contactIds.length === 0) {
+      return;
+    }
+
+    setIsSendingEmail(true);
+    try {
+      const response = await fetch(
+        `/api/teams/${teamId}/integrations/scaleway-email/send`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contactIds,
+            subject: emailSubject,
+            html: emailBody,
+          }),
+        },
+      );
+
+      const json = await response.json();
+      if (!response.ok) {
+        throw new Error(json?.error || "Failed to send email");
+      }
+
+      const result = json.data as {
+        requested: number;
+        skipped: number;
+      };
+
+      toast({
+        title: "Email batch queued",
+        description: `${result.requested - result.skipped} email${
+          result.requested - result.skipped === 1 ? "" : "s"
+        } queued for worker delivery. ${result.skipped} skipped.`,
+      });
+
+      setIsEmailDialogOpen(false);
+      setEmailRecipients([]);
+      setEmailSubject("");
+      setEmailBody("");
+      clearSelection();
+    } catch (error) {
+      toast({
+        title: "Unable to send email",
+        description:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
   const columns = useMemo<ColumnDef<ContactList>[]>(
     () => [
       {
@@ -507,6 +629,20 @@ export default function ContactListsManager({
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={
+                      isBulkDeleting ||
+                      isSendingEmail ||
+                      getEmailRecipientsFromLists(selectedRows).length === 0
+                    }
+                    onClick={() => openEmailDialog(selectedRows)}
+                  >
+                    <Mail className="mr-2 h-4 w-4" />
+                    Email selected
+                  </Button>
+                  <Button
+                    type="button"
                     variant="destructive"
                     size="sm"
                     disabled={isBulkDeleting}
@@ -533,6 +669,17 @@ export default function ContactListsManager({
                     Clear
                   </Button>
                 </div>
+                <ListEmailDialog
+                  open={isEmailDialogOpen}
+                  recipients={emailRecipients}
+                  subject={emailSubject}
+                  body={emailBody}
+                  isSending={isSendingEmail}
+                  onOpenChange={setIsEmailDialogOpen}
+                  onSubjectChange={setEmailSubject}
+                  onBodyChange={setEmailBody}
+                  onSend={() => handleSendEmail(clearSelection)}
+                />
               </div>
             )}
             toolbar={
@@ -587,3 +734,109 @@ export default function ContactListsManager({
     </div>
   );
 }
+
+type ListEmailDialogProps = {
+  open: boolean;
+  recipients: ListEmailRecipient[];
+  subject: string;
+  body: string;
+  isSending: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubjectChange: (value: string) => void;
+  onBodyChange: (value: string) => void;
+  onSend: () => void;
+};
+
+const ListEmailDialog = ({
+  open,
+  recipients,
+  subject,
+  body,
+  isSending,
+  onOpenChange,
+  onSubjectChange,
+  onBodyChange,
+  onSend,
+}: ListEmailDialogProps) => {
+  const canSend =
+    recipients.length > 0 &&
+    recipients.length <= 100 &&
+    subject.trim().length > 0 &&
+    body.trim().length > 0 &&
+    !isSending;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Send email to selected lists</DialogTitle>
+          <DialogDescription>
+            Sends one email per unique contact through the Scaleway
+            Transactional Email integration.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+            {recipients.length} unique recipient
+            {recipients.length === 1 ? "" : "s"} with email selected
+            {recipients.length > 100
+              ? ". Reduce the selection to 100 recipients or fewer."
+              : "."}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="list-email-subject">Subject</Label>
+            <Input
+              id="list-email-subject"
+              value={subject}
+              onChange={(event) => onSubjectChange(event.target.value)}
+              disabled={isSending}
+              placeholder="Email subject"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="list-email-body">Email body</Label>
+            <Textarea
+              id="list-email-body"
+              value={body}
+              onChange={(event) => onBodyChange(event.target.value)}
+              disabled={isSending}
+              placeholder="<p>Hello,</p><p>Write your email here.</p>"
+              className="min-h-56 font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              HTML is supported. Duplicate contacts across lists are only
+              included once.
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSending}
+          >
+            Cancel
+          </Button>
+          <Button type="button" onClick={onSend} disabled={!canSend}>
+            {isSending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending…
+              </>
+            ) : (
+              <>
+                <Send className="mr-2 h-4 w-4" />
+                Send email
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
