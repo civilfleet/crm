@@ -22,12 +22,22 @@ COPY . .
 
 RUN yarn build
 
-FROM base AS runner
+FROM base AS runner-tools
 
 ENV NODE_ENV=production
 
 COPY --from=builder /app ./
 
+FROM base AS runner-app
+
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/.next/standalone ./
+
 EXPOSE 3000
 
-CMD ["node", "node_modules/next/dist/bin/next", "start", "-H", "0.0.0.0"]
+CMD ["node", "server.js"]

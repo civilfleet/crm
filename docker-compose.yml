@@ -69,9 +69,10 @@ services:
       retries: 10
 
   migrate:
-    image: crm-app:local
+    image: crm-tools:local
     build:
       context: .
+      target: runner-tools
     command: [ "node", "node_modules/prisma/build/index.js", "migrate", "deploy" ]
     environment:
       <<: *app-env
@@ -80,9 +81,10 @@ services:
         condition: service_healthy
 
   bootstrap:
-    image: crm-app:local
+    image: crm-tools:local
     build:
       context: .
+      target: runner-tools
     command: [ "node", "--import", "tsx", "scripts/bootstrap-admin.ts" ]
     environment:
       <<: *app-env
@@ -94,7 +96,8 @@ services:
     image: crm-app:local
     build:
       context: .
-    command: [ "node", "node_modules/next/dist/bin/next", "start", "-H", "0.0.0.0" ]
+      target: runner-app
+    command: [ "node", "server.js" ]
     environment:
       <<: *app-env
     ports:
@@ -106,9 +109,10 @@ services:
         condition: service_completed_successfully
 
   worker:
-    image: crm-app:local
+    image: crm-tools:local
     build:
       context: .
+      target: runner-tools
     command: [ "node", "--import", "tsx", "scripts/zammad-worker.ts" ]
     environment:
       <<: *app-env
