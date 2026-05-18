@@ -114,6 +114,7 @@ type UpdateContactInput = {
 type ImportContactsFromCsvInput = {
   teamId: string;
   csv: string;
+  columnMapping?: Partial<Record<ContactImportField, string>>;
   userId?: string;
   userName?: string;
 };
@@ -442,7 +443,17 @@ const CONTACT_IMPORT_HEADER_ALIASES = {
 
 type ContactImportField = keyof typeof CONTACT_IMPORT_HEADER_ALIASES;
 
-const buildContactImportHeaderMap = (headers: string[]) => {
+const CONTACT_IMPORT_FIELDS = Object.keys(
+  CONTACT_IMPORT_HEADER_ALIASES,
+) as ContactImportField[];
+
+const isContactImportField = (field: string): field is ContactImportField =>
+  CONTACT_IMPORT_FIELDS.includes(field as ContactImportField);
+
+const buildContactImportHeaderMap = (
+  headers: string[],
+  columnMapping?: Partial<Record<ContactImportField, string>>,
+) => {
   const normalizedHeaderToIndex = new Map<string, number>();
 
   headers.forEach((header, index) => {
@@ -454,7 +465,24 @@ const buildContactImportHeaderMap = (headers: string[]) => {
 
   const fieldToIndex = new Map<ContactImportField, number>();
 
+  Object.entries(columnMapping ?? {}).forEach(([field, header]) => {
+    if (!isContactImportField(field) || typeof header !== "string") {
+      return;
+    }
+
+    const normalizedHeader = normalizeCsvHeader(header);
+    const index = normalizedHeaderToIndex.get(normalizedHeader);
+    if (index !== undefined) {
+      fieldToIndex.set(field, index);
+    }
+  });
+
   Object.entries(CONTACT_IMPORT_HEADER_ALIASES).forEach(([field, aliases]) => {
+    const importField = field as ContactImportField;
+    if (fieldToIndex.has(importField)) {
+      return;
+    }
+
     const matchingAlias = aliases.find((alias) =>
       normalizedHeaderToIndex.has(normalizeCsvHeader(alias)),
     );
@@ -464,7 +492,7 @@ const buildContactImportHeaderMap = (headers: string[]) => {
     }
 
     fieldToIndex.set(
-      field as ContactImportField,
+      importField,
       normalizedHeaderToIndex.get(normalizeCsvHeader(matchingAlias)) ?? -1,
     );
   });
@@ -1567,11 +1595,12 @@ const createContact = async (
 const importContactsFromCsv = async ({
   teamId,
   csv,
+  columnMapping,
   userId,
   userName,
 }: ImportContactsFromCsvInput): Promise<ContactImportResult> => {
   const parsed = parseCsv(csv.replace(/^\uFEFF/, ""));
-  const headerMap = buildContactImportHeaderMap(parsed.headers);
+  const headerMap = buildContactImportHeaderMap(parsed.headers, columnMapping);
 
   if (!parsed.headers.length || parsed.rows.length === 0) {
     throw new Error("CSV file does not contain any contact rows.");

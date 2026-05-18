@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { parseCsv } from "@/lib/csv";
 import type { ContactFilter, ContactFilterType } from "@/types";
 
 const ContactMap = dynamic(() => import("@/components/contacts/contact-map"), {
@@ -183,6 +184,114 @@ const CONTACT_FIELD_LABELS: Record<
   website: "Website",
 };
 
+const CONTACT_IMPORT_FIELDS: ReadonlyArray<{
+  field: ContactImportField;
+  label: string;
+  required?: boolean;
+}> = [
+  { field: "name", label: "Name", required: true },
+  { field: "email", label: "Email", required: true },
+  { field: "phone", label: "Phone" },
+  { field: "signal", label: "Signal" },
+  { field: "pronouns", label: "Pronouns" },
+  { field: "address", label: "Address" },
+  { field: "postalCode", label: "Postal code" },
+  { field: "city", label: "City" },
+  { field: "state", label: "State" },
+  { field: "country", label: "Country" },
+  { field: "website", label: "Website" },
+  { field: "group", label: "Group name" },
+  { field: "groupId", label: "Group ID" },
+] as const;
+
+type ContactImportField =
+  | "name"
+  | "email"
+  | "phone"
+  | "signal"
+  | "pronouns"
+  | "address"
+  | "postalCode"
+  | "city"
+  | "state"
+  | "country"
+  | "website"
+  | "group"
+  | "groupId";
+type ContactImportColumnMapping = Partial<Record<ContactImportField, string>>;
+type ContactImportSourceMapping = Record<
+  string,
+  ContactImportField | "__none__"
+>;
+
+const CONTACT_IMPORT_HEADER_ALIASES: Record<ContactImportField, string[]> = {
+  name: ["name", "fullname", "contactname"],
+  email: ["email", "emailaddress", "e-mail", "mail"],
+  phone: ["phone", "phonenumber", "mobile", "telephone"],
+  signal: ["signal", "signalphone"],
+  pronouns: ["pronouns"],
+  address: ["address", "street"],
+  postalCode: ["postalcode", "postcode", "zip", "zipcode"],
+  state: ["state", "region", "province"],
+  city: ["city", "town"],
+  country: ["country"],
+  website: ["website", "url", "homepage"],
+  group: ["group", "groupname"],
+  groupId: ["groupid"],
+};
+
+const normalizeImportHeader = (header: string) =>
+  header.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const buildDefaultImportMapping = (headers: string[]) => {
+  const normalizedHeaders = new Map(
+    headers.map((header) => [normalizeImportHeader(header), header]),
+  );
+  const mapping: ContactImportColumnMapping = {};
+
+  CONTACT_IMPORT_FIELDS.forEach(({ field }) => {
+    const alias = CONTACT_IMPORT_HEADER_ALIASES[field].find((value) =>
+      normalizedHeaders.has(normalizeImportHeader(value)),
+    );
+    if (alias) {
+      mapping[field] = normalizedHeaders.get(normalizeImportHeader(alias));
+    }
+  });
+
+  return mapping;
+};
+
+const buildDefaultImportSourceMapping = (headers: string[]) => {
+  const fieldMapping = buildDefaultImportMapping(headers);
+  const sourceMapping: ContactImportSourceMapping = {};
+
+  headers.forEach((header) => {
+    sourceMapping[header] = "__none__";
+  });
+
+  Object.entries(fieldMapping).forEach(([field, header]) => {
+    if (header) {
+      sourceMapping[header] = field as ContactImportField;
+    }
+  });
+
+  return sourceMapping;
+};
+
+const toContactImportColumnMapping = (
+  sourceMapping: ContactImportSourceMapping,
+) => {
+  const columnMapping: ContactImportColumnMapping = {};
+
+  Object.entries(sourceMapping).forEach(([header, field]) => {
+    if (field !== "__none__") {
+      columnMapping[field] = header;
+    }
+  });
+
+  return columnMapping;
+};
+
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 const querySchema = z.object({
@@ -245,6 +354,10 @@ export default function ContactTable({ teamId }: ContactTableProps) {
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [importHeaders, setImportHeaders] = useState<string[]>([]);
+  const [importPreviewRows, setImportPreviewRows] = useState<string[][]>([]);
+  const [importSourceMapping, setImportSourceMapping] =
+    useState<ContactImportSourceMapping>({});
   const [importResult, setImportResult] = useState<ContactImportResult | null>(
     null,
   );
@@ -992,6 +1105,10 @@ export default function ContactTable({ teamId }: ContactTableProps) {
       const formData = new FormData();
       formData.append("teamId", teamId);
       formData.append("file", importFile);
+      formData.append(
+        "columnMapping",
+        JSON.stringify(toContactImportColumnMapping(importSourceMapping)),
+      );
 
       const response = await fetch("/api/contacts/import", {
         method: "POST",
@@ -1025,6 +1142,31 @@ export default function ContactTable({ teamId }: ContactTableProps) {
       });
     } finally {
       setIsImporting(false);
+    }
+  };
+
+  const handleImportFileChange = async (file: File | null) => {
+    setImportFile(file);
+    setImportResult(null);
+    setImportHeaders([]);
+    setImportPreviewRows([]);
+    setImportSourceMapping({});
+
+    if (!file) {
+      return;
+    }
+
+    try {
+      const parsed = parseCsv(await file.text());
+      setImportHeaders(parsed.headers);
+      setImportPreviewRows(parsed.rows.slice(0, 3));
+      setImportSourceMapping(buildDefaultImportSourceMapping(parsed.headers));
+    } catch (_error) {
+      toast({
+        title: "Unable to read CSV",
+        description: "Check that the selected file is a valid CSV file.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -1181,16 +1323,23 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                 <ContactImportDialog
                   open={isImportDialogOpen}
                   file={importFile}
+                  headers={importHeaders}
+                  previewRows={importPreviewRows}
+                  sourceMapping={importSourceMapping}
                   result={importResult}
                   isImporting={isImporting}
                   onOpenChange={(open) => {
                     setIsImportDialogOpen(open);
                     if (!open) {
                       setImportFile(null);
+                      setImportHeaders([]);
+                      setImportPreviewRows([]);
+                      setImportSourceMapping({});
                       setImportResult(null);
                     }
                   }}
-                  onFileChange={setImportFile}
+                  onFileChange={handleImportFileChange}
+                  onSourceMappingChange={setImportSourceMapping}
                   onImport={handleImportContacts}
                 />
               </div>
@@ -1303,36 +1452,49 @@ type ContactImportResult = {
 type ContactImportDialogProps = {
   open: boolean;
   file: File | null;
+  headers: string[];
+  previewRows: string[][];
+  sourceMapping: ContactImportSourceMapping;
   result: ContactImportResult | null;
   isImporting: boolean;
   onOpenChange: (open: boolean) => void;
-  onFileChange: (file: File | null) => void;
+  onFileChange: (file: File | null) => void | Promise<void>;
+  onSourceMappingChange: (mapping: ContactImportSourceMapping) => void;
   onImport: () => void;
 };
 
 const ContactImportDialog = ({
   open,
   file,
+  headers,
+  previewRows,
+  sourceMapping,
   result,
   isImporting,
   onOpenChange,
   onFileChange,
+  onSourceMappingChange,
   onImport,
 }: ContactImportDialogProps) => {
-  const canImport = Boolean(file) && !isImporting;
+  const selectedFields = Object.values(sourceMapping);
+  const canImport =
+    Boolean(file) &&
+    selectedFields.includes("name") &&
+    selectedFields.includes("email") &&
+    !isImporting;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Import contacts from CSV</DialogTitle>
           <DialogDescription>
-            Upload a comma-separated file with name and email columns. Duplicate
-            emails are skipped.
+            Upload a comma-separated file, then map its columns to CRM contact
+            fields. Duplicate emails are skipped.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
           <div className="space-y-2">
             <Label htmlFor="contact-import-file">CSV file</Label>
             <Input
@@ -1345,10 +1507,83 @@ const ContactImportDialog = ({
               }}
             />
             <p className="text-xs text-muted-foreground">
-              Supported headers: name, email, phone, signal, pronouns, address,
-              postalCode, city, state, country, website, group, groupId.
+              Name and email are required. Other mapped columns are optional.
             </p>
           </div>
+
+          {headers.length > 0 && (
+            <div className="space-y-3">
+              <div className="rounded-md border">
+                <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(12rem,0.8fr)] gap-3 border-b bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">
+                  <span>CSV column</span>
+                  <span>Sample values</span>
+                  <span>Import as</span>
+                </div>
+                <div className="divide-y">
+                  {headers.map((header, columnIndex) => (
+                    <div
+                      key={header}
+                      className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(12rem,0.8fr)] items-center gap-3 px-3 py-2"
+                    >
+                      <div className="truncate text-sm font-medium">
+                        {header}
+                      </div>
+                      <div className="min-w-0 text-xs text-muted-foreground">
+                        {previewRows.length > 0
+                          ? previewRows
+                              .map((row) => row[columnIndex])
+                              .filter(Boolean)
+                              .slice(0, 3)
+                              .join(" / ") || "-"
+                          : "-"}
+                      </div>
+                      <Select
+                        value={sourceMapping[header] ?? "__none__"}
+                        disabled={isImporting}
+                        onValueChange={(value) => {
+                          const nextValue = value as
+                            | ContactImportField
+                            | "__none__";
+                          const nextMapping = { ...sourceMapping };
+
+                          if (nextValue !== "__none__") {
+                            Object.entries(nextMapping).forEach(
+                              ([mappedHeader, mappedField]) => {
+                                if (
+                                  mappedHeader !== header &&
+                                  mappedField === nextValue
+                                ) {
+                                  nextMapping[mappedHeader] = "__none__";
+                                }
+                              },
+                            );
+                          }
+
+                          nextMapping[header] = nextValue;
+                          onSourceMappingChange(nextMapping);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Do not import" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">Do not import</SelectItem>
+                          {CONTACT_IMPORT_FIELDS.map(
+                            ({ field, label, required }) => (
+                              <SelectItem key={field} value={field}>
+                                {label}
+                                {required ? " *" : ""}
+                              </SelectItem>
+                            ),
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {result && (
             <div className="rounded-md border bg-muted/30 p-3 text-sm">

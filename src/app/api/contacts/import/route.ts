@@ -8,6 +8,7 @@ export async function POST(req: Request) {
     const formData = await req.formData();
     const teamId = formData.get("teamId");
     const file = formData.get("file");
+    const rawColumnMapping = formData.get("columnMapping");
 
     if (typeof teamId !== "string" || !teamId) {
       return NextResponse.json(
@@ -32,10 +33,15 @@ export async function POST(req: Request) {
 
     const session = await verifyTeamAccess(teamId, { requireModule: "CRM" });
     const csv = await file.text();
+    const columnMapping =
+      typeof rawColumnMapping === "string" && rawColumnMapping.trim()
+        ? JSON.parse(rawColumnMapping)
+        : undefined;
 
     const result = await importContactsFromCsv({
       teamId,
       csv,
+      columnMapping,
       userId: session.user.userId,
       userName: session.user.name ?? undefined,
     });
