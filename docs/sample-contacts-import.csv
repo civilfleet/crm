@@ -1,0 +1,4 @@
+name,email,phone,signal,pronouns,address,postalCode,city,state,country,website,group,groupId
+Ada Lovelace,ada.lovelace@example.org,+49 30 123456,+49 30 123456,she/her,Example Street 12,10115,Berlin,Berlin,Germany,https://example.org,Volunteers,
+Grace Hopper,grace.hopper@example.org,+1 202 555 0142,,she/her,1 Navy Yard,20374,Washington,DC,United States,https://example.com,,
+Alan Turing,alan.turing@example.org,,+44 20 7946 0958,he/him,23 Logic Lane,M1 1AE,Manchester,England,United Kingdom,,Researchers,

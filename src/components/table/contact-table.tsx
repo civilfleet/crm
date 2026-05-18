@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Filter, Loader2, Mail, Plus, Send, X } from "lucide-react";
+import { Filter, Loader2, Mail, Plus, Send, Upload, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -242,6 +242,12 @@ export default function ContactTable({ teamId }: ContactTableProps) {
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importResult, setImportResult] = useState<ContactImportResult | null>(
+    null,
+  );
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
   const [emailRecipients, setEmailRecipients] = useState<ContactRow[]>([]);
   const [emailSubject, setEmailSubject] = useState("");
@@ -974,6 +980,54 @@ export default function ContactTable({ teamId }: ContactTableProps) {
     }
   };
 
+  const handleImportContacts = async () => {
+    if (!importFile) {
+      return;
+    }
+
+    setIsImporting(true);
+    setImportResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("teamId", teamId);
+      formData.append("file", importFile);
+
+      const response = await fetch("/api/contacts/import", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(json?.error || "Failed to import contacts");
+      }
+
+      const result = json.data as ContactImportResult;
+      setImportResult(result);
+
+      toast({
+        title: "Contact import complete",
+        description: `${result.created} created, ${result.skipped} skipped.`,
+      });
+
+      if (result.created > 0) {
+        await mutate();
+      }
+    } catch (importError) {
+      toast({
+        title: "Unable to import contacts",
+        description:
+          importError instanceof Error
+            ? importError.message
+            : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <div className="my-4 flex flex-col gap-5">
       <Form {...form}>
@@ -1100,19 +1154,46 @@ export default function ContactTable({ teamId }: ContactTableProps) {
               },
             }}
             toolbar={
-              <Link
-                href={`/teams/${teamId}/crm/contacts/create`}
-                aria-label="Add contact"
-              >
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   type="button"
+                  variant="outline"
                   size="sm"
                   className="hidden gap-2 px-3 sm:inline-flex"
+                  onClick={() => setIsImportDialogOpen(true)}
                 >
-                  <Plus className="h-4 w-4" />
-                  <span>Add contact</span>
+                  <Upload className="h-4 w-4" />
+                  <span>Import CSV</span>
                 </Button>
-              </Link>
+                <Link
+                  href={`/teams/${teamId}/crm/contacts/create`}
+                  aria-label="Add contact"
+                >
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="hidden gap-2 px-3 sm:inline-flex"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Add contact</span>
+                  </Button>
+                </Link>
+                <ContactImportDialog
+                  open={isImportDialogOpen}
+                  file={importFile}
+                  result={importResult}
+                  isImporting={isImporting}
+                  onOpenChange={(open) => {
+                    setIsImportDialogOpen(open);
+                    if (!open) {
+                      setImportFile(null);
+                      setImportResult(null);
+                    }
+                  }}
+                  onFileChange={setImportFile}
+                  onImport={handleImportContacts}
+                />
+              </div>
             }
             selectable
             renderBatchActions={({ selectedRows, clearSelection }) => (
@@ -1195,9 +1276,126 @@ export default function ContactTable({ teamId }: ContactTableProps) {
           <span className="sr-only">Add contact</span>
         </Button>
       </Link>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        aria-label="Import CSV"
+        className="fixed bottom-20 right-5 z-40 h-12 w-12 rounded-full bg-background shadow-lg sm:hidden"
+        onClick={() => setIsImportDialogOpen(true)}
+      >
+        <Upload className="h-5 w-5" />
+      </Button>
     </div>
   );
 }
+
+type ContactImportResult = {
+  created: number;
+  skipped: number;
+  totalRows: number;
+  skippedRows: Array<{
+    rowNumber: number;
+    reason: string;
+  }>;
+};
+
+type ContactImportDialogProps = {
+  open: boolean;
+  file: File | null;
+  result: ContactImportResult | null;
+  isImporting: boolean;
+  onOpenChange: (open: boolean) => void;
+  onFileChange: (file: File | null) => void;
+  onImport: () => void;
+};
+
+const ContactImportDialog = ({
+  open,
+  file,
+  result,
+  isImporting,
+  onOpenChange,
+  onFileChange,
+  onImport,
+}: ContactImportDialogProps) => {
+  const canImport = Boolean(file) && !isImporting;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Import contacts from CSV</DialogTitle>
+          <DialogDescription>
+            Upload a comma-separated file with name and email columns. Duplicate
+            emails are skipped.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="contact-import-file">CSV file</Label>
+            <Input
+              id="contact-import-file"
+              type="file"
+              accept=".csv,text/csv"
+              disabled={isImporting}
+              onChange={(event) => {
+                onFileChange(event.currentTarget.files?.[0] ?? null);
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Supported headers: name, email, phone, signal, pronouns, address,
+              postalCode, city, state, country, website, group, groupId.
+            </p>
+          </div>
+
+          {result && (
+            <div className="rounded-md border bg-muted/30 p-3 text-sm">
+              <div className="font-medium">
+                {result.created} created, {result.skipped} skipped from{" "}
+                {result.totalRows} rows.
+              </div>
+              {result.skippedRows.length > 0 && (
+                <div className="mt-3 max-h-44 overflow-auto text-muted-foreground">
+                  {result.skippedRows.map((row) => (
+                    <div key={`${row.rowNumber}-${row.reason}`}>
+                      Row {row.rowNumber}: {row.reason}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isImporting}
+          >
+            Close
+          </Button>
+          <Button type="button" onClick={onImport} disabled={!canImport}>
+            {isImporting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Importing...
+              </>
+            ) : (
+              <>
+                <Upload className="mr-2 h-4 w-4" />
+                Import contacts
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 type MassEmailDialogProps = {
   open: boolean;
