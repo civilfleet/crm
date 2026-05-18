@@ -54,12 +54,20 @@ jobs:
             | sed 's/^-*//; s/-*$//; s/^$/ref/')
 
           docker build \
+            --target runner-app \
             -t "$PACKAGE_IMAGE:$IMAGE_TAG" \
             -t "$PACKAGE_IMAGE:$REF_TAG" \
             .
 
+          docker build \
+            --target runner-tools \
+            -t "$PACKAGE_IMAGE-tools:$IMAGE_TAG" \
+            -t "$PACKAGE_IMAGE-tools:$REF_TAG" \
+            .
+
           if [ "${GITHUB_REF_NAME}" = "main" ]; then
             docker tag "$PACKAGE_IMAGE:$IMAGE_TAG" "$PACKAGE_IMAGE:latest"
+            docker tag "$PACKAGE_IMAGE-tools:$IMAGE_TAG" "$PACKAGE_IMAGE-tools:latest"
           fi
 
       - name: Login to Gitea container registry
@@ -84,9 +92,12 @@ jobs:
 
           docker push "$PACKAGE_IMAGE:$IMAGE_TAG"
           docker push "$PACKAGE_IMAGE:$REF_TAG"
+          docker push "$PACKAGE_IMAGE-tools:$IMAGE_TAG"
+          docker push "$PACKAGE_IMAGE-tools:$REF_TAG"
 
           if [ "${GITHUB_REF_NAME}" = "main" ]; then
             docker push "$PACKAGE_IMAGE:latest"
+            docker push "$PACKAGE_IMAGE-tools:latest"
           fi
 
   deploy:
