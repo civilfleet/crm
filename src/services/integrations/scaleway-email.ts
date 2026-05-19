@@ -80,6 +80,49 @@ const stripHtml = (html: string) =>
     .replace(/\s{2,}/g, " ")
     .trim();
 
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+type EmailPlaceholderContact = {
+  name?: string | null;
+  email?: string | null;
+  city?: string | null;
+  country?: string | null;
+  phone?: string | null;
+};
+
+const getFirstName = (name?: string | null) =>
+  name?.trim().split(/\s+/)[0] ?? "";
+
+const renderEmailPlaceholders = (
+  value: string,
+  contact: EmailPlaceholderContact,
+  options: { escape?: boolean } = {},
+) => {
+  const replacements: Record<string, string> = {
+    "contact.name": contact.name?.trim() ?? "",
+    "contact.firstName": getFirstName(contact.name),
+    "contact.email": contact.email?.trim() ?? "",
+    "contact.city": contact.city?.trim() ?? "",
+    "contact.country": contact.country?.trim() ?? "",
+    "contact.phone": contact.phone?.trim() ?? "",
+  };
+
+  return value.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (match, key) => {
+    const replacement = replacements[key];
+    if (replacement === undefined) {
+      return match;
+    }
+
+    return options.escape === false ? replacement : escapeHtml(replacement);
+  });
+};
+
 const getRetryDelayMs = (attempts: number) => {
   const delaySeconds = Math.min(
     DEFAULT_RETRY_DELAY_SECONDS * 2 ** Math.max(attempts - 1, 0),
@@ -542,19 +585,46 @@ export const processEmailBatch = async (batch: EmailBatch) => {
       batchId: batch.id,
       status: EmailRecipientStatus.PENDING,
     },
+    include: {
+      contact: {
+        select: {
+          name: true,
+          email: true,
+          city: true,
+          country: true,
+          phone: true,
+        },
+      },
+    },
     orderBy: { createdAt: "asc" },
   });
 
   for (const recipient of pendingRecipients) {
     try {
+      const placeholderContact = {
+        name: recipient.name ?? recipient.contact?.name,
+        email: recipient.email ?? recipient.contact?.email,
+        city: recipient.contact?.city,
+        country: recipient.contact?.country,
+        phone: recipient.contact?.phone,
+      };
+      const renderedSubject = renderEmailPlaceholders(
+        batch.subject,
+        placeholderContact,
+        { escape: false },
+      );
+      const renderedHtml = renderEmailPlaceholders(
+        batch.html,
+        placeholderContact,
+      );
       const scalewayEmail = await sendScalewayEmail({
         apiKey: integration.apiKey,
         region,
         projectId: integration.defaultListId,
         from,
         to: { email: recipient.email, name: recipient.name ?? undefined },
-        subject: batch.subject,
-        html: batch.html,
+        subject: renderedSubject,
+        html: renderedHtml,
       });
 
       const sentAt = new Date();
@@ -575,8 +645,8 @@ export const processEmailBatch = async (batch: EmailBatch) => {
             teamId: batch.teamId,
             direction: EngagementDirection.OUTBOUND,
             source: EngagementSource.EMAIL,
-            subject: batch.subject,
-            message: batch.html,
+            subject: renderedSubject,
+            message: renderedHtml,
             userId: batch.userId,
             userName: batch.userName,
             externalId: scalewayEmail.id,

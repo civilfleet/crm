@@ -20,6 +20,7 @@ import {
   AlignLeft,
   AlignRight,
   Bold,
+  Braces,
   Eye,
   EyeOff,
   Italic,
@@ -47,6 +48,12 @@ import {
   type LexicalEditor,
 } from "lexical";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 type RichEmailEditorProps = {
@@ -73,6 +80,15 @@ const editorTheme = {
     underline: "underline",
   },
 };
+
+const PLACEHOLDERS = [
+  { label: "Contact name", value: "{{ contact.name }}" },
+  { label: "First name", value: "{{ contact.firstName }}" },
+  { label: "Email", value: "{{ contact.email }}" },
+  { label: "City", value: "{{ contact.city }}" },
+  { label: "Country", value: "{{ contact.country }}" },
+  { label: "Phone", value: "{{ contact.phone }}" },
+] as const;
 
 const importHtml = (editor: LexicalEditor, html: string) => {
   const parser = new DOMParser();
@@ -261,6 +277,41 @@ const ToolbarPlugin = ({ disabled }: { disabled?: boolean }) => {
       >
         <AlignRight className="h-4 w-4" />
       </ToolbarButton>
+      <span className="mx-1 h-5 w-px bg-border" />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={disabled}
+            className="h-8 gap-2 px-2"
+          >
+            <Braces className="h-4 w-4" />
+            Placeholders
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start">
+          {PLACEHOLDERS.map((placeholder) => (
+            <DropdownMenuItem
+              key={placeholder.value}
+              onSelect={() => {
+                editor.update(() => {
+                  const selection = $getSelection();
+                  if ($isRangeSelection(selection)) {
+                    selection.insertText(placeholder.value);
+                  }
+                });
+              }}
+            >
+              <span>{placeholder.label}</span>
+              <code className="ml-2 text-xs text-muted-foreground">
+                {placeholder.value}
+              </code>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 };
