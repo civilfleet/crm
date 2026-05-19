@@ -19,6 +19,7 @@ model Organization {
   website                 String?      @db.VarChar(255)
   taxID                   String?      @db.VarChar(255)
   isFilledByOrg           Boolean      @default(false)
+  portalAccessEnabled     Boolean      @default(false)
   bankDetailsId           String?      @unique
   orgTypeId               String?
   orgType                 OrganizationType? @relation(fields: [orgTypeId], references: [id], onDelete: SetNull)

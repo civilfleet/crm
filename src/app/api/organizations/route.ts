@@ -102,6 +102,8 @@ export async function POST(req: Request) {
     }
     const normalizedData = {
       ...validatedData,
+      portalAccessEnabled:
+        validatedData.portalAccessEnabled || validatedData.isFilledByOrg,
       profileData: validatedData.profileData as
         | Prisma.InputJsonValue
         | undefined,

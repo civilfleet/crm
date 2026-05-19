@@ -467,6 +467,7 @@ export interface Organization {
   website?: string;
   taxID?: string;
   isFilledByOrg: boolean;
+  portalAccessEnabled: boolean;
   orgTypeId?: string;
   orgType?: OrganizationType;
   profileData?: Record<string, unknown>;

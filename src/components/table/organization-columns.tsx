@@ -115,7 +115,7 @@ export const columns = (
       return (
         <Link
           href={`${basePath}/${organization.id}`}
-          className="text-left font-medium text-primary hover:underline"
+          className="font-medium hover:underline"
         >
           {organization.name || "N/A"}
         </Link>

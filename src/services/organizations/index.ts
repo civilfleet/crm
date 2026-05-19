@@ -22,6 +22,7 @@ type Organization = {
   contactPersonId?: string;
   teamId?: string;
   isFilledByOrg: boolean;
+  portalAccessEnabled?: boolean;
   bankDetails?: {
     accountHolder?: string;
     iban?: string;
@@ -206,6 +207,9 @@ const createOrUpdateOrganization = async (formData: Organization) => {
     // Common organization data
     const profileData =
       formData.profileData === undefined ? undefined : formData.profileData;
+    const portalAccessEnabled = Boolean(
+      formData.portalAccessEnabled || orgUser,
+    );
     const organizationData = {
       name: formData.name,
       address: formData.address,
@@ -216,6 +220,7 @@ const createOrUpdateOrganization = async (formData: Organization) => {
       website: formData.website,
       taxID: formData.taxID,
       isFilledByOrg: formData.isFilledByOrg,
+      portalAccessEnabled,
       profileData,
       ...(bankDetail && { bankDetails: { connect: { id: bankDetail.id } } }),
       ...(orgUser && {
@@ -320,6 +325,7 @@ const updateOrganization = async (formData: Organization, id: string) => {
       website: formData.website,
       taxID: formData.taxID,
       isFilledByOrg: formData.isFilledByOrg,
+      portalAccessEnabled: formData.portalAccessEnabled,
       profileData: formData.profileData ?? undefined,
       orgType: formData.orgTypeId
         ? { connect: { id: formData.orgTypeId } }

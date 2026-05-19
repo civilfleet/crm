@@ -46,6 +46,9 @@ const getAdminUser = async (userId: string) => {
     },
   });
   const organizationsPromise = prisma.organization.findMany({
+    where: {
+      portalAccessEnabled: true,
+    },
     select: {
       id: true,
       name: true,

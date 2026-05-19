@@ -123,6 +123,7 @@ const createOrganizationSchema = z.object({
     })
     .optional()
     .or(z.literal("")),
+  portalAccessEnabled: z.boolean().optional(),
   articlesOfAssociation: z
     .string()
     .min(2, {

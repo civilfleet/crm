@@ -74,6 +74,7 @@ type Organization = {
   articlesOfAssociation?: string;
   taxID?: string;
   isFilledByOrg: boolean;
+  portalAccessEnabled?: boolean;
   orgTypeId?: string;
   profileData?: Record<string, unknown>;
   contactPersonId?: string;
@@ -109,6 +110,7 @@ export default function OrganizationForm({ data }: { data: Organization }) {
   const [isUpdate] = useState(!!data?.email);
   const schema = isUpdate ? updateOrganizationSchema : createOrganizationSchema;
   const teamId = data?.teamId;
+  const isFundingRoute = pathname.includes("/funding/organizations");
 
   const fetcher = (url: string) => fetch(url).then((res) => res.json());
   const { data: orgTypesData } = useSWR(
@@ -159,6 +161,7 @@ export default function OrganizationForm({ data }: { data: Organization }) {
         data?.Files?.find((file) => file.type === "ARTICLES_OF_ASSOCIATION")
           ?.url || "",
       taxID: data?.taxID || "",
+      portalAccessEnabled: data?.portalAccessEnabled ?? isFundingRoute,
       logo: data?.Files?.find((file) => file.type === "LOGO")?.url || "",
       bankDetails: {
         bankName: data?.bankDetails?.bankName || "",
@@ -592,10 +595,44 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                   </div>
                   <div>
                     <h4 className="text-lg font-semibold">
+                      Organization portal
+                    </h4>
+                    <CardDescription>
+                      Controls whether this organization appears as a selectable
+                      organization portal context.
+                    </CardDescription>
+                    <hr />
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="portalAccessEnabled"
+                    render={({ field }) => (
+                      <FormItem className="flex items-start gap-3 rounded-md border p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={Boolean(field.value)}
+                            onCheckedChange={(checked) =>
+                              field.onChange(Boolean(checked))
+                            }
+                          />
+                        </FormControl>
+                        <div className="space-y-1">
+                          <FormLabel>Enable organization portal access</FormLabel>
+                          <CardDescription>
+                            Show this organization in the team selector even if
+                            no login user is assigned yet.
+                          </CardDescription>
+                          <FormMessage />
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                  <div>
+                    <h4 className="text-lg font-semibold">
                       Portal login user
                     </h4>
                     <CardDescription>
-                      Optional. Use this only when someone from the organization
+                      Optional. Use this when someone from the organization
                       should be able to sign in.
                     </CardDescription>
                     <hr />
