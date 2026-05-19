@@ -70,7 +70,10 @@ export default async function EventDetailPage({
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-4">
-                  <EventRegistrationsTable registrations={registrationRows} />
+                  <EventRegistrationsTable
+                    teamId={teamId}
+                    registrations={registrationRows}
+                  />
                 </CardContent>
               </Card>
             }

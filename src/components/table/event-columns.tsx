@@ -34,6 +34,7 @@ export type EventRow = {
   startDate: string | Date;
   endDate?: string | Date;
   isPublic: boolean;
+  registrationCount: number;
   contacts: Array<{
     id: string;
     name: string;
@@ -279,6 +280,15 @@ export const eventColumns: ColumnDef<EventRow>[] = [
     cell: ({ row }) => <span>{formatDateTime(row.original.endDate)}</span>,
   },
   {
+    accessorKey: "registrationCount",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Registrants" />
+    ),
+    cell: ({ row }) => (
+      <span className="tabular-nums">{row.original.registrationCount}</span>
+    ),
+  },
+  {
     accessorKey: "contacts",
     header: "Contacts",
     cell: ({ row }) => renderContacts(row.original.contacts),
@@ -361,6 +371,10 @@ export const renderEventCard = (event: EventRow) => {
             {formatDateTime(event.endDate)}
           </p>
         )}
+        <p className="text-muted-foreground">
+          <span className="font-medium">Registrants:</span>{" "}
+          {event.registrationCount}
+        </p>
       </div>
 
       {event.contacts.length > 0 && (

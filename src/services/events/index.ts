@@ -78,6 +78,11 @@ type EventWithContacts = Prisma.EventGetPayload<{
         list: true;
       };
     };
+    _count: {
+      select: {
+        registrations: true;
+      };
+    };
   };
 }>;
 
@@ -107,6 +112,7 @@ type EventType = {
   startDate: Date;
   endDate?: Date;
   isPublic: boolean;
+  registrationCount: number;
   createdAt: Date;
   updatedAt: Date;
   contacts: Array<{
@@ -166,6 +172,7 @@ const mapEvent = (event: EventWithContacts): EventType => ({
   startDate: event.startDate,
   endDate: event.endDate ?? undefined,
   isPublic: event.isPublic,
+  registrationCount: event._count.registrations,
   createdAt: event.createdAt,
   updatedAt: event.updatedAt,
   contacts: event.contacts.map((ec) => ({
@@ -304,6 +311,11 @@ export const getTeamEvents = async (
           list: true,
         },
       },
+      _count: {
+        select: {
+          registrations: true,
+        },
+      },
     },
     orderBy: {
       startDate: "desc",
@@ -332,6 +344,11 @@ export const getEventById = async (eventId: string, teamId: string) => {
       lists: {
         include: {
           list: true,
+        },
+      },
+      _count: {
+        select: {
+          registrations: true,
         },
       },
     },
@@ -475,6 +492,11 @@ export const createEvent = async (input: CreateEventInput) => {
         lists: {
           include: {
             list: true,
+          },
+        },
+        _count: {
+          select: {
+            registrations: true,
           },
         },
       },
@@ -641,6 +663,11 @@ export const updateEvent = async (input: UpdateEventInput) => {
         lists: {
           include: {
             list: true,
+          },
+        },
+        _count: {
+          select: {
+            registrations: true,
           },
         },
       },

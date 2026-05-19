@@ -38,7 +38,8 @@ export type ScalewayEmailIntegrationSettings = IntegrationConnection & {
 
 export type SendMassEmailInput = {
   teamId: string;
-  contactIds: string[];
+  contactIds?: string[];
+  eventIds?: string[];
   subject: string;
   html: string;
   userId?: string;
@@ -295,14 +296,43 @@ export const saveScalewayEmailIntegration = async ({
 
 export const sendMassEmailToContacts = async ({
   teamId,
-  contactIds,
+  contactIds = [],
+  eventIds = [],
   subject,
   html,
   userId,
   userName,
   senderLabelMode = "default",
 }: SendMassEmailInput): Promise<SendMassEmailResult> => {
-  const uniqueContactIds = Array.from(new Set(contactIds));
+  const uniqueDirectContactIds = Array.from(new Set(contactIds));
+  const uniqueEventIds = Array.from(new Set(eventIds));
+
+  if (uniqueDirectContactIds.length === 0 && uniqueEventIds.length === 0) {
+    throw new Error("Select at least one recipient.");
+  }
+
+  const eventRegistrantContactIds =
+    uniqueEventIds.length > 0
+      ? await prisma.eventRegistration.findMany({
+          where: {
+            eventId: { in: uniqueEventIds },
+            event: { teamId },
+          },
+          select: {
+            contactId: true,
+          },
+        })
+      : [];
+  const uniqueContactIds = Array.from(
+    new Set([
+      ...uniqueDirectContactIds,
+      ...eventRegistrantContactIds.map((registration) => registration.contactId),
+    ]),
+  );
+
+  if (uniqueContactIds.length === 0) {
+    throw new Error("No email recipients found for this selection.");
+  }
   if (uniqueContactIds.length > MAX_RECIPIENTS) {
     throw new Error(
       `You can send to at most ${MAX_RECIPIENTS} contacts at once.`,

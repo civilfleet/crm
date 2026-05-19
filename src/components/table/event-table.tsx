@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Mail, Plus, Send } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -17,7 +17,17 @@ import {
   renderEventCard,
 } from "@/components/table/event-columns";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Form } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -25,11 +35,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 
 interface EventTableProps {
   teamId: string;
 }
+
+type SenderLabelMode = "default" | "user";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -44,6 +57,13 @@ const querySchema = z.object({
 export default function EventTable({ teamId }: EventTableProps) {
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [emailEvents, setEmailEvents] = useState<EventRow[]>([]);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailSenderLabelMode, setEmailSenderLabelMode] =
+    useState<SenderLabelMode>("default");
 
   const form = useForm<z.infer<typeof querySchema>>({
     resolver: zodResolver(querySchema),
@@ -175,6 +195,86 @@ export default function EventTable({ teamId }: EventTableProps) {
     }
   };
 
+  const openEmailDialog = (selectedRows: EventRow[]) => {
+    const eventsWithRegistrants = selectedRows.filter(
+      (event) => event.registrationCount > 0,
+    );
+
+    if (eventsWithRegistrants.length === 0) {
+      toast({
+        title: "No registrants",
+        description:
+          "The selected events do not have registrants to email yet.",
+      });
+      return;
+    }
+
+    setEmailEvents(eventsWithRegistrants);
+    setIsEmailDialogOpen(true);
+  };
+
+  const handleSendEmail = async (clearSelection: () => void) => {
+    const eventIds = emailEvents.map((event) => event.id);
+    if (eventIds.length === 0) {
+      return;
+    }
+
+    setIsSendingEmail(true);
+    try {
+      const response = await fetch(
+        `/api/teams/${teamId}/integrations/scaleway-email/send`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            eventIds,
+            subject: emailSubject,
+            html: emailBody,
+            senderLabelMode: emailSenderLabelMode,
+          }),
+        },
+      );
+
+      const json = await response.json();
+      if (!response.ok) {
+        throw new Error(json?.error || "Failed to send email");
+      }
+
+      const result = json.data as {
+        requested: number;
+        skipped: number;
+      };
+
+      toast({
+        title: "Email batch queued",
+        description: `${result.requested - result.skipped} email${
+          result.requested - result.skipped === 1 ? "" : "s"
+        } queued for worker delivery. ${result.skipped} skipped.`,
+      });
+
+      setIsEmailDialogOpen(false);
+      setEmailEvents([]);
+      setEmailSubject("");
+      setEmailBody("");
+      setEmailSenderLabelMode("default");
+      clearSelection();
+      await mutate();
+    } catch (sendError) {
+      toast({
+        title: "Unable to send email",
+        description:
+          sendError instanceof Error
+            ? sendError.message
+            : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 my-4">
       <Form {...form}>
@@ -268,6 +368,17 @@ export default function EventTable({ teamId }: EventTableProps) {
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
+                    size="sm"
+                    disabled={
+                      isDeleting || isSendingEmail || selectedRows.length === 0
+                    }
+                    onClick={() => openEmailDialog(selectedRows)}
+                  >
+                    <Mail className="mr-2 h-4 w-4" />
+                    Send email
+                  </Button>
+                  <Button
+                    type="button"
                     variant="destructive"
                     size="sm"
                     disabled={isDeleting}
@@ -294,6 +405,19 @@ export default function EventTable({ teamId }: EventTableProps) {
                     Clear
                   </Button>
                 </div>
+                <EventEmailDialog
+                  open={isEmailDialogOpen}
+                  events={emailEvents}
+                  subject={emailSubject}
+                  body={emailBody}
+                  senderLabelMode={emailSenderLabelMode}
+                  isSending={isSendingEmail}
+                  onOpenChange={setIsEmailDialogOpen}
+                  onSubjectChange={setEmailSubject}
+                  onBodyChange={setEmailBody}
+                  onSenderLabelModeChange={setEmailSenderLabelMode}
+                  onSend={() => handleSendEmail(clearSelection)}
+                />
               </div>
             )}
           />
@@ -317,3 +441,140 @@ export default function EventTable({ teamId }: EventTableProps) {
     </div>
   );
 }
+
+type EventEmailDialogProps = {
+  open: boolean;
+  events: EventRow[];
+  subject: string;
+  body: string;
+  senderLabelMode: SenderLabelMode;
+  isSending: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubjectChange: (value: string) => void;
+  onBodyChange: (value: string) => void;
+  onSenderLabelModeChange: (value: SenderLabelMode) => void;
+  onSend: () => void;
+};
+
+const EventEmailDialog = ({
+  open,
+  events,
+  subject,
+  body,
+  senderLabelMode,
+  isSending,
+  onOpenChange,
+  onSubjectChange,
+  onBodyChange,
+  onSenderLabelModeChange,
+  onSend,
+}: EventEmailDialogProps) => {
+  const registrantCount = events.reduce(
+    (total, event) => total + event.registrationCount,
+    0,
+  );
+  const canSend =
+    events.length > 0 &&
+    subject.trim().length > 0 &&
+    body.trim().length > 0 &&
+    !isSending;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Send email to event registrants</DialogTitle>
+          <DialogDescription>
+            Sends one email per unique registrant contact through the Scaleway
+            Transactional Email integration.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+            {events.length} event{events.length === 1 ? "" : "s"} selected with{" "}
+            {registrantCount} current registrant
+            {registrantCount === 1 ? "" : "s"}. Duplicate contacts across
+            events are only included once.
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="event-email-sender">Sender</Label>
+            <Select
+              value={senderLabelMode}
+              onValueChange={(value) =>
+                onSenderLabelModeChange(value as SenderLabelMode)
+              }
+              disabled={isSending}
+            >
+              <SelectTrigger id="event-email-sender">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">
+                  Default sender label
+                </SelectItem>
+                <SelectItem value="user">My user name</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              The sender address stays the default address configured for
+              Transactional Email.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="event-email-subject">Subject</Label>
+            <Input
+              id="event-email-subject"
+              value={subject}
+              onChange={(event) => onSubjectChange(event.target.value)}
+              disabled={isSending}
+              placeholder="Email subject"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="event-email-body">Email body</Label>
+            <Textarea
+              id="event-email-body"
+              value={body}
+              onChange={(event) => onBodyChange(event.target.value)}
+              disabled={isSending}
+              placeholder="<p>Hello,</p><p>Write your email here.</p>"
+              className="min-h-56 font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">
+              HTML is supported. Successful sends are logged in each contact's
+              engagement history.
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSending}
+          >
+            Cancel
+          </Button>
+          <Button type="button" onClick={onSend} disabled={!canSend}>
+            {isSending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Send className="mr-2 h-4 w-4" />
+                Send email
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
