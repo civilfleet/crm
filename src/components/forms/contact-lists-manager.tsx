@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
 import { DataTable } from "@/components/data-table";
+import { RichEmailEditor } from "@/components/rich-email-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,7 +38,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { ContactListType } from "@/types";
 
@@ -835,18 +835,13 @@ const ListEmailDialog = ({
 
           <div className="space-y-2">
             <Label htmlFor="list-email-body">Email body</Label>
-            <Textarea
+            <RichEmailEditor
               id="list-email-body"
               value={body}
-              onChange={(event) => onBodyChange(event.target.value)}
+              onChange={onBodyChange}
               disabled={isSending}
-              placeholder="<p>Hello,</p><p>Write your email here.</p>"
-              className="min-h-56 font-mono text-sm"
+              previewDescription="Use the toolbar to format the message. Duplicate contacts across lists are only included once."
             />
-            <p className="text-xs text-muted-foreground">
-              HTML is supported. Duplicate contacts across lists are only
-              included once.
-            </p>
           </div>
         </div>
 

@@ -12,6 +12,7 @@ import { DataTable } from "@/components/data-table";
 import ButtonControl from "@/components/helper/button-control";
 import FormInputControl from "@/components/helper/form-input-control";
 import TableLoadingState from "@/components/loading/table-loading-state";
+import { RichEmailEditor } from "@/components/rich-email-editor";
 import {
   type ContactRow,
   contactColumns,
@@ -43,7 +44,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { parseCsv } from "@/lib/csv";
 import type { ContactFilter, ContactFilterType } from "@/types";
@@ -1734,18 +1734,13 @@ const MassEmailDialog = ({
 
           <div className="space-y-2">
             <Label htmlFor="mass-email-body">Email body</Label>
-            <Textarea
+            <RichEmailEditor
               id="mass-email-body"
               value={body}
-              onChange={(event) => onBodyChange(event.target.value)}
+              onChange={onBodyChange}
               disabled={isSending}
-              placeholder="<p>Hello,</p><p>Write your email here.</p>"
-              className="min-h-56 font-mono text-sm"
+              previewDescription="Use the toolbar to format the message. Successful sends are logged in each contact's engagement history."
             />
-            <p className="text-xs text-muted-foreground">
-              HTML is supported. Successful sends are logged in each contact's
-              engagement history.
-            </p>
           </div>
         </div>
 
