@@ -111,10 +111,14 @@ export const columns = (
       <DataTableColumnHeader column={column} title="Name" />
     ),
     cell: ({ row }) => {
+      const organization = row.original;
       return (
-        <div className="text-left font-medium">
-          {row.getValue("name") || "N/A"}
-        </div>
+        <Link
+          href={`${basePath}/${organization.id}`}
+          className="text-left font-medium text-primary hover:underline"
+        >
+          {organization.name || "N/A"}
+        </Link>
       );
     },
   },

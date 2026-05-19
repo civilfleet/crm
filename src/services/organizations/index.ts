@@ -30,7 +30,7 @@ type Organization = {
   };
   user?: {
     name?: string;
-    email: string;
+    email?: string;
     phone?: string;
     address?: string;
     postalCode?: string;
@@ -172,17 +172,20 @@ const createOrUpdateOrganization = async (formData: Organization) => {
         })
       : undefined;
 
-    const email = formData.user?.email?.toLowerCase() as string;
+    const userEmail = formData.user?.email?.trim().toLowerCase();
 
-    let orgUser = await prisma.user.findUnique({
-      where: { email },
-    });
+    let orgUser = userEmail
+      ? await prisma.user.findUnique({
+          where: { email: userEmail },
+        })
+      : null;
 
-    if (orgUser) {
+    if (userEmail && orgUser) {
       orgUser = await prisma.user.update({
-        where: { email },
+        where: { email: userEmail },
         data: {
           ...formData.user,
+          email: userEmail,
           roles: {
             set: Array.from(
               new Set([...(orgUser.roles ?? []), Roles.Organization]),
@@ -190,11 +193,11 @@ const createOrUpdateOrganization = async (formData: Organization) => {
           },
         },
       });
-    } else {
+    } else if (userEmail) {
       orgUser = await prisma.user.create({
         data: {
           ...formData.user,
-          email,
+          email: userEmail,
           roles: [Roles.Organization],
         },
       });

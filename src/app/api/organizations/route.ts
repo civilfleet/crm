@@ -118,7 +118,7 @@ export async function POST(req: Request) {
         ? `You're In! Welcome to ${appUrl}.`
         : `You're In! Welcome to ${appName}.`;
 
-      await Promise.all([
+      const emails = [
         sendEmail(
           {
             to: organization.email,
@@ -133,26 +133,36 @@ export async function POST(req: Request) {
             appName,
           },
         ),
-        sendEmail(
-          {
-            to: user?.email as string,
-            subject,
-            template: "welcome",
-          },
-          {
-            name: user?.name,
-            email: user?.email,
-            loginUrl,
-            appUrl,
-            appName,
-          },
-        ),
-      ]);
+      ];
+
+      if (user?.email) {
+        emails.push(
+          sendEmail(
+            {
+              to: user.email,
+              subject,
+              template: "welcome",
+            },
+            {
+              name: user.name,
+              email: user.email,
+              loginUrl,
+              appUrl,
+              appName,
+            },
+          ),
+        );
+      }
+
+      await Promise.all(emails);
     }
 
     return NextResponse.json(
       {
         message: "success",
+        data: {
+          id: organization.id,
+        },
       },
       { status: 201 },
     );

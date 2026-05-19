@@ -25,6 +25,7 @@ model Organization {
   profileData             Json?
   contactPersonId         String?
   contactPerson           Contact?   @relation("OrganizationContactPerson", fields: [contactPersonId], references: [id], onDelete: SetNull)
+  contacts                ContactOrganization[]
   users                   User[] @relation("OrganizationUsers") // Many-to-Many relation
   teamId                  String?     
   team                    Teams?              @relation(fields: [teamId], references: [id])   
@@ -495,10 +496,22 @@ model Contact {
   changeLogs        ContactChangeLog[]
   lists             ContactListMember[]
   organizationsAsContactPerson Organization[] @relation("OrganizationContactPerson")
+  organizations     ContactOrganization[]
 
   @@index([groupId])
   @@index([teamId, groupId])
   @@unique([teamId, email])
+}
+
+model ContactOrganization {
+  contactId      String
+  organizationId String
+  contact        Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+
+  @@id([contactId, organizationId])
+  @@index([organizationId])
 }
 
 model EmailBatch {

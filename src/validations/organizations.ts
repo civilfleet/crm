@@ -47,6 +47,15 @@ const createUserSchema = z.object({
     .or(z.literal("")),
 });
 
+const organizationLoginUserSchema = createUserSchema.extend({
+  email: z
+    .email({
+      message: "Invalid email address format.",
+    })
+    .optional()
+    .or(z.literal("")),
+});
+
 const createOrganizationSchema = z.object({
   name: z
     .string()
@@ -122,11 +131,17 @@ const createOrganizationSchema = z.object({
     .optional()
     .or(z.literal("")),
   logo: z.string().optional().or(z.literal("")),
-  orgTypeId: z.uuid("Organization type id must be a valid UUID").optional(),
+  orgTypeId: z
+    .uuid("Organization type id must be a valid UUID")
+    .optional()
+    .or(z.literal("")),
   profileData: z.record(z.string(), z.unknown()).optional(),
-  contactPersonId: z.uuid("Contact id must be a valid UUID").optional(),
+  contactPersonId: z
+    .uuid("Contact id must be a valid UUID")
+    .optional()
+    .or(z.literal("")),
   bankDetails: bankDetailsSchema,
-  user: createUserSchema,
+  user: organizationLoginUserSchema.optional(),
 });
 
 const updateOrganizationSchema = createOrganizationSchema;

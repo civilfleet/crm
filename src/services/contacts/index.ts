@@ -81,6 +81,7 @@ type CreateContactInput = {
   signal?: string;
   website?: string;
   socialLinks?: ContactSocialLink[];
+  organizationIds?: string[];
   groupId?: string;
   profileAttributes?: ContactProfileAttribute[];
 };
@@ -107,6 +108,7 @@ type UpdateContactInput = {
   signal?: string;
   website?: string;
   socialLinks?: ContactSocialLink[];
+  organizationIds?: string[];
   groupId?: string;
   profileAttributes?: ContactProfileAttribute[];
 };
@@ -164,6 +166,17 @@ type ContactWithAttributes = Prisma.ContactGetPayload<{
     registrations: {
       include: {
         event: true;
+      };
+    };
+    organizations: {
+      include: {
+        organization: {
+          select: {
+            id: true;
+            name: true;
+            email: true;
+          };
+        };
       };
     };
   };
@@ -612,6 +625,11 @@ const mapContact = (contact: ContactWithAttributes): ContactType => ({
   socialLinks: contact.socialLinks.map((link) => ({
     platform: link.platform,
     handle: link.handle,
+  })),
+  organizations: contact.organizations.map(({ organization }) => ({
+    id: organization.id,
+    name: organization.name,
+    email: organization.email,
   })),
   groupId: contact.groupId ?? undefined,
   group: contact.group ? mapGroup(contact.group) : undefined,
@@ -1338,6 +1356,17 @@ async function getTeamContacts(
             event: true,
           },
         },
+        organizations: {
+          include: {
+            organization: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
       },
       orderBy: {
         createdAt: "desc",
@@ -1393,6 +1422,17 @@ const getContactById = async (
           event: true,
         },
       },
+      organizations: {
+        include: {
+          organization: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -1440,11 +1480,13 @@ const createContact = async (
     signal,
     website,
     socialLinks,
+    organizationIds,
     groupId,
     profileAttributes,
   } = sanitizedInput;
   const normalizedAttributes = normalizeAttributes(profileAttributes);
   const normalizedSocialLinks = normalizeSocialLinks(socialLinks);
+  const normalizedOrganizationIds = Array.from(new Set(organizationIds ?? []));
   const trimmedName = name?.trim() ?? "";
   if (!trimmedName) {
     throw new Error("Name is required");
@@ -1554,6 +1596,27 @@ const createContact = async (
       });
     }
 
+    if (normalizedOrganizationIds.length > 0) {
+      const organizations = await tx.organization.findMany({
+        where: {
+          id: { in: normalizedOrganizationIds },
+          teamId,
+        },
+        select: { id: true },
+      });
+
+      if (organizations.length !== normalizedOrganizationIds.length) {
+        throw new Error("One or more selected organizations could not be found.");
+      }
+
+      await tx.contactOrganization.createMany({
+        data: normalizedOrganizationIds.map((organizationId) => ({
+          contactId: contact.id,
+          organizationId,
+        })),
+      });
+    }
+
     // Log contact creation
     await logContactCreation(contact.id, userId, userName, tx, {
       source: "manual",
@@ -1583,6 +1646,17 @@ const createContact = async (
         registrations: {
           include: {
             event: true,
+          },
+        },
+        organizations: {
+          include: {
+            organization: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
           },
         },
       },
@@ -1782,6 +1856,7 @@ const updateContact = async (
     groupId,
     profileAttributes,
     socialLinks,
+    organizationIds,
   } = sanitizedInput;
   const normalizedName = typeof name === "string" ? name.trim() : undefined;
   const pronounsProvided = Object.hasOwn(input, "pronouns");
@@ -1943,6 +2018,10 @@ const updateContact = async (
   const normalizedSocialLinks = socialLinksProvided
     ? normalizeSocialLinks(socialLinks)
     : [];
+  const organizationIdsProvided = Object.hasOwn(input, "organizationIds");
+  const normalizedOrganizationIds = organizationIdsProvided
+    ? Array.from(new Set(organizationIds ?? []))
+    : [];
 
   return prisma.$transaction(async (tx) => {
     // Get the existing contact
@@ -1954,6 +2033,17 @@ const updateContact = async (
       include: {
         attributes: true,
         socialLinks: true,
+        organizations: {
+          include: {
+            organization: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -2335,6 +2425,49 @@ const updateContact = async (
       }
     }
 
+    if (organizationIdsProvided) {
+      const organizations = await tx.organization.findMany({
+        where: {
+          id: { in: normalizedOrganizationIds },
+          teamId,
+        },
+        select: { id: true },
+      });
+
+      if (organizations.length !== normalizedOrganizationIds.length) {
+        throw new Error("One or more selected organizations could not be found.");
+      }
+
+      const existingOrganizationIds = new Set(
+        existing.organizations.map((entry) => entry.organizationId),
+      );
+      const nextOrganizationIds = new Set(normalizedOrganizationIds);
+
+      for (const organizationId of existingOrganizationIds) {
+        if (!nextOrganizationIds.has(organizationId)) {
+          await tx.contactOrganization.delete({
+            where: {
+              contactId_organizationId: {
+                contactId,
+                organizationId,
+              },
+            },
+          });
+        }
+      }
+
+      for (const organizationId of nextOrganizationIds) {
+        if (!existingOrganizationIds.has(organizationId)) {
+          await tx.contactOrganization.create({
+            data: {
+              contactId,
+              organizationId,
+            },
+          });
+        }
+      }
+    }
+
     if (groupId !== undefined && groupId !== existing.groupId) {
       await logFieldUpdate(
         contactId,
@@ -2484,6 +2617,17 @@ const updateContact = async (
         registrations: {
           include: {
             event: true,
+          },
+        },
+        organizations: {
+          include: {
+            organization: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
           },
         },
       },

@@ -200,6 +200,11 @@ export interface Contact {
   signal?: string;
   website?: string;
   socialLinks: ContactSocialLink[];
+  organizations?: Array<{
+    id: string;
+    name?: string | null;
+    email: string;
+  }>;
   groupId?: string;
   group?: Group;
   profileAttributes: ContactProfileAttribute[];

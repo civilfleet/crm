@@ -8,6 +8,7 @@ import { useFieldArray, useForm } from "react-hook-form";
 import useSWR from "swr";
 import type { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -57,6 +58,12 @@ type ContactFormValues = CreateContactFormValues | UpdateContactFormValues;
 type Group = {
   id: string;
   name: string;
+};
+
+type OrganizationOption = {
+  id: string;
+  name: string | null;
+  email: string;
 };
 
 interface ContactFormProps {
@@ -113,6 +120,10 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
   const isEditMode = Boolean(contact);
 
   const { data: groupsData } = useSWR(`/api/groups?teamId=${teamId}`, fetcher);
+  const { data: organizationsData } = useSWR(
+    teamId ? `/api/organizations?teamId=${teamId}` : null,
+    fetcher,
+  );
   const { data: attributeKeysData, isLoading: attributeKeysLoading } = useSWR(
     teamId ? `/api/contacts/attribute-keys?teamId=${teamId}` : null,
     fetcher,
@@ -123,6 +134,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
   );
 
   const groups: Group[] = groupsData?.data || [];
+  const organizations: OrganizationOption[] = organizationsData?.data || [];
   const allowedSubmodules: ContactSubmodule[] = submodulesData?.data || [];
   const canAccessSubmodule = useCallback(
     (submodule: ContactSubmodule) => allowedSubmodules.includes(submodule),
@@ -182,6 +194,9 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
               platform: link.platform,
               handle: link.handle,
             })) ?? [],
+          organizationIds:
+            contact?.organizations?.map((organization) => organization.id) ??
+            [],
           groupId: contact?.groupId ?? undefined,
           profileAttributes: (contact?.profileAttributes ??
             []) as CreateContactFormValues["profileAttributes"],
@@ -207,6 +222,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
           signal: "",
           website: "",
           socialLinks: [],
+          organizationIds: [],
           groupId: undefined,
           profileAttributes: [] as CreateContactFormValues["profileAttributes"],
         },
@@ -839,6 +855,70 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                         <FormMessage />
                       </FormItem>
                     )}
+                  />
+                  <FormField
+                    control={typedControl}
+                    name="organizationIds"
+                    render={({ field }) => {
+                      const selectedOrganizationIds = field.value ?? [];
+
+                      return (
+                        <FormItem className="sm:col-span-2 lg:col-span-3">
+                          <FormLabel>Organizations</FormLabel>
+                          <FormDescription>
+                            Assign this contact to one or more organizations.
+                          </FormDescription>
+                          {organizations.length === 0 ? (
+                            <p className="rounded-md border p-3 text-sm text-muted-foreground">
+                              No organizations are available in this team.
+                            </p>
+                          ) : (
+                            <div className="grid gap-3 md:grid-cols-2">
+                              {organizations.map((organization) => (
+                                <label
+                                  key={organization.id}
+                                  className="flex min-w-0 items-start gap-3 rounded-md border p-3"
+                                >
+                                  <Checkbox
+                                    checked={selectedOrganizationIds.includes(
+                                      organization.id,
+                                    )}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        field.onChange(
+                                          Array.from(
+                                            new Set([
+                                              ...selectedOrganizationIds,
+                                              organization.id,
+                                            ]),
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      field.onChange(
+                                        selectedOrganizationIds.filter(
+                                          (id) => id !== organization.id,
+                                        ),
+                                      );
+                                    }}
+                                  />
+                                  <span className="min-w-0">
+                                    <span className="block break-words text-sm font-medium">
+                                      {organization.name || organization.email}
+                                    </span>
+                                    <span className="block break-all text-xs text-muted-foreground">
+                                      {organization.email}
+                                    </span>
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
                   />
                 </div>
 

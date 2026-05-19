@@ -206,6 +206,7 @@ export const createContactSchema = z.object({
   signal: optionalText(z.string()),
   website: optionalWebsite,
   socialLinks: z.array(contactSocialLinkSchema).default([]),
+  organizationIds: z.array(z.uuid("Organization id must be a valid UUID")).default([]),
   profileAttributes: z.array(contactAttributeSchema).default([]),
   groupId: z.preprocess(
     preprocessEmptyString,
@@ -245,6 +246,9 @@ export const updateContactSchema = z.object({
   signal: optionalText(z.string()),
   website: optionalWebsite,
   socialLinks: z.array(contactSocialLinkSchema).optional(),
+  organizationIds: z
+    .array(z.uuid("Organization id must be a valid UUID"))
+    .optional(),
   profileAttributes: z.array(contactAttributeSchema).optional(),
   groupId: z.preprocess(
     preprocessEmptyString,

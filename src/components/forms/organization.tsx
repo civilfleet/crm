@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import useSWR from "swr";
@@ -18,6 +19,7 @@ import {
   createOrganizationSchema,
   updateOrganizationSchema,
 } from "@/validations/organizations";
+import type { AppModule } from "@/types";
 import FileUpload from "../file-uploader";
 import Alert from "../helper/alert";
 import ButtonControl from "../helper/button-control";
@@ -101,6 +103,8 @@ type Organization = {
 };
 
 export default function OrganizationForm({ data }: { data: Organization }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const { toast } = useToast();
   const [isUpdate] = useState(!!data?.email);
   const schema = isUpdate ? updateOrganizationSchema : createOrganizationSchema;
@@ -115,9 +119,15 @@ export default function OrganizationForm({ data }: { data: Organization }) {
     teamId ? `/api/contacts?teamId=${teamId}&query=` : null,
     fetcher,
   );
+  const { data: modulesData } = useSWR(
+    teamId ? `/api/teams/${teamId}/modules` : null,
+    fetcher,
+  );
 
   const orgTypes: OrganizationType[] = orgTypesData?.data || [];
   const contacts: ContactOption[] = contactsData?.data || [];
+  const teamModules: AppModule[] = modulesData?.data || [];
+  const hasFundingModule = teamId ? teamModules.includes("FUNDING") : true;
 
   const orgTypeMap = useMemo(() => {
     return new Map(orgTypes.map((type) => [type.id, type]));
@@ -218,7 +228,7 @@ export default function OrganizationForm({ data }: { data: Organization }) {
         });
         return;
       }
-      await response.json();
+      const responseData = await response.json();
       toast({
         title: "Success",
         description: isUpdate
@@ -226,6 +236,10 @@ export default function OrganizationForm({ data }: { data: Organization }) {
           : "Organization information created",
         variant: "default",
       });
+      const organizationId = responseData?.data?.id;
+      if (!isUpdate && organizationId) {
+        router.push(`${pathname.replace(/\/create\/?$/, "")}/${organizationId}`);
+      }
     } catch (e) {
       toast({
         title: "Error",
@@ -262,7 +276,7 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                   control={form.control}
                   name="orgTypeId"
                   render={({ field }) => (
-                    <div>
+                    <FormItem>
                       <Select
                         onValueChange={(value) =>
                           field.onChange(value === "none" ? "" : value)
@@ -281,7 +295,8 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
+                      <FormMessage />
+                    </FormItem>
                   )}
                 />
                 <FormInputControl
@@ -295,7 +310,7 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                   control={form.control}
                   name="contactPersonId"
                   render={({ field }) => (
-                    <div>
+                    <FormItem>
                       <Select
                         onValueChange={(value) =>
                           field.onChange(value === "none" ? "" : value)
@@ -316,7 +331,8 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
+                      <FormMessage />
+                    </FormItem>
                   )}
                 />
                 <FormInputControl
@@ -502,144 +518,160 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                   </div>
                 </div>
               )}
-              <div>
-                <h4 className="text-lg font-semibold">Tax Details</h4>
-                <CardDescription>
-                  Please attached your tax exemption certificate
-                </CardDescription>
-                <hr />
-              </div>
+              {hasFundingModule ? (
+                <>
+                  <div>
+                    <h4 className="text-lg font-semibold">Tax Details</h4>
+                    <CardDescription>
+                      Please attached your tax exemption certificate
+                    </CardDescription>
+                    <hr />
+                  </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <FormInputControl
-                  form={form}
-                  name="taxID"
-                  placeholder="Tax ID"
-                  isFilled={isFieldFilled(data?.taxID)}
-                />
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <FormInputControl
+                      form={form}
+                      name="taxID"
+                      placeholder="Tax ID"
+                      isFilled={isFieldFilled(data?.taxID)}
+                    />
 
-                <FileUpload
-                  placeholder="Tax exemption certificate"
-                  name="taxExemptionCertificate"
-                  data={
-                    data?.Files?.find(
-                      (file) => file.type === "TAX_EXEMPTION_CERTIFICATE",
-                    )?.id as string
-                  }
-                  onFileUpload={(url) =>
-                    form.setValue("taxExemptionCertificate", url)
-                  }
-                  error={
-                    form?.formState?.errors?.taxExemptionCertificate
-                      ? (form.formState.errors?.taxExemptionCertificate
-                          ?.message as string)
-                      : ""
-                  }
-                />
-              </div>
+                    <FileUpload
+                      placeholder="Tax exemption certificate"
+                      name="taxExemptionCertificate"
+                      data={
+                        data?.Files?.find(
+                          (file) =>
+                            file.type === "TAX_EXEMPTION_CERTIFICATE",
+                        )?.id as string
+                      }
+                      onFileUpload={(url) =>
+                        form.setValue("taxExemptionCertificate", url)
+                      }
+                      error={
+                        form?.formState?.errors?.taxExemptionCertificate
+                          ? (form.formState.errors?.taxExemptionCertificate
+                              ?.message as string)
+                          : ""
+                      }
+                    />
+                  </div>
 
-              <div>
-                <h4 className="text-lg font-semibold">Bank Details</h4>
-                <hr />
-              </div>
+                  <div>
+                    <h4 className="text-lg font-semibold">Bank Details</h4>
+                    <hr />
+                  </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <FormInputControl
-                  form={form}
-                  name="bankDetails.bankName"
-                  placeholder="Bank name"
-                  isFilled={isFieldFilled(data?.bankDetails?.bankName)}
-                />
-                <FormInputControl
-                  form={form}
-                  name="bankDetails.accountHolder"
-                  placeholder="Account holder"
-                  isFilled={isFieldFilled(data?.bankDetails?.accountHolder)}
-                />
-                <FormInputControl
-                  form={form}
-                  name="bankDetails.iban"
-                  placeholder="IBAN"
-                  isFilled={isFieldFilled(data?.bankDetails?.iban)}
-                />
-                <FormInputControl
-                  form={form}
-                  name="bankDetails.bic"
-                  placeholder="SWIFT"
-                  isFilled={isFieldFilled(data?.bankDetails?.bic)}
-                />
-              </div>
-              <h4 className="text-lg font-semibold">
-                User Person
-                <hr />
-              </h4>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <FormInputControl
-                  form={form}
-                  name="user.name"
-                  placeholder="User person name"
-                  isFilled={isFieldFilled(data?.user?.name)}
-                />
-                <FormInputControl
-                  form={form}
-                  disabled={!!data?.email}
-                  name="user.email"
-                  placeholder="User person email"
-                  isFilled={isFieldFilled(data?.user?.email)}
-                />
-                <FormInputControl
-                  form={form}
-                  name="user.phone"
-                  placeholder="User person phone"
-                  isFilled={isFieldFilled(data?.user?.phone)}
-                />
-              </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <FormInputControl
+                      form={form}
+                      name="bankDetails.bankName"
+                      placeholder="Bank name"
+                      isFilled={isFieldFilled(data?.bankDetails?.bankName)}
+                    />
+                    <FormInputControl
+                      form={form}
+                      name="bankDetails.accountHolder"
+                      placeholder="Account holder"
+                      isFilled={isFieldFilled(
+                        data?.bankDetails?.accountHolder,
+                      )}
+                    />
+                    <FormInputControl
+                      form={form}
+                      name="bankDetails.iban"
+                      placeholder="IBAN"
+                      isFilled={isFieldFilled(data?.bankDetails?.iban)}
+                    />
+                    <FormInputControl
+                      form={form}
+                      name="bankDetails.bic"
+                      placeholder="SWIFT"
+                      isFilled={isFieldFilled(data?.bankDetails?.bic)}
+                    />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold">
+                      Portal login user
+                    </h4>
+                    <CardDescription>
+                      Optional. Use this only when someone from the organization
+                      should be able to sign in.
+                    </CardDescription>
+                    <hr />
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <FormInputControl
+                      form={form}
+                      name="user.name"
+                      placeholder="Login user name"
+                      isFilled={isFieldFilled(data?.user?.name)}
+                    />
+                    <FormInputControl
+                      form={form}
+                      disabled={!!data?.email}
+                      name="user.email"
+                      placeholder="Login user email"
+                      isFilled={isFieldFilled(data?.user?.email)}
+                    />
+                    <FormInputControl
+                      form={form}
+                      name="user.phone"
+                      placeholder="Login user phone"
+                      isFilled={isFieldFilled(data?.user?.phone)}
+                    />
+                  </div>
 
-              <div>
-                <h4 className="text-lg font-semibold">
-                  Article of Association & Logo
-                </h4>
-                <CardDescription>
-                  Please attached articles of association and logo
-                </CardDescription>
-                <hr />
-              </div>
+                  <div>
+                    <h4 className="text-lg font-semibold">
+                      Article of Association & Logo
+                    </h4>
+                    <CardDescription>
+                      Please attached articles of association and logo
+                    </CardDescription>
+                    <hr />
+                  </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <FileUpload
-                    placeholder="Article of Association"
-                    name="articlesOfAssociation"
-                    data={
-                      data?.Files?.find(
-                        (file) => file.type === "ARTICLES_OF_ASSOCIATION",
-                      )?.id
-                    }
-                    error={
-                      form?.formState?.errors?.articlesOfAssociation
-                        ? (form.formState.errors?.articlesOfAssociation
-                            ?.message as string)
-                        : ""
-                    }
-                    onFileUpload={(url) =>
-                      form.setValue("articlesOfAssociation", url)
-                    }
-                  />
-                </div>
-                <div>
-                  <FileUpload
-                    placeholder="Logo of your Organization"
-                    name="logo"
-                    data={data?.Files?.find((file) => file.type === "LOGO")?.id}
-                    error={
-                      form?.formState?.errors?.logo
-                        ? (form.formState.errors?.logo?.message as string)
-                        : ""
-                    }
-                    onFileUpload={(url) => form.setValue("logo", url)}
-                  />
-                </div>
-              </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <FileUpload
+                        placeholder="Article of Association"
+                        name="articlesOfAssociation"
+                        data={
+                          data?.Files?.find(
+                            (file) =>
+                              file.type === "ARTICLES_OF_ASSOCIATION",
+                          )?.id
+                        }
+                        error={
+                          form?.formState?.errors?.articlesOfAssociation
+                            ? (form.formState.errors?.articlesOfAssociation
+                                ?.message as string)
+                            : ""
+                        }
+                        onFileUpload={(url) =>
+                          form.setValue("articlesOfAssociation", url)
+                        }
+                      />
+                    </div>
+                    <div>
+                      <FileUpload
+                        placeholder="Logo of your Organization"
+                        name="logo"
+                        data={
+                          data?.Files?.find((file) => file.type === "LOGO")?.id
+                        }
+                        error={
+                          form?.formState?.errors?.logo
+                            ? (form.formState.errors?.logo?.message as string)
+                            : ""
+                        }
+                        onFileUpload={(url) => form.setValue("logo", url)}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : null}
 
               {isUpdate ? (
                 <Alert
