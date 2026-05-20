@@ -476,6 +476,7 @@ export interface Organization {
   bankDetailsId?: string;
   managers: Manager[];
   users: User[];
+  contacts?: Array<Pick<Contact, "id" | "teamId" | "name" | "email" | "phone">>;
   teamId?: string;
   team?: Teams;
   bankDetails?: BankDetails;

@@ -160,6 +160,7 @@ export default function OrganizationTable({
   );
   const loading = isLoading || !data;
   const totalOrganizations = Number(data?.total ?? data?.data?.length ?? 0);
+  const organizations = Array.isArray(data?.data) ? data.data : [];
 
   if (error) {
     toast({
@@ -412,7 +413,7 @@ export default function OrganizationTable({
           <div className="w-full overflow-x-auto">
             <DataTable
               columns={columns(mutate, resolvedBasePath)}
-              data={data?.data}
+              data={organizations}
               initialView="table"
               serverPagination={{
                 page,

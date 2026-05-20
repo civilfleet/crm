@@ -109,7 +109,11 @@ export function DataTable<TData, TValue>({
     pageIndex: 0,
     pageSize: 10,
   });
-  const previousDataRef = React.useRef(data);
+  const tableData = React.useMemo(
+    () => (Array.isArray(data) ? data : []),
+    [data],
+  );
+  const previousDataRef = React.useRef(tableData);
   const isServerPagination = Boolean(serverPagination);
   const paginationState = isServerPagination
     ? {
@@ -172,7 +176,7 @@ export function DataTable<TData, TValue>({
   );
 
   const table = useReactTable({
-    data,
+    data: tableData,
     columns: enhancedColumns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -218,17 +222,17 @@ export function DataTable<TData, TValue>({
     if (isServerPagination) {
       return;
     }
-    if (previousDataRef.current === data) {
+    if (previousDataRef.current === tableData) {
       return;
     }
-    previousDataRef.current = data;
+    previousDataRef.current = tableData;
     setPagination((previous) => {
       if (previous.pageIndex === 0) {
         return previous;
       }
       return { ...previous, pageIndex: 0 };
     });
-  });
+  }, [isServerPagination, tableData]);
 
   React.useEffect(() => {
     if (isServerPagination) {
@@ -254,13 +258,13 @@ export function DataTable<TData, TValue>({
     : table.getPageCount();
   const canPaginate = pageCount > 1;
   const currentPageRows = isServerPagination
-    ? data.length
+    ? tableData.length
     : table.getRowModel().rows.length;
   const currentFrom = paginationState.pageIndex * paginationState.pageSize + 1;
   const currentTo = currentFrom + currentPageRows - 1;
   const totalItems = isServerPagination
     ? (serverPagination?.total ?? 0)
-    : data.length;
+    : tableData.length;
 
   return (
     <div className="w-full">
@@ -395,7 +399,7 @@ export function DataTable<TData, TValue>({
       ) : effectiveView === "map" ? (
         <div className="p-3">
           {renderMap ? (
-            renderMap(data)
+            renderMap(tableData)
           ) : (
             <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
               Map view is unavailable.

@@ -13,6 +13,7 @@ import {
   MapPin,
   Phone,
   User,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -43,7 +44,13 @@ import {
 import type { FundingRequest, Organization } from "@/types";
 import DetailItem from "./helper/detail-item";
 
-type ExpandableSection = "profile" | "banking" | "files" | "users" | "funding";
+type ExpandableSection =
+  | "profile"
+  | "banking"
+  | "files"
+  | "users"
+  | "contacts"
+  | "funding";
 
 export default function OrganizationDetails({
   organization,
@@ -54,6 +61,7 @@ export default function OrganizationDetails({
 }) {
   const router = useRouter();
   const users = organization?.users || [];
+  const contacts = organization?.contacts || [];
   const [expandedSections, setExpandedSections] = useState<ExpandableSection[]>(
     ["profile"],
   );
@@ -426,6 +434,105 @@ export default function OrganizationDetails({
                               </span>
                               <span className="sm:hidden">Call</span>
                             </a>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+      )}
+      {contacts.length > 0 && (
+        <Collapsible
+          open={isSectionExpanded("contacts")}
+          onOpenChange={() => toggleSection("contacts")}
+          className="w-full"
+        >
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 py-4 px-6">
+              <div>
+                <CardTitle className="text-xl font-semibold">
+                  Linked Contacts{" "}
+                  <Badge variant="outline">{contacts.length}</Badge>
+                </CardTitle>
+                <CardDescription>
+                  People linked to this organization from the CRM
+                </CardDescription>
+              </div>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  {isSectionExpanded("contacts") ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </Button>
+              </CollapsibleTrigger>
+            </CardHeader>
+
+            <CollapsibleContent>
+              <CardContent className="px-6 pb-6">
+                <div className="border rounded-md">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead>Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {contacts.map((contact) => (
+                        <TableRow
+                          key={contact.id}
+                          className="hover:bg-muted/40"
+                        >
+                          <TableCell className="font-medium">
+                            <div className="flex items-center">
+                              <Users className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                              {contact.name}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {contact.email ? (
+                              <a
+                                href={`mailto:${contact.email}`}
+                                className="text-primary hover:underline"
+                              >
+                                {contact.email}
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {contact.phone ? (
+                              <a
+                                href={`tel:${contact.phone}`}
+                                className="text-primary hover:underline"
+                              >
+                                {contact.phone}
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() =>
+                                router.push(
+                                  `/teams/${contact.teamId}/crm/contacts/${contact.id}`,
+                                )
+                              }
+                            >
+                              View
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))}
