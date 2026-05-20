@@ -1,6 +1,6 @@
 "use client";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Loader2, Mail, Plus, Send, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -9,6 +9,7 @@ import useSWR from "swr";
 import { z } from "zod";
 import { DataTable } from "@/components/data-table";
 import TableLoadingState from "@/components/loading/table-loading-state";
+import { RichEmailEditor } from "@/components/rich-email-editor";
 import {
   columns,
   type OrganizationColumns,
@@ -22,8 +23,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -59,6 +69,37 @@ type FieldFilter = {
   value?: string;
 };
 
+type SenderLabelMode = "default" | "user";
+
+type LinkedContactRecipient = {
+  id: string;
+  name: string;
+  email?: string | null;
+};
+
+const getLinkedContactRecipients = (organizations: OrganizationColumns[]) => {
+  const recipientMap = new Map<string, LinkedContactRecipient>();
+
+  organizations.forEach((organization) => {
+    organization.contacts?.forEach((contact) => {
+      if (!recipientMap.has(contact.id)) {
+        recipientMap.set(contact.id, contact);
+      }
+    });
+  });
+
+  return Array.from(recipientMap.values());
+};
+
+const getSelectedOrganizationTeamIds = (organizations: OrganizationColumns[]) =>
+  Array.from(
+    new Set(
+      organizations
+        .map((organization) => organization.team?.id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  );
+
 export default function OrganizationTable({
   teamId,
   basePath,
@@ -68,6 +109,15 @@ export default function OrganizationTable({
   const isAdmin = pathname.startsWith("/admin");
   const [fieldFilters, setFieldFilters] = useState<FieldFilter[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [emailOrganizations, setEmailOrganizations] = useState<
+    OrganizationColumns[]
+  >([]);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailSenderLabelMode, setEmailSenderLabelMode] =
+    useState<SenderLabelMode>("default");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const resolvedBasePath = (basePath ?? pathname).replace(/\/$/, "");
@@ -237,6 +287,84 @@ export default function OrganizationTable({
       });
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const openEmailDialog = (selectedRows: OrganizationColumns[]) => {
+    setEmailOrganizations(selectedRows);
+    setIsEmailDialogOpen(true);
+  };
+
+  const handleSendEmail = async (clearSelection: () => void) => {
+    const recipients = getLinkedContactRecipients(emailOrganizations);
+    const recipientsWithEmail = recipients.filter((contact) => contact.email);
+    const contactIds = recipientsWithEmail.map((contact) => contact.id);
+    const selectedTeamIds = getSelectedOrganizationTeamIds(emailOrganizations);
+    const selectedTeamId = selectedTeamIds[0];
+
+    if (
+      !selectedTeamId ||
+      selectedTeamIds.length !== 1 ||
+      contactIds.length === 0
+    ) {
+      return;
+    }
+
+    setIsSendingEmail(true);
+
+    try {
+      const response = await fetch(
+        `/api/teams/${selectedTeamId}/integrations/scaleway-email/send`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contactIds,
+            subject: emailSubject,
+            html: emailBody,
+            senderLabelMode: emailSenderLabelMode,
+          }),
+        },
+      );
+
+      const json = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(json?.error || "Failed to send email");
+      }
+
+      const result = json.data as {
+        requested: number;
+        skipped: number;
+      };
+
+      toast({
+        title: "Email batch queued",
+        description: `${result.requested - result.skipped} email${
+          result.requested - result.skipped === 1 ? "" : "s"
+        } queued for worker delivery. ${result.skipped} skipped.`,
+      });
+
+      setIsEmailDialogOpen(false);
+      setEmailOrganizations([]);
+      setEmailSubject("");
+      setEmailBody("");
+      setEmailSenderLabelMode("default");
+      clearSelection();
+      await mutate();
+    } catch (sendError) {
+      toast({
+        title: "Unable to send email",
+        description:
+          sendError instanceof Error
+            ? sendError.message
+            : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingEmail(false);
     }
   };
 
@@ -432,6 +560,34 @@ export default function OrganizationTable({
                     {selectedRows.length} selected
                   </span>
                   <div className="flex items-center gap-2">
+                    {(() => {
+                      const typedRows = selectedRows as OrganizationColumns[];
+                      const selectedTeamIds =
+                        getSelectedOrganizationTeamIds(typedRows);
+                      const recipients = getLinkedContactRecipients(typedRows);
+                      const recipientsWithEmail = recipients.filter(
+                        (contact) => contact.email,
+                      );
+                      const emailDisabled =
+                        isDeleting ||
+                        isSendingEmail ||
+                        selectedRows.length === 0 ||
+                        selectedTeamIds.length !== 1 ||
+                        recipientsWithEmail.length === 0;
+
+                      return (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={emailDisabled}
+                          onClick={() => openEmailDialog(typedRows)}
+                        >
+                          <Mail className="mr-2 h-4 w-4" />
+                          Email linked contacts
+                        </Button>
+                      );
+                    })()}
                     <Button
                       type="button"
                       variant="destructive"
@@ -463,6 +619,19 @@ export default function OrganizationTable({
                       Clear
                     </Button>
                   </div>
+                  <OrganizationContactsEmailDialog
+                    open={isEmailDialogOpen}
+                    organizations={emailOrganizations}
+                    subject={emailSubject}
+                    body={emailBody}
+                    senderLabelMode={emailSenderLabelMode}
+                    isSending={isSendingEmail}
+                    onOpenChange={setIsEmailDialogOpen}
+                    onSubjectChange={setEmailSubject}
+                    onBodyChange={setEmailBody}
+                    onSenderLabelModeChange={setEmailSenderLabelMode}
+                    onSend={() => handleSendEmail(clearSelection)}
+                  />
                 </div>
               )}
               renderCard={(org: OrganizationColumns) => (
@@ -553,3 +722,147 @@ export default function OrganizationTable({
     </div>
   );
 }
+
+type OrganizationContactsEmailDialogProps = {
+  open: boolean;
+  organizations: OrganizationColumns[];
+  subject: string;
+  body: string;
+  senderLabelMode: SenderLabelMode;
+  isSending: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubjectChange: (value: string) => void;
+  onBodyChange: (value: string) => void;
+  onSenderLabelModeChange: (value: SenderLabelMode) => void;
+  onSend: () => void;
+};
+
+const OrganizationContactsEmailDialog = ({
+  open,
+  organizations,
+  subject,
+  body,
+  senderLabelMode,
+  isSending,
+  onOpenChange,
+  onSubjectChange,
+  onBodyChange,
+  onSenderLabelModeChange,
+  onSend,
+}: OrganizationContactsEmailDialogProps) => {
+  const recipients = getLinkedContactRecipients(organizations);
+  const recipientsWithEmail = recipients.filter((contact) => contact.email);
+  const missingEmailCount = recipients.length - recipientsWithEmail.length;
+  const selectedTeamIds = getSelectedOrganizationTeamIds(organizations);
+  const canSend =
+    selectedTeamIds.length === 1 &&
+    recipientsWithEmail.length > 0 &&
+    subject.trim().length > 0 &&
+    body.trim().length > 0 &&
+    !isSending;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Email linked contacts</DialogTitle>
+          <DialogDescription>
+            Sends one email per linked contact through the Scaleway
+            Transactional Email integration.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+            {organizations.length} organization
+            {organizations.length === 1 ? "" : "s"} selected.{" "}
+            {recipientsWithEmail.length} linked contact
+            {recipientsWithEmail.length === 1 ? "" : "s"} with email will
+            receive this message
+            {missingEmailCount > 0
+              ? `, ${missingEmailCount} linked contact${
+                  missingEmailCount === 1 ? "" : "s"
+                } without email will be skipped`
+              : ""}
+            .
+          </div>
+
+          {selectedTeamIds.length > 1 ? (
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+              Select organizations from one team at a time to send email.
+            </div>
+          ) : null}
+
+          <div className="space-y-2">
+            <Label htmlFor="organization-email-sender">Sender</Label>
+            <Select
+              value={senderLabelMode}
+              onValueChange={(value) =>
+                onSenderLabelModeChange(value as SenderLabelMode)
+              }
+              disabled={isSending}
+            >
+              <SelectTrigger id="organization-email-sender">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Default sender label</SelectItem>
+                <SelectItem value="user">My user name</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              The sender address stays the default address configured for
+              Transactional Email.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="organization-email-subject">Subject</Label>
+            <Input
+              id="organization-email-subject"
+              value={subject}
+              onChange={(event) => onSubjectChange(event.target.value)}
+              disabled={isSending}
+              placeholder="Email subject"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="organization-email-body">Email body</Label>
+            <RichEmailEditor
+              id="organization-email-body"
+              value={body}
+              onChange={onBodyChange}
+              disabled={isSending}
+              previewDescription="Use the toolbar to format the message. Successful sends are logged in each contact's engagement history."
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSending}
+          >
+            Cancel
+          </Button>
+          <Button type="button" onClick={onSend} disabled={!canSend}>
+            {isSending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Send className="mr-2 h-4 w-4" />
+                Send email
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};

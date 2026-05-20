@@ -467,6 +467,52 @@ const getOrganizationByEmail = async (email: string) => {
   }
 };
 
+const organizationListInclude = {
+  bankDetails: true,
+  orgType: true,
+  contactPerson: true,
+  users: true,
+  contacts: {
+    include: {
+      contact: {
+        select: {
+          id: true,
+          teamId: true,
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
+    },
+  },
+  team: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+    },
+  },
+} satisfies Prisma.OrganizationInclude;
+
+const mapOrganizationListItem = <
+  T extends {
+    contacts?: Array<{
+      contact: {
+        id: string;
+        teamId: string;
+        name: string;
+        email: string | null;
+        phone: string | null;
+      };
+    }>;
+  },
+>(
+  organization: T,
+) => ({
+  ...organization,
+  contacts: organization.contacts?.map(({ contact }) => contact) ?? [],
+});
+
 const getOrganizations = async (
   searchQuery: string,
   teamId: string,
@@ -583,44 +629,21 @@ const getOrganizations = async (
   const skip = (page - 1) * pageSize;
 
   if (!pagination) {
-    const data = await prisma.organization.findMany({
+    const organizations = await prisma.organization.findMany({
       where,
-      include: {
-        bankDetails: true,
-        orgType: true,
-        contactPerson: true,
-        users: true,
-        team: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
+      include: organizationListInclude,
       orderBy: {
         createdAt: "desc",
       },
     });
+    const data = organizations.map(mapOrganizationListItem);
     return { data, total: data.length };
   }
 
-  const [data, total] = await Promise.all([
+  const [organizations, total] = await Promise.all([
     prisma.organization.findMany({
       where,
-      include: {
-        bankDetails: true,
-        orgType: true,
-        contactPerson: true,
-        users: true,
-        team: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-      },
+      include: organizationListInclude,
       orderBy: {
         createdAt: "desc",
       },
@@ -629,6 +652,7 @@ const getOrganizations = async (
     }),
     prisma.organization.count({ where }),
   ]);
+  const data = organizations.map(mapOrganizationListItem);
 
   return { data, total };
 };

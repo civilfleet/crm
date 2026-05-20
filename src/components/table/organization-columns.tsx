@@ -30,6 +30,13 @@ export type OrganizationColumns = {
     name?: string;
     email?: string;
   };
+  contacts?: Array<{
+    id: string;
+    teamId: string;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+  }>;
   user?: {
     email: string;
   };
