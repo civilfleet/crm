@@ -173,10 +173,12 @@
     color: hsl(var(--foreground));
   }
   a:not([class]) {
-    color: hsl(198 100% 17%);
+    color: inherit;
+    text-decoration-line: underline;
+    text-underline-offset: 2px;
   }
   a:not([class]):hover {
-    color: hsl(199 67% 26%);
+    color: inherit;
   }
   [data-slot="card"] {
     box-shadow: 0 8px 26px hsl(199 67% 26% / 0.08);

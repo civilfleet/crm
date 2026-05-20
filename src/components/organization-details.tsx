@@ -414,7 +414,7 @@ export default function OrganizationDetails({
                           <TableCell>
                             <a
                               href={`mailto:${user.email}`}
-                              className="text-primary hover:underline flex items-center"
+                              className="flex items-center text-foreground underline underline-offset-2 hover:text-foreground"
                             >
                               <Mail className="h-3 w-3 mr-2 inline" />
                               <span className="hidden sm:inline">
@@ -426,7 +426,7 @@ export default function OrganizationDetails({
                           <TableCell>
                             <a
                               href={`tel:${user.phone}`}
-                              className="text-primary hover:underline flex items-center"
+                              className="flex items-center text-foreground underline underline-offset-2 hover:text-foreground"
                             >
                               <Phone className="h-3 w-3 mr-2 inline" />
                               <span className="hidden sm:inline">
@@ -501,7 +501,7 @@ export default function OrganizationDetails({
                             {contact.email ? (
                               <a
                                 href={`mailto:${contact.email}`}
-                                className="text-primary hover:underline"
+                                className="text-foreground underline underline-offset-2 hover:text-foreground"
                               >
                                 {contact.email}
                               </a>
@@ -513,7 +513,7 @@ export default function OrganizationDetails({
                             {contact.phone ? (
                               <a
                                 href={`tel:${contact.phone}`}
-                                className="text-primary hover:underline"
+                                className="text-foreground underline underline-offset-2 hover:text-foreground"
                               >
                                 {contact.phone}
                               </a>

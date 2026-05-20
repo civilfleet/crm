@@ -41,7 +41,7 @@ const RegistrantCell = ({
     <div className="flex flex-col">
       <Link
         href={`/teams/${teamId}/crm/contacts/${registration.contactId}`}
-        className="font-medium text-primary hover:underline"
+        className="font-medium text-foreground underline underline-offset-2 hover:text-foreground"
       >
         {displayName}
       </Link>
@@ -62,7 +62,7 @@ const EmailCell = ({ email }: { email: string }) => {
   return (
     <a
       href={`mailto:${email}`}
-      className="text-sm text-primary hover:underline break-all"
+      className="break-all text-sm text-foreground underline underline-offset-2 hover:text-foreground"
     >
       {email}
     </a>
@@ -75,7 +75,10 @@ const PhoneCell = ({ phone }: { phone?: string }) => {
   }
 
   return (
-    <a href={`tel:${phone}`} className="text-sm text-primary hover:underline">
+    <a
+      href={`tel:${phone}`}
+      className="text-sm text-foreground underline underline-offset-2 hover:text-foreground"
+    >
       {phone}
     </a>
   );
@@ -141,7 +144,7 @@ export const renderEventRegistrationCard = (
         {registration.email ? (
           <a
             href={`mailto:${registration.email}`}
-            className="hover:underline break-all"
+            className="break-all text-foreground underline underline-offset-2 hover:text-foreground"
           >
             {registration.email}
           </a>
@@ -152,7 +155,10 @@ export const renderEventRegistrationCard = (
       <div className="text-sm">
         <span className="font-medium">Phone: </span>
         {registration.phone ? (
-          <a href={`tel:${registration.phone}`} className="hover:underline">
+          <a
+            href={`tel:${registration.phone}`}
+            className="text-foreground underline underline-offset-2 hover:text-foreground"
+          >
             {registration.phone}
           </a>
         ) : (

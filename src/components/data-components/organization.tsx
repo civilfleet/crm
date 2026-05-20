@@ -262,7 +262,7 @@ function LinkedContactsOverview({
                       {contact.email ? (
                         <a
                           href={`mailto:${contact.email}`}
-                          className="inline-flex items-center text-primary hover:underline"
+                          className="inline-flex items-center text-foreground underline underline-offset-2 hover:text-foreground"
                         >
                           <Mail className="mr-2 h-3.5 w-3.5" />
                           {contact.email}
@@ -275,7 +275,7 @@ function LinkedContactsOverview({
                       {contact.phone ? (
                         <a
                           href={`tel:${contact.phone}`}
-                          className="inline-flex items-center text-primary hover:underline"
+                          className="inline-flex items-center text-foreground underline underline-offset-2 hover:text-foreground"
                         >
                           <Phone className="mr-2 h-3.5 w-3.5" />
                           {contact.phone}

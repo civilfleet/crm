@@ -43,7 +43,7 @@ export default function MentionText({
         <Link
           key={`${mentionStart}-${mentionEnd}`}
           href={`/teams/${teamId}/users/${mentionedUser.id}`}
-          className="font-medium text-primary underline underline-offset-2"
+          className="font-medium text-foreground underline underline-offset-2 hover:text-foreground"
           title={mentionedUser.email}
         >
           @{mentionedUser.name?.trim() || mentionedUser.email}

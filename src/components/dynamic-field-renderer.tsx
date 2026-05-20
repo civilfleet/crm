@@ -50,7 +50,7 @@ const DynamicFieldRenderer = ({ field, value }: DynamicFieldRendererProps) => {
         return (
           <Link
             href={`mailto:${value}`}
-            className="flex items-center gap-1 text-primary hover:underline"
+            className="flex items-center gap-1 text-foreground underline underline-offset-2 hover:text-foreground"
           >
             <Mail className="h-3 w-3" />
             {String(value)}
@@ -63,7 +63,7 @@ const DynamicFieldRenderer = ({ field, value }: DynamicFieldRendererProps) => {
             href={String(value)}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-primary hover:underline"
+            className="flex items-center gap-1 text-foreground underline underline-offset-2 hover:text-foreground"
           >
             <ExternalLink className="h-3 w-3" />
             {String(value)}
@@ -119,7 +119,7 @@ const DynamicFieldRenderer = ({ field, value }: DynamicFieldRendererProps) => {
               href={value}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 text-primary hover:underline"
+              className="flex items-center gap-1 text-foreground underline underline-offset-2 hover:text-foreground"
             >
               <File className="h-3 w-3" />
               View File
