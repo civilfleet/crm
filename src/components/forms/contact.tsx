@@ -1,14 +1,20 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, PlusCircle, Trash2 } from "lucide-react";
+import {
+  Building2,
+  Loader2,
+  PlusCircle,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import useSWR from "swr";
 import type { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -117,13 +123,17 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [organizationSearch, setOrganizationSearch] = useState("");
+  const [newOrganizationEmail, setNewOrganizationEmail] = useState("");
+  const [isCreatingOrganization, setIsCreatingOrganization] = useState(false);
   const isEditMode = Boolean(contact);
 
   const { data: groupsData } = useSWR(`/api/groups?teamId=${teamId}`, fetcher);
-  const { data: organizationsData } = useSWR(
-    teamId ? `/api/organizations?teamId=${teamId}` : null,
-    fetcher,
-  );
+  const {
+    data: organizationsData,
+    isLoading: organizationsLoading,
+    mutate: mutateOrganizations,
+  } = useSWR(teamId ? `/api/organizations?teamId=${teamId}` : null, fetcher);
   const { data: attributeKeysData, isLoading: attributeKeysLoading } = useSWR(
     teamId ? `/api/contacts/attribute-keys?teamId=${teamId}` : null,
     fetcher,
@@ -135,6 +145,16 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
 
   const groups: Group[] = groupsData?.data || [];
   const organizations: OrganizationOption[] = organizationsData?.data || [];
+  const organizationOptions = useMemo(
+    () =>
+      organizations
+        .map((organization) => ({
+          ...organization,
+          label: organization.name || organization.email,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [organizations],
+  );
   const allowedSubmodules: ContactSubmodule[] = submodulesData?.data || [];
   const canAccessSubmodule = useCallback(
     (submodule: ContactSubmodule) => allowedSubmodules.includes(submodule),
@@ -326,6 +346,78 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
       platform: "",
       handle: "",
     } as CreateContactFormValues["socialLinks"][number]);
+  };
+
+  const createOrganizationFromContact = async (name: string) => {
+    const trimmedName = name.trim();
+    const trimmedEmail = newOrganizationEmail.trim().toLowerCase();
+
+    if (!trimmedName || !trimmedEmail) {
+      toast({
+        title: "Organization name and email are required",
+        description: "Add an email address before creating the organization.",
+        variant: "destructive",
+      });
+      return null;
+    }
+
+    setIsCreatingOrganization(true);
+
+    try {
+      const response = await fetch("/api/organizations/quick-create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          teamId,
+          name: trimmedName,
+          email: trimmedEmail,
+        }),
+      });
+
+      const body = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(body.error || "Failed to create organization");
+      }
+
+      const createdOrganization = body.data as OrganizationOption;
+
+      await mutateOrganizations(
+        (current: typeof organizationsData) =>
+          current
+            ? {
+                ...current,
+                data: [createdOrganization, ...(current.data ?? [])],
+                total: Number(current.total ?? 0) + 1,
+              }
+            : current,
+        { revalidate: false },
+      );
+
+      setOrganizationSearch("");
+      setNewOrganizationEmail("");
+
+      toast({
+        title: "Organization created",
+        description: `${createdOrganization.name || createdOrganization.email} is ready to link.`,
+      });
+
+      return createdOrganization;
+    } catch (error) {
+      toast({
+        title: "Unable to create organization",
+        description:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+      return null;
+    } finally {
+      setIsCreatingOrganization(false);
+    }
   };
 
   const onSubmit = async (
@@ -861,6 +953,48 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                     name="organizationIds"
                     render={({ field }) => {
                       const selectedOrganizationIds = field.value ?? [];
+                      const selectedOrganizations = selectedOrganizationIds.map(
+                        (id) =>
+                          organizationOptions.find(
+                            (organization) => organization.id === id,
+                          ) ?? {
+                            id,
+                            name: null,
+                            email: "",
+                            label: "Selected organization",
+                          },
+                      );
+                      const normalizedSearch = organizationSearch
+                        .trim()
+                        .toLowerCase();
+                      const filteredOrganizations = organizationOptions.filter(
+                        (organization) => {
+                          if (
+                            selectedOrganizationIds.includes(organization.id)
+                          ) {
+                            return false;
+                          }
+
+                          if (!normalizedSearch) {
+                            return true;
+                          }
+
+                          return (
+                            organization.label
+                              .toLowerCase()
+                              .includes(normalizedSearch) ||
+                            organization.email
+                              .toLowerCase()
+                              .includes(normalizedSearch)
+                          );
+                        },
+                      );
+                      const exactOrganizationExists = organizationOptions.some(
+                        (organization) =>
+                          organization.label.toLowerCase() ===
+                            normalizedSearch ||
+                          organization.email.toLowerCase() === normalizedSearch,
+                      );
 
                       return (
                         <FormItem className="sm:col-span-2 lg:col-span-3">
@@ -868,23 +1002,64 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                           <FormDescription>
                             Assign this contact to one or more organizations.
                           </FormDescription>
-                          {organizations.length === 0 ? (
-                            <p className="rounded-md border p-3 text-sm text-muted-foreground">
-                              No organizations are available in this team.
-                            </p>
-                          ) : (
-                            <div className="grid gap-3 md:grid-cols-2">
-                              {organizations.map((organization) => (
-                                <label
-                                  key={organization.id}
-                                  className="flex min-w-0 items-start gap-3 rounded-md border p-3"
-                                >
-                                  <Checkbox
-                                    checked={selectedOrganizationIds.includes(
-                                      organization.id,
-                                    )}
-                                    onCheckedChange={(checked) => {
-                                      if (checked) {
+                          <div className="space-y-3 rounded-md border p-3">
+                            {selectedOrganizations.length > 0 && (
+                              <div className="flex flex-wrap gap-2">
+                                {selectedOrganizations.map((organization) => (
+                                  <span
+                                    key={organization.id}
+                                    className="inline-flex max-w-full items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1 text-sm"
+                                  >
+                                    <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                    <span className="truncate">
+                                      {organization.label}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      aria-label={`Remove ${organization.label}`}
+                                      className="rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                                      onClick={() =>
+                                        field.onChange(
+                                          selectedOrganizationIds.filter(
+                                            (id) => id !== organization.id,
+                                          ),
+                                        )
+                                      }
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            <div className="relative">
+                              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                              <Input
+                                value={organizationSearch}
+                                onChange={(event) =>
+                                  setOrganizationSearch(event.target.value)
+                                }
+                                placeholder="Search organizations by name or email"
+                                className="pl-9"
+                              />
+                            </div>
+
+                            <div className="max-h-56 overflow-y-auto rounded-md border bg-background">
+                              {organizationsLoading ? (
+                                <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Loading organizations
+                                </div>
+                              ) : filteredOrganizations.length > 0 ? (
+                                filteredOrganizations
+                                  .slice(0, 20)
+                                  .map((organization) => (
+                                    <button
+                                      key={organization.id}
+                                      type="button"
+                                      className="flex w-full min-w-0 items-center justify-between gap-3 border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted/60"
+                                      onClick={() =>
                                         field.onChange(
                                           Array.from(
                                             new Set([
@@ -892,29 +1067,90 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                                               organization.id,
                                             ]),
                                           ),
+                                        )
+                                      }
+                                    >
+                                      <span className="min-w-0">
+                                        <span className="block truncate font-medium">
+                                          {organization.label}
+                                        </span>
+                                        <span className="block truncate text-xs text-muted-foreground">
+                                          {organization.email}
+                                        </span>
+                                      </span>
+                                      <PlusCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                    </button>
+                                  ))
+                              ) : (
+                                <div className="p-3 text-sm text-muted-foreground">
+                                  No organizations found.
+                                </div>
+                              )}
+                            </div>
+
+                            {normalizedSearch && !exactOrganizationExists && (
+                              <div className="rounded-md border border-dashed p-3">
+                                <div className="mb-3">
+                                  <p className="text-sm font-medium">
+                                    Create &quot;{organizationSearch.trim()}
+                                    &quot;
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Add an email address, then link the new
+                                    organization to this contact.
+                                  </p>
+                                </div>
+                                <div className="flex flex-col gap-2 sm:flex-row">
+                                  <Input
+                                    type="email"
+                                    value={newOrganizationEmail}
+                                    onChange={(event) =>
+                                      setNewOrganizationEmail(
+                                        event.target.value,
+                                      )
+                                    }
+                                    placeholder="organization@example.org"
+                                  />
+                                  <Button
+                                    type="button"
+                                    className="shrink-0"
+                                    disabled={isCreatingOrganization}
+                                    onClick={async () => {
+                                      const created =
+                                        await createOrganizationFromContact(
+                                          organizationSearch,
                                         );
+
+                                      if (!created) {
                                         return;
                                       }
 
                                       field.onChange(
-                                        selectedOrganizationIds.filter(
-                                          (id) => id !== organization.id,
+                                        Array.from(
+                                          new Set([
+                                            ...selectedOrganizationIds,
+                                            created.id,
+                                          ]),
                                         ),
                                       );
                                     }}
-                                  />
-                                  <span className="min-w-0">
-                                    <span className="block break-words text-sm font-medium">
-                                      {organization.name || organization.email}
-                                    </span>
-                                    <span className="block break-all text-xs text-muted-foreground">
-                                      {organization.email}
-                                    </span>
-                                  </span>
-                                </label>
-                              ))}
-                            </div>
-                          )}
+                                  >
+                                    {isCreatingOrganization ? (
+                                      <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Creating
+                                      </>
+                                    ) : (
+                                      <>
+                                        <PlusCircle className="mr-2 h-4 w-4" />
+                                        Create
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                           <FormMessage />
                         </FormItem>
                       );

@@ -390,9 +390,31 @@ const getOrganizationById = async (id: string) => {
           country: true,
         },
       },
+      contacts: {
+        include: {
+          contact: {
+            select: {
+              id: true,
+              teamId: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
+        },
+        orderBy: {
+          contact: {
+            name: "asc",
+          },
+        },
+      },
     },
   });
-  return { ...organization, user: organization?.users[0] };
+  return {
+    ...organization,
+    contacts: organization?.contacts.map(({ contact }) => contact) ?? [],
+    user: organization?.users[0],
+  };
 };
 
 const getOrganizationByEmail = async (email: string) => {
