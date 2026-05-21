@@ -36,21 +36,40 @@ services:
 
   seaweedfs-init:
     image: amazon/aws-cli:latest
-    entrypoint: [ "/bin/sh", "-c" ]
-    command: >
-      until aws --endpoint-url=http://seaweedfs:8333 s3api list-buckets
-      >/dev/null 2>&1; do sleep 1; done; aws
-      --endpoint-url=http://seaweedfs:8333 s3api head-bucket --bucket
-      "$${NEXT_AWS_S3_BUCKET_NAME}" >/dev/null 2>&1 || aws
-      --endpoint-url=http://seaweedfs:8333 s3api create-bucket --bucket
-      "$${NEXT_AWS_S3_BUCKET_NAME}"
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        until aws --endpoint-url=http://seaweedfs:8333 s3api list-buckets >/dev/null 2>&1; do
+          sleep 1
+        done
+        aws --endpoint-url=http://seaweedfs:8333 s3api head-bucket --bucket "$${NEXT_AWS_S3_BUCKET_NAME}" >/dev/null 2>&1 || aws --endpoint-url=http://seaweedfs:8333 s3api create-bucket --bucket "$${NEXT_AWS_S3_BUCKET_NAME}"
+    command: []
     environment:
-      AWS_ACCESS_KEY_ID: ${NEXT_AWS_S3_ACCESS_KEY:-local}
-      AWS_SECRET_ACCESS_KEY: ${NEXT_AWS_S3_ACCESS_SECRET:-local-secret}
-      AWS_DEFAULT_REGION: ${NEXT_AWS_S3_BUCKET_REGION:-us-east-1}
-      NEXT_AWS_S3_BUCKET_NAME: ${NEXT_AWS_S3_BUCKET_NAME:-crm}
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local-secret
+      AWS_DEFAULT_REGION: us-east-1
+      NEXT_AWS_S3_BUCKET_NAME: ${SEAWEEDFS_BUCKET_NAME:-crm}
     depends_on:
       - seaweedfs
+
+  seaweedfs-cors:
+    image: crm-tools:local
+    build:
+      context: .
+      target: runner-tools
+    command: [ "node", "--import", "tsx", "scripts/manage-s3-cors.ts", "apply" ]
+    environment:
+      <<: *app-env
+      S3_CORS_ALLOWED_ORIGINS: ${S3_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      S3_CORS_ALLOWED_METHODS: ${S3_CORS_ALLOWED_METHODS:-GET,HEAD,PUT}
+      S3_CORS_ALLOWED_HEADERS: "${S3_CORS_ALLOWED_HEADERS:-*}"
+      S3_CORS_EXPOSE_HEADERS: ${S3_CORS_EXPOSE_HEADERS:-ETag}
+      S3_CORS_MAX_AGE_SECONDS: ${S3_CORS_MAX_AGE_SECONDS:-3000}
+      S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+    depends_on:
+      seaweedfs-init:
+        condition: service_completed_successfully
 
   postgres:
     image: postgres:16-alpine
@@ -105,7 +124,7 @@ services:
     depends_on:
       bootstrap:
         condition: service_completed_successfully
-      seaweedfs-init:
+      seaweedfs-cors:
         condition: service_completed_successfully
 
   worker:
@@ -121,7 +140,7 @@ services:
     depends_on:
       bootstrap:
         condition: service_completed_successfully
-      seaweedfs-init:
+      seaweedfs-cors:
         condition: service_completed_successfully
 
 volumes:

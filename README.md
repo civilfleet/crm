@@ -116,7 +116,7 @@ To run the app, Postgres, migrations, and the Zammad worker together:
 docker compose up --build
 ```
 
-The `seaweedfs` service provides local S3-compatible storage, and `seaweedfs-init` creates the default `crm` bucket before the web app and worker start. The `migrate` service runs `prisma migrate deploy` before the web app and worker start. The `worker` service runs the Zammad worker from the same image as the web app and processes queued sync jobs outside API requests.
+The `seaweedfs` service provides local S3-compatible storage, `seaweedfs-init` creates the default `crm` bucket, and `seaweedfs-cors` applies the upload CORS policy before the web app and worker start. The `migrate` service runs `prisma migrate deploy` before the web app and worker start. The `worker` service runs the Zammad worker from the same image as the web app and processes queued sync jobs outside API requests.
 
 To bootstrap an initial admin on a fresh database, set `BOOTSTRAP_ADMIN_EMAIL` and optionally `BOOTSTRAP_ADMIN_NAME`:
 
@@ -173,6 +173,10 @@ NEXT_AWS_S3_ACCESS_KEY="local"
 NEXT_AWS_S3_ACCESS_SECRET="local-secret"
 NEXT_AWS_S3_BUCKET_NAME="crm"
 ```
+
+Docker Compose applies the bucket CORS policy automatically through the `seaweedfs-cors` service after bucket creation.
+If `NEXT_AWS_S3_*` values are set in `.env` or the shell, Docker Compose uses them instead of the SeaweedFS defaults and the CORS bootstrap targets that configured bucket.
+The local SeaweedFS bucket init always uses the bundled `local` / `local-secret` credentials; set `SEAWEEDFS_BUCKET_NAME` only if you need a different local bucket name.
 
 Optional CORS script overrides:
 
