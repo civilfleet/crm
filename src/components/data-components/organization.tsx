@@ -60,6 +60,9 @@ function LinkedContactsOverview({
 }) {
   const [contactSearch, setContactSearch] = useState("");
   const [actionContactId, setActionContactId] = useState<string | null>(null);
+  const [newContactEmail, setNewContactEmail] = useState("");
+  const [newContactPhone, setNewContactPhone] = useState("");
+  const [isCreatingContact, setIsCreatingContact] = useState(false);
   const trimmedSearch = contactSearch.trim();
   const searchKey =
     teamId && trimmedSearch
@@ -78,6 +81,12 @@ function LinkedContactsOverview({
     : [];
   const availableSearchResults = searchResults.filter(
     (contact) => !linkedContactIds.has(contact.id),
+  );
+  const normalizedSearch = trimmedSearch.toLowerCase();
+  const exactContactExists = searchResults.some(
+    (contact) =>
+      contact.name.trim().toLowerCase() === normalizedSearch ||
+      contact.email?.trim().toLowerCase() === normalizedSearch,
   );
 
   const linkContact = async (contactId: string) => {
@@ -119,6 +128,62 @@ function LinkedContactsOverview({
       });
     } finally {
       setActionContactId(null);
+    }
+  };
+
+  const createAndLinkContact = async () => {
+    if (!teamId || !trimmedSearch || !newContactEmail.trim()) {
+      toast({
+        title: "Name and email are required",
+        description: "Add an email address before creating the contact.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsCreatingContact(true);
+
+    try {
+      const response = await fetch("/api/contacts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          teamId,
+          name: trimmedSearch,
+          email: newContactEmail.trim().toLowerCase(),
+          phone: newContactPhone.trim() || undefined,
+          organizationIds: [organizationId],
+        }),
+      });
+
+      const body = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(body.error || "Failed to create contact");
+      }
+
+      setContactSearch("");
+      setNewContactEmail("");
+      setNewContactPhone("");
+      await onLinkedContactsChange();
+
+      toast({
+        title: "Contact created",
+        description: "The new contact is linked to this organization.",
+      });
+    } catch (error) {
+      toast({
+        title: "Unable to create contact",
+        description:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingContact(false);
     }
   };
 
@@ -227,6 +292,48 @@ function LinkedContactsOverview({
                 ) : (
                   <div className="p-3 text-sm text-muted-foreground">
                     No unlinked contacts found.
+                  </div>
+                )}
+                {!exactContactExists && (
+                  <div className="border-t border-dashed p-3">
+                    <div className="mb-3">
+                      <p className="text-sm font-medium">
+                        Create &quot;{trimmedSearch}&quot;
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Add a new contact and link them to this organization.
+                      </p>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                      <Input
+                        type="email"
+                        value={newContactEmail}
+                        onChange={(event) =>
+                          setNewContactEmail(event.target.value)
+                        }
+                        placeholder="contact@example.org"
+                      />
+                      <Input
+                        value={newContactPhone}
+                        onChange={(event) =>
+                          setNewContactPhone(event.target.value)
+                        }
+                        placeholder="Phone optional"
+                      />
+                      <Button
+                        type="button"
+                        className="shrink-0"
+                        disabled={isCreatingContact}
+                        onClick={createAndLinkContact}
+                      >
+                        {isCreatingContact ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <UserPlus className="mr-2 h-4 w-4" />
+                        )}
+                        Create
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
