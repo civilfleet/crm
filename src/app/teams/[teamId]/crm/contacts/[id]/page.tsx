@@ -619,15 +619,15 @@ export default async function ContactDetailPage({
   const filesTabContent = (
     <>
       <div>
-        <h3 className="text-base font-semibold">Compliance Documents</h3>
+        <h3 className="text-base font-semibold">Files</h3>
         <p className="text-sm text-muted-foreground">
-          Attached compliance and legal documents
+          List of files attached to this contact
         </p>
       </div>
 
       {!contact.files || contact.files.length === 0 ? (
         <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-          No documents attached.
+          No files attached.
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -650,7 +650,7 @@ export default async function ContactDetailPage({
                   rel="noopener noreferrer"
                   className="text-sm text-blue-600 hover:underline break-all"
                 >
-                  View Document
+                  View File
                 </a>
               </div>
             </div>

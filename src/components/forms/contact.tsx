@@ -1638,7 +1638,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
 
               <TabsContent value="files" className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium">Compliance Documents</h3>
+                  <h3 className="text-lg font-medium">Files</h3>
                   <Button
                     type="button"
                     variant="outline"
@@ -1669,9 +1669,12 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                           name={`files.${index}.name`}
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Document Name</FormLabel>
+                              <FormLabel>File Name</FormLabel>
                               <FormControl>
-                                <Input placeholder="e.g. NDA 2024" {...field} />
+                                <Input
+                                  placeholder="e.g. onboarding checklist"
+                                  {...field}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -1682,7 +1685,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                           name={`files.${index}.type`}
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Document Type</FormLabel>
+                              <FormLabel>File Type</FormLabel>
                               <Select
                                 onValueChange={field.onChange}
                                 defaultValue={field.value}
@@ -1693,10 +1696,11 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  <SelectItem value="NDA">NDA</SelectItem>
-                                  <SelectItem value="Code of Conduct">
-                                    Code of Conduct
+                                  <SelectItem value="Attachment">
+                                    Attachment
                                   </SelectItem>
+                                  <SelectItem value="Form">Form</SelectItem>
+                                  <SelectItem value="Report">Report</SelectItem>
                                   <SelectItem value="Other">Other</SelectItem>
                                 </SelectContent>
                               </Select>
@@ -1776,8 +1780,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
 
                   {fileFields.length === 0 && (
                     <div className="text-center py-8 text-muted-foreground border rounded-md border-dashed">
-                      No documents attached. Click "Add File" to upload
-                      compliance documents.
+                      No files attached. Click "Add File" to upload a file.
                     </div>
                   )}
                 </div>
