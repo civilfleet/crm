@@ -20,6 +20,7 @@ import ContactChangeHistory from "@/components/contact-change-history";
 import ContactEngagementHistory from "@/components/contact-engagement-history";
 import ContactResponsiveTabs from "@/components/contact-responsive-tabs";
 import DeleteContactButton from "@/components/forms/delete-contact-button";
+import DeleteContactFileButton from "@/components/forms/delete-contact-file-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -631,30 +632,44 @@ export default async function ContactDetailPage({
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          {contact.files.map((file) => (
-            <div
-              key={file.id}
-              className="flex items-start gap-3 rounded-md border bg-muted/30 p-4"
-            >
-              <FileText className="mt-0.5 h-5 w-5 text-muted-foreground" />
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium">{file.name}</p>
-                  <Badge variant="outline" className="text-xs">
-                    {file.type}
-                  </Badge>
+          {contact.files.map((file) => {
+            if (!file.id) {
+              return null;
+            }
+
+            return (
+              <div
+                key={file.id}
+                className="flex items-start gap-3 rounded-md border bg-muted/30 p-4"
+              >
+                <FileText className="mt-0.5 h-5 w-5 text-muted-foreground" />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium">{file.name}</p>
+                    <Badge variant="outline" className="text-xs">
+                      {file.type}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <a
+                      href={`/api/files/${file.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="break-all text-sm text-blue-600 hover:underline"
+                    >
+                      View File
+                    </a>
+                    <DeleteContactFileButton
+                      teamId={teamId}
+                      contactId={id}
+                      fileId={file.id}
+                      fileName={file.name}
+                    />
+                  </div>
                 </div>
-                <a
-                  href={`/api/files/${file.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-blue-600 hover:underline break-all"
-                >
-                  View File
-                </a>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </>

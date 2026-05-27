@@ -2793,6 +2793,70 @@ const updateContact = async (
   });
 };
 
+const deleteContactFile = async (
+  {
+    teamId,
+    contactId,
+    fileId,
+  }: {
+    teamId: string;
+    contactId: string;
+    fileId: string;
+  },
+  userId: string,
+  userName?: string,
+) => {
+  return prisma.$transaction(async (tx) => {
+    const contact = await tx.contact.findFirst({
+      where: {
+        id: contactId,
+        teamId,
+      },
+      include: {
+        files: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            url: true,
+          },
+        },
+      },
+    });
+
+    if (!contact) {
+      throw new Error("Contact not found");
+    }
+
+    const file = contact.files.find((item) => item.id === fileId);
+
+    if (!file) {
+      throw new Error("File not found");
+    }
+
+    const oldFileValue = mapFileChangeValue(contact.files);
+    const newFileValue = mapFileChangeValue(
+      contact.files.filter((item) => item.id !== fileId),
+    );
+
+    await tx.file.delete({
+      where: { id: fileId },
+    });
+
+    await logFieldUpdate(
+      contactId,
+      "files",
+      oldFileValue,
+      newFileValue,
+      userId,
+      userName,
+      tx,
+    );
+
+    return file;
+  });
+};
+
 const deleteContacts = async (teamId: string, ids: string[]) => {
   if (!ids.length) {
     return;
@@ -2835,6 +2899,7 @@ const getTeamContactAttributeKeys = async (
 
 export {
   createContact,
+  deleteContactFile,
   deleteContacts,
   getAllowedContactSubmodules,
   getContactById,
