@@ -100,6 +100,37 @@ jobs:
             docker push "$PACKAGE_IMAGE-tools:latest"
           fi
 
+      - name: Cleanup Docker artifacts
+        if: always()
+        run: |
+          set -euo pipefail
+
+          REF_TAG=$(printf '%s' "$GITHUB_REF_NAME" \
+            | tr '[:upper:]' '[:lower:]' \
+            | tr '/:' '--' \
+            | tr -c 'a-z0-9_.-' '-' \
+            | sed 's/^-*//; s/-*$//; s/^$/ref/')
+
+          IMAGE_TAG="sha-${GITHUB_SHA}"
+
+          docker image rm -f \
+            "$PACKAGE_IMAGE:$IMAGE_TAG" \
+            "$PACKAGE_IMAGE:$REF_TAG" \
+            "$PACKAGE_IMAGE-tools:$IMAGE_TAG" \
+            "$PACKAGE_IMAGE-tools:$REF_TAG" \
+            2>/dev/null || true
+
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            docker image rm -f \
+              "$PACKAGE_IMAGE:latest" \
+              "$PACKAGE_IMAGE-tools:latest" \
+              2>/dev/null || true
+          fi
+
+          docker container prune -f
+          docker network prune -f
+          docker builder prune -af
+
   deploy:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
