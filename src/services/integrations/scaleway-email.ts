@@ -42,6 +42,7 @@ export type SendMassEmailInput = {
   eventIds?: string[];
   subject: string;
   html: string;
+  bccEmails?: string[];
   userId?: string;
   userName?: string;
   senderLabelMode?: SenderLabelMode;
@@ -343,12 +344,20 @@ export const sendMassEmailToContacts = async ({
   eventIds = [],
   subject,
   html,
+  bccEmails = [],
   userId,
   userName,
   senderLabelMode = "default",
 }: SendMassEmailInput): Promise<SendMassEmailResult> => {
   const uniqueDirectContactIds = Array.from(new Set(contactIds));
   const uniqueEventIds = Array.from(new Set(eventIds));
+  const normalizedBccEmails = Array.from(
+    new Set(
+      bccEmails
+        .map((email) => email.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  );
 
   if (uniqueDirectContactIds.length === 0 && uniqueEventIds.length === 0) {
     throw new Error("Select at least one recipient.");
@@ -426,6 +435,7 @@ export const sendMassEmailToContacts = async ({
       subject,
       html,
       text: stripHtml(html),
+      bccEmails: normalizedBccEmails,
       senderEmail: from.email,
       senderName: from.name,
       requestedCount: uniqueContactIds.length,
@@ -630,6 +640,31 @@ export const processEmailBatch = async (batch: EmailBatch) => {
       });
 
       const sentAt = new Date();
+      for (const bccEmail of batch.bccEmails) {
+        try {
+          await sendScalewayEmail({
+            apiKey: integration.apiKey,
+            region,
+            projectId: integration.defaultListId,
+            from,
+            to: { email: bccEmail },
+            subject: renderedSubject,
+            html: renderedHtml,
+          });
+        } catch (bccError) {
+          logger.error(
+            {
+              teamId: batch.teamId,
+              batchId: batch.id,
+              recipientId: recipient.id,
+              bccEmail,
+              error: bccError,
+            },
+            "Scaleway BCC copy failed",
+          );
+        }
+      }
+
       await prisma.emailRecipient.update({
         where: { id: recipient.id },
         data: {

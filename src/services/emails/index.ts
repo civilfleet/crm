@@ -31,6 +31,7 @@ export type EmailHistoryBatch = {
   subject: string;
   html: string;
   text?: string;
+  bccEmails: string[];
   senderEmail?: string;
   senderName?: string;
   status: string;
@@ -74,6 +75,7 @@ const mapEmailBatch = (batch: EmailBatchWithRecipients): EmailHistoryBatch => ({
   subject: batch.subject,
   html: batch.html,
   text: batch.text ?? undefined,
+  bccEmails: batch.bccEmails,
   senderEmail: batch.senderEmail ?? undefined,
   senderName: batch.senderName ?? undefined,
   status: batch.status,

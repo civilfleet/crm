@@ -68,6 +68,12 @@ interface ContactListsManagerProps {
 
 type SenderLabelMode = "default" | "user";
 
+const parseEmailList = (value: string) =>
+  value
+    .split(/[\s,;]+/)
+    .map((email) => email.trim())
+    .filter(Boolean);
+
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 export default function ContactListsManager({
@@ -84,6 +90,7 @@ export default function ContactListsManager({
   );
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
+  const [emailBcc, setEmailBcc] = useState("");
   const [emailSenderLabelMode, setEmailSenderLabelMode] =
     useState<SenderLabelMode>("default");
   const [copiedListId, setCopiedListId] = useState<string | null>(null);
@@ -363,6 +370,7 @@ export default function ContactListsManager({
             contactIds,
             subject: emailSubject,
             html: emailBody,
+            bccEmails: parseEmailList(emailBcc),
             senderLabelMode: emailSenderLabelMode,
           }),
         },
@@ -389,6 +397,7 @@ export default function ContactListsManager({
       setEmailRecipients([]);
       setEmailSubject("");
       setEmailBody("");
+      setEmailBcc("");
       setEmailSenderLabelMode("default");
       clearSelection();
     } catch (error) {
@@ -666,11 +675,13 @@ export default function ContactListsManager({
                   recipients={emailRecipients}
                   subject={emailSubject}
                   body={emailBody}
+                  bcc={emailBcc}
                   senderLabelMode={emailSenderLabelMode}
                   isSending={isSendingEmail}
                   onOpenChange={setIsEmailDialogOpen}
                   onSubjectChange={setEmailSubject}
                   onBodyChange={setEmailBody}
+                  onBccChange={setEmailBcc}
                   onSenderLabelModeChange={setEmailSenderLabelMode}
                   onSend={() => handleSendEmail(clearSelection)}
                 />
@@ -741,11 +752,13 @@ type ListEmailDialogProps = {
   recipients: ListEmailRecipient[];
   subject: string;
   body: string;
+  bcc: string;
   senderLabelMode: SenderLabelMode;
   isSending: boolean;
   onOpenChange: (open: boolean) => void;
   onSubjectChange: (value: string) => void;
   onBodyChange: (value: string) => void;
+  onBccChange: (value: string) => void;
   onSenderLabelModeChange: (value: SenderLabelMode) => void;
   onSend: () => void;
 };
@@ -755,11 +768,13 @@ const ListEmailDialog = ({
   recipients,
   subject,
   body,
+  bcc,
   senderLabelMode,
   isSending,
   onOpenChange,
   onSubjectChange,
   onBodyChange,
+  onBccChange,
   onSenderLabelModeChange,
   onSend,
 }: ListEmailDialogProps) => {
@@ -822,6 +837,21 @@ const ListEmailDialog = ({
               disabled={isSending}
               placeholder="Email subject"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="list-email-bcc">BCC</Label>
+            <Input
+              id="list-email-bcc"
+              value={bcc}
+              onChange={(event) => onBccChange(event.target.value)}
+              disabled={isSending}
+              placeholder="internal@example.org, finance@example.org"
+            />
+            <p className="text-xs text-muted-foreground">
+              Separate multiple hidden copy recipients with commas, spaces, or
+              new lines.
+            </p>
           </div>
 
           <div className="space-y-2">

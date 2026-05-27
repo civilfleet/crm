@@ -547,6 +547,7 @@ model EmailBatch {
   subject     String              @db.VarChar(500)
   html        String              @db.Text
   text        String?             @db.Text
+  bccEmails   String[]            @default([])
   senderEmail String?             @db.VarChar(255)
   senderName  String?             @db.VarChar(255)
   status      EmailBatchStatus    @default(SENDING)

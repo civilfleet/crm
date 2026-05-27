@@ -1,0 +1,2 @@
+ALTER TABLE "EmailBatch"
+ADD COLUMN "bccEmails" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

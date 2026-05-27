@@ -44,6 +44,12 @@ interface EventTableProps {
 
 type SenderLabelMode = "default" | "user";
 
+const parseEmailList = (value: string) =>
+  value
+    .split(/[\s,;]+/)
+    .map((email) => email.trim())
+    .filter(Boolean);
+
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
 const querySchema = z.object({
@@ -62,6 +68,7 @@ export default function EventTable({ teamId }: EventTableProps) {
   const [emailEvents, setEmailEvents] = useState<EventRow[]>([]);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
+  const [emailBcc, setEmailBcc] = useState("");
   const [emailSenderLabelMode, setEmailSenderLabelMode] =
     useState<SenderLabelMode>("default");
 
@@ -232,6 +239,7 @@ export default function EventTable({ teamId }: EventTableProps) {
             eventIds,
             subject: emailSubject,
             html: emailBody,
+            bccEmails: parseEmailList(emailBcc),
             senderLabelMode: emailSenderLabelMode,
           }),
         },
@@ -258,6 +266,7 @@ export default function EventTable({ teamId }: EventTableProps) {
       setEmailEvents([]);
       setEmailSubject("");
       setEmailBody("");
+      setEmailBcc("");
       setEmailSenderLabelMode("default");
       clearSelection();
       await mutate();
@@ -410,11 +419,13 @@ export default function EventTable({ teamId }: EventTableProps) {
                   events={emailEvents}
                   subject={emailSubject}
                   body={emailBody}
+                  bcc={emailBcc}
                   senderLabelMode={emailSenderLabelMode}
                   isSending={isSendingEmail}
                   onOpenChange={setIsEmailDialogOpen}
                   onSubjectChange={setEmailSubject}
                   onBodyChange={setEmailBody}
+                  onBccChange={setEmailBcc}
                   onSenderLabelModeChange={setEmailSenderLabelMode}
                   onSend={() => handleSendEmail(clearSelection)}
                 />
@@ -447,11 +458,13 @@ type EventEmailDialogProps = {
   events: EventRow[];
   subject: string;
   body: string;
+  bcc: string;
   senderLabelMode: SenderLabelMode;
   isSending: boolean;
   onOpenChange: (open: boolean) => void;
   onSubjectChange: (value: string) => void;
   onBodyChange: (value: string) => void;
+  onBccChange: (value: string) => void;
   onSenderLabelModeChange: (value: SenderLabelMode) => void;
   onSend: () => void;
 };
@@ -461,11 +474,13 @@ const EventEmailDialog = ({
   events,
   subject,
   body,
+  bcc,
   senderLabelMode,
   isSending,
   onOpenChange,
   onSubjectChange,
   onBodyChange,
+  onBccChange,
   onSenderLabelModeChange,
   onSend,
 }: EventEmailDialogProps) => {
@@ -530,6 +545,21 @@ const EventEmailDialog = ({
               disabled={isSending}
               placeholder="Email subject"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="event-email-bcc">BCC</Label>
+            <Input
+              id="event-email-bcc"
+              value={bcc}
+              onChange={(event) => onBccChange(event.target.value)}
+              disabled={isSending}
+              placeholder="internal@example.org, finance@example.org"
+            />
+            <p className="text-xs text-muted-foreground">
+              Separate multiple hidden copy recipients with commas, spaces, or
+              new lines.
+            </p>
           </div>
 
           <div className="space-y-2">

@@ -389,6 +389,10 @@ const EmailBatchDetails = ({
         <DetailItem label="Started" value={formatDateTime(batch.startedAt)} />
         <DetailItem label="Locked at" value={formatDateTime(batch.lockedAt)} />
         <DetailItem label="Locked by" value={batch.lockedBy || "-"} />
+        <DetailItem
+          label="BCC"
+          value={batch.bccEmails.length ? batch.bccEmails.join(", ") : "-"}
+        />
       </div>
       {batch.lastError ? (
         <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-950">
