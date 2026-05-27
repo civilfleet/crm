@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
 import { DataTable } from "@/components/data-table";
+import { ContactListExportDialog } from "@/components/forms/contact-list-export-dialog";
 import { RichEmailEditor } from "@/components/rich-email-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -87,6 +88,10 @@ export default function ContactListsManager({
     useState<SenderLabelMode>("default");
   const [copiedListId, setCopiedListId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<string>("updated-desc");
+  const [exportingList, setExportingList] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const { data: listsData, mutate } = useSWR(
     `/api/contact-lists?teamId=${teamId}`,
@@ -122,7 +127,8 @@ export default function ContactListsManager({
   }, [lists, sortKey]);
   const isLoading = !listsData;
 
-  const handleDelete = useCallback(async (listId: string, listName: string) => {
+  const handleDelete = useCallback(
+    async (listId: string, listName: string) => {
     if (!confirm(`Are you sure you want to delete "${listName}"?`)) {
       return;
     }
@@ -164,9 +170,12 @@ export default function ContactListsManager({
     } finally {
       setDeletingId(null);
     }
-  }, [mutate, router, teamId, toast]);
+    },
+    [mutate, router, teamId, toast],
+  );
 
-  const handleCopyContacts = useCallback(async (list: ContactList) => {
+  const handleCopyContacts = useCallback(
+    async (list: ContactList) => {
     if (!list.contacts?.length) {
       toast({
         title: "No contacts to copy",
@@ -222,7 +231,9 @@ export default function ContactListsManager({
       });
       setTimeout(
         () =>
-          setCopiedListId((current) => (current === list.id ? null : current)),
+            setCopiedListId((current) =>
+              current === list.id ? null : current,
+            ),
         2000,
       );
     } catch (error) {
@@ -233,38 +244,9 @@ export default function ContactListsManager({
         variant: "destructive",
       });
     }
-  }, [toast]);
-
-  const buildEmailExport = useCallback((list: ContactList) => {
-    const emails = Array.from(
-      new Set(
-        list.contacts
-          .map((contact) => contact.email?.trim())
-          .filter((email): email is string => Boolean(email)),
-      ),
+    },
+    [toast],
     );
-
-    return emails.length > 0 ? ["email", ...emails].join("\n") : "";
-  }, []);
-
-  const handleExportEmails = useCallback((list: ContactList) => {
-    const csvContent = buildEmailExport(list);
-    if (!csvContent) {
-      toast({
-        title: "No emails to export",
-        description: "Add contacts with email addresses to export.",
-      });
-      return;
-    }
-
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${list.name.replace(/\s+/g, "-").toLowerCase()}-emails.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, [buildEmailExport, toast]);
 
   const handleDeleteSelected = async (
     selectedRows: ContactList[],
@@ -322,7 +304,8 @@ export default function ContactListsManager({
     }
   };
 
-  const getEmailRecipientsFromLists = useCallback((selectedRows: ContactList[]) => {
+  const getEmailRecipientsFromLists = useCallback(
+    (selectedRows: ContactList[]) => {
     const recipientsById = new Map<string, ListEmailRecipient>();
 
     selectedRows.forEach((list) => {
@@ -341,7 +324,9 @@ export default function ContactListsManager({
     });
 
     return Array.from(recipientsById.values());
-  }, []);
+    },
+    [],
+  );
 
   const openEmailDialog = (selectedRows: ContactList[]) => {
     const recipients = getEmailRecipientsFromLists(selectedRows);
@@ -487,9 +472,11 @@ export default function ContactListsManager({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => handleExportEmails(list)}
-                aria-label="Export emails"
-                title="Export emails"
+                onClick={() =>
+                  setExportingList({ id: list.id, name: list.name })
+                }
+                aria-label="Export list"
+                title="Export list"
               >
                 <Download className="h-4 w-4" />
               </Button>
@@ -522,7 +509,6 @@ export default function ContactListsManager({
       copiedListId,
       deletingId,
       handleCopyContacts,
-      handleExportEmails,
       handleDelete,
       isBulkDeleting,
     ],
@@ -571,8 +557,8 @@ export default function ContactListsManager({
           variant="outline"
           size="sm"
           className="justify-start gap-1"
-          onClick={() => handleExportEmails(list)}
-          aria-label="Export emails"
+          onClick={() => setExportingList({ id: list.id, name: list.name })}
+          aria-label="Export list"
         >
           <Download className="h-4 w-4" />
           Export
@@ -739,6 +725,13 @@ export default function ContactListsManager({
           <span className="sr-only">Add list</span>
         </Button>
       </Link>
+
+      <ContactListExportDialog
+        open={!!exportingList}
+        onOpenChange={(open) => !open && setExportingList(null)}
+        list={exportingList}
+        teamId={teamId}
+      />
     </div>
   );
 }
@@ -810,9 +803,7 @@ const ListEmailDialog = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="default">
-                  Default sender label
-                </SelectItem>
+                <SelectItem value="default">Default sender label</SelectItem>
                 <SelectItem value="user">My user name</SelectItem>
               </SelectContent>
             </Select>

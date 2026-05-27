@@ -59,3 +59,26 @@ export const parseCsv = (input: string): CsvParseResult => {
     rows: bodyRows.map((bodyRow) => bodyRow.map((value) => value.trim())),
   };
 };
+
+export const stringifyCsv = (headers: string[], rows: string[][]): string => {
+  const escapeValue = (value: string | undefined | null) => {
+    if (value === null || value === undefined) {
+      return "";
+    }
+    const stringValue = String(value);
+    if (
+      stringValue.includes('"') ||
+      stringValue.includes(",") ||
+      stringValue.includes("\n") ||
+      stringValue.includes("\r")
+    ) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+
+  const headerRow = headers.map(escapeValue).join(",");
+  const bodyRows = rows.map((row) => row.map(escapeValue).join(","));
+
+  return [headerRow, ...bodyRows].join("\n");
+};

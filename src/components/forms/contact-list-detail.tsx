@@ -9,6 +9,7 @@ import type { FieldErrors } from "react-hook-form";
 import { useForm } from "react-hook-form";
 import useSWR from "swr";
 import type { z } from "zod";
+import { ContactListExportDialog } from "@/components/forms/contact-list-export-dialog";
 import { ContactListFiltersBuilder } from "@/components/forms/contact-list-filters-builder";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -118,6 +119,7 @@ export function ContactListDetail({ teamId, listId }: ContactListDetailProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedQuery = useDebounce(searchQuery, 300);
   const lastSyncedKeyRef = useRef<string | null>(null);
@@ -459,40 +461,6 @@ export function ContactListDetail({ teamId, listId }: ContactListDetailProps) {
 
   const currentListType = effectiveListType;
   const currentContactsCount = list?.contacts.length ?? 0;
-  const handleExportEmails = () => {
-    if (!list?.contacts?.length) {
-      toast({
-        title: "No contacts to export",
-        description: "Add contacts with email addresses to export.",
-      });
-      return;
-    }
-
-    const emails = Array.from(
-      new Set(
-        list.contacts
-          .map((contact) => contact.email?.trim())
-          .filter((email): email is string => Boolean(email)),
-      ),
-    );
-
-    if (emails.length === 0) {
-      toast({
-        title: "No emails to export",
-        description: "Contacts in this list don't have email addresses.",
-      });
-      return;
-    }
-
-    const csvContent = ["email", ...emails].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${list.name.replace(/\s+/g, "-").toLowerCase()}-emails.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
 
   return (
     <div className="space-y-6">
@@ -506,7 +474,7 @@ export function ContactListDetail({ teamId, listId }: ContactListDetailProps) {
           )}
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
-          {!isNewList && (
+          {!isNewList && list && (
             <>
               <Badge variant="secondary">
                 {currentContactsCount} contact
@@ -517,10 +485,20 @@ export function ContactListDetail({ teamId, listId }: ContactListDetailProps) {
                   ? "Smart list"
                   : "Manual list"}
               </Badge>
-              <Button variant="outline" size="sm" onClick={handleExportEmails}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsExportDialogOpen(true)}
+              >
                 <Download className="mr-2 h-4 w-4" />
-                Export emails
+                Export
               </Button>
+              <ContactListExportDialog
+                open={isExportDialogOpen}
+                onOpenChange={setIsExportDialogOpen}
+                list={{ id: list.id, name: list.name }}
+                teamId={teamId}
+              />
             </>
           )}
           <Button asChild variant="outline">

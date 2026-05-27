@@ -1,8 +1,14 @@
 import { Prisma } from "@prisma/client";
+import { stringifyCsv } from "@/lib/csv";
 import prisma from "@/lib/prisma";
 import { getTeamContacts } from "@/services/contacts";
 import { ensureDefaultGroup } from "@/services/groups";
-import { type ContactFilter, ContactListType, Roles } from "@/types";
+import {
+  type ContactFilter,
+  ContactListType,
+  type Contact as ContactType,
+  Roles,
+} from "@/types";
 
 type CreateContactListInput = {
   teamId: string;
@@ -487,11 +493,91 @@ const removeContactsFromList = async (input: RemoveContactsInput) => {
     },
   });
 };
+const exportContactList = async (
+  listId: string,
+  teamId: string,
+  userId?: string,
+  roles: Roles[] = [],
+  options: { fields: string[]; attributes: string[] } = {
+    fields: [],
+    attributes: [],
+  },
+) => {
+  const contactAccessWhere = await buildContactVisibilityFilter(
+    teamId,
+    userId,
+    roles,
+  );
+
+  const list = await prisma.contactList.findFirst({
+    where: {
+      id: listId,
+      teamId,
+    },
+    include: {
+      contacts: {
+        ...(contactAccessWhere ? { where: contactAccessWhere } : {}),
+        select: {
+          contactId: true,
+        },
+      },
+    },
+  });
+
+  if (!list) {
+    throw new Error("List not found");
+  }
+
+  let contacts: ContactType[] = [];
+
+  if (list.type === ContactListType.SMART) {
+    const filters = parseFilters(list.filters as Prisma.JsonValue | null);
+    contacts = await getTeamContacts(teamId, undefined, userId, filters, roles);
+  } else {
+    const contactIds = list.contacts.map((c) => c.contactId);
+    if (contactIds.length > 0) {
+      contacts = await getTeamContacts(
+        teamId,
+        undefined,
+        userId,
+        [{ type: "contactIds", contactIds }],
+        roles,
+      );
+    }
+  }
+
+  const { fields, attributes } = options;
+  const headers = [...fields, ...attributes];
+
+  const rows = contacts.map((contact) => {
+    return headers.map((header) => {
+      if (fields.includes(header)) {
+        const val = contact[header as keyof typeof contact];
+        if (val instanceof Date) {
+          return val.toISOString();
+        }
+        return val ? String(val) : "";
+      } else {
+        const attr = contact.profileAttributes.find((a) => a.key === header);
+        if (!attr) return "";
+        if (attr.type === "LOCATION") {
+          return (
+            attr.value.label ?? `${attr.value.latitude},${attr.value.longitude}`
+          );
+        }
+        return String(attr.value);
+      }
+    });
+  });
+
+  return stringifyCsv(headers, rows);
+};
 
 export {
   addContactsToList,
   createContactList,
   deleteContactLists,
+  exportContactList,
   getContactListById,
   getTeamContactLists,
   removeContactsFromList,
