@@ -181,6 +181,7 @@ type ContactWithAttributes = Prisma.ContactGetPayload<{
         };
       };
     };
+    files: true;
   };
 }>;
 
@@ -591,6 +592,15 @@ const mapContactGender = (
 ): ContactGender | undefined =>
   gender ? (gender as ContactGender) : undefined;
 
+const mapFileChangeValue = (
+  files: { name?: string | null; type: string; url: string }[],
+) =>
+  files.map((file) => ({
+    name: file.name ?? file.url,
+    type: file.type,
+    url: file.url,
+  }));
+
 const mapContactRequestPreference = (
   preference?: $Enums.ContactRequestPreference | null,
 ): ContactRequestPreference | undefined =>
@@ -640,6 +650,12 @@ const mapContact = (contact: ContactWithAttributes): ContactType => ({
     .filter((attribute): attribute is ContactProfileAttribute =>
       Boolean(attribute),
     ),
+  files: contact.files.map((file) => ({
+    id: file.id,
+    name: file.name ?? file.url,
+    type: file.type,
+    url: file.url,
+  })),
   events: (() => {
     const eventMap = new Map<
       string,
@@ -1382,6 +1398,7 @@ async function getTeamContacts(
             },
           },
         },
+        files: true,
       },
       orderBy: {
         createdAt: "desc",
@@ -1636,26 +1653,32 @@ const createContact = async (
       });
     }
 
-    if (files && files.length > 0 && userId) {
-      const fileData = files
-        .filter((f) => f.name && f.url && f.type)
-        .map((f) => ({
-          name: f.name,
-          type: f.type,
-          url: f.url,
-          contactId: contact.id,
-          createdById: userId,
-          updatedById: userId,
-        }));
-      if (fileData.length > 0) {
-        await tx.file.createMany({ data: fileData });
-      }
+    const fileData = userId
+      ? (files
+          ?.filter((f) => f.name && f.url && f.type)
+          .map((f) => ({
+            name: f.name,
+            type: f.type,
+            url: f.url,
+            contactId: contact.id,
+            createdById: userId,
+            updatedById: userId,
+          })) ?? [])
+      : [];
+
+    if (fileData.length > 0) {
+      await tx.file.createMany({ data: fileData });
     }
 
     // Log contact creation
     await logContactCreation(contact.id, userId, userName, tx, {
       source: "manual",
       createdVia: "contact-form",
+      ...(fileData.length > 0
+        ? {
+            attachedFiles: mapFileChangeValue(fileData),
+          }
+        : {}),
     });
 
     const created = await tx.contact.findUniqueOrThrow({
@@ -1694,6 +1717,7 @@ const createContact = async (
             },
           },
         },
+        files: true,
       },
     });
 
@@ -2509,10 +2533,25 @@ const updateContact = async (
     if (files !== undefined && userId) {
       const existingFiles = await tx.file.findMany({
         where: { contactId },
-        select: { id: true, url: true },
+        select: { id: true, name: true, type: true, url: true },
       });
 
       const newUrls = new Set(files.map((f) => f.url));
+      const nextFiles = files.filter((f) => f.name && f.url && f.type);
+      const oldFileValue = mapFileChangeValue(existingFiles);
+      const newFileValue = mapFileChangeValue(nextFiles);
+
+      if (JSON.stringify(oldFileValue) !== JSON.stringify(newFileValue)) {
+        await logFieldUpdate(
+          contactId,
+          "files",
+          oldFileValue,
+          newFileValue,
+          userId,
+          userName,
+          tx,
+        );
+      }
 
       const toRemove = existingFiles.filter((f) => !newUrls.has(f.url));
       if (toRemove.length > 0) {
@@ -2522,7 +2561,7 @@ const updateContact = async (
       }
 
       const existingUrls = new Set(existingFiles.map((f) => f.url));
-      const toAdd = files.filter(
+      const toAdd = nextFiles.filter(
         (f) => !existingUrls.has(f.url) && f.name && f.type,
       );
 

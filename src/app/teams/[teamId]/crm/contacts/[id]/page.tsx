@@ -645,7 +645,7 @@ export default async function ContactDetailPage({
                   </Badge>
                 </div>
                 <a
-                  href={file.url}
+                  href={`/api/files/${file.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-blue-600 hover:underline break-all"
