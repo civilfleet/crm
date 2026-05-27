@@ -22,10 +22,12 @@ const getFiles = async (
     organizationId,
     teamId,
     contactId,
+    includeContactFiles = false,
   }: {
     organizationId?: string;
     teamId?: string;
     contactId?: string;
+    includeContactFiles?: boolean;
   },
   searchQuery: string,
 ) => {
@@ -47,6 +49,7 @@ const getFiles = async (
         { FundingRequest: { teamId } },
         { donationAgreement: { some: { teamId } } },
         { Transaction: { some: { teamId } } },
+        ...(includeContactFiles ? [{ contact: { teamId } }] : []),
       ],
     };
   } else if (organizationId) {
@@ -118,6 +121,14 @@ const getFiles = async (
               name: true,
             },
           },
+        },
+      },
+      contact: {
+        select: {
+          id: true,
+          teamId: true,
+          name: true,
+          email: true,
         },
       },
       downloadAudits: {

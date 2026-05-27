@@ -123,6 +123,12 @@ const navItems: {
       module: "CRM",
     },
     {
+      title: "Files",
+      url: "crm/files",
+      icon: FolderOpen,
+      module: "CRM",
+    },
+    {
       type: "separator",
       label: "Admin",
       module: "ADMIN",

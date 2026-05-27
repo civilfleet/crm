@@ -24,6 +24,8 @@ export async function GET(req: Request) {
     const teamId = searchParams.get("teamId") || "";
     const organizationId = searchParams.get("organizationId") || "";
     const contactId = searchParams.get("contactId") || "";
+    const includeContactFiles =
+      searchParams.get("includeContactFiles") === "true";
 
     if (teamId) {
       await verifyTeamAccess(teamId);
@@ -51,6 +53,7 @@ export async function GET(req: Request) {
           organizationId,
           teamId,
           contactId,
+          includeContactFiles,
         },
         searchQuery,
       );

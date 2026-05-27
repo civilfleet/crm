@@ -1,6 +1,8 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { auth } from "@/auth";
+import prisma from "@/lib/prisma";
 import s3Client from "@/lib/s3-client";
 import { handlePrismaError } from "@/lib/utils";
 import { createZipBuffer } from "@/lib/zip";
@@ -40,6 +42,51 @@ const s3BodyToBuffer = async (body: unknown) => {
   return Buffer.concat(chunks);
 };
 
+const getScopedFiles = async ({
+  teamId,
+  organizationId,
+  includeContactFiles,
+  searchQuery,
+  ids,
+}: {
+  teamId: string;
+  organizationId: string;
+  includeContactFiles: boolean;
+  searchQuery: string;
+  ids?: string[];
+}) => {
+  const files = await getFiles(
+    { teamId, organizationId, includeContactFiles },
+    searchQuery,
+  );
+
+  if (!ids?.length) {
+    return files;
+  }
+
+  const selectedIds = new Set(ids);
+  const scopedFiles = files.filter((file) => selectedIds.has(file.id));
+
+  if (scopedFiles.length !== selectedIds.size) {
+    throw new Error("One or more selected files could not be found.");
+  }
+
+  return scopedFiles;
+};
+
+const deleteFilesSchema = z.object({
+  teamId: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.uuid("Team id must be a valid UUID").optional(),
+  ),
+  organizationId: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.uuid("Organization id must be a valid UUID").optional(),
+  ),
+  includeContactFiles: z.boolean().optional().default(false),
+  ids: z.array(z.uuid("File id must be a valid UUID")).min(1),
+});
+
 export async function GET(req: Request) {
   try {
     const session = await auth();
@@ -51,6 +98,12 @@ export async function GET(req: Request) {
     const teamId = searchParams.get("teamId") || "";
     const organizationId = searchParams.get("organizationId") || "";
     const searchQuery = searchParams.get("query") || "";
+    const includeContactFiles =
+      searchParams.get("includeContactFiles") === "true";
+    const selectedIds = (searchParams.get("ids") || "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
 
     if (!teamId && !organizationId) {
       return NextResponse.json(
@@ -68,7 +121,13 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const files = await getFiles({ teamId, organizationId }, searchQuery);
+    const files = await getScopedFiles({
+      teamId,
+      organizationId,
+      includeContactFiles,
+      searchQuery,
+      ids: selectedIds,
+    });
     if (!files.length) {
       return NextResponse.json({ error: "No files found" }, { status: 404 });
     }
@@ -86,7 +145,7 @@ export async function GET(req: Request) {
       const data = await s3BodyToBuffer(response.Body);
 
       const orgName = normalizePathSegment(
-        file.organization?.name ?? "Unassigned",
+        file.organization?.name ?? file.contact?.name ?? "Unassigned",
       );
       const fileType = normalizePathSegment(file.type || "File");
       const datePart = new Date(file.createdAt).toISOString().slice(0, 10);
@@ -107,7 +166,7 @@ export async function GET(req: Request) {
     }
 
     const zip = createZipBuffer(entries);
-    const archiveName = `funding-files-${new Date().toISOString().slice(0, 10)}.zip`;
+    const archiveName = `${includeContactFiles ? "crm" : "funding"}-files-${new Date().toISOString().slice(0, 10)}.zip`;
 
     await recordFileDownloadAudit({
       userId: session.user.userId,
@@ -124,6 +183,57 @@ export async function GET(req: Request) {
         "Content-Disposition": `attachment; filename=${archiveName}`,
       },
     });
+  } catch (e) {
+    const { message } = handlePrismaError(e);
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const session = await auth();
+    if (!session?.user?.userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const payload = await req.json().catch(() => ({}));
+    const { teamId, organizationId, includeContactFiles, ids } =
+      deleteFilesSchema.parse(payload);
+
+    if (!teamId && !organizationId) {
+      return NextResponse.json(
+        { error: "teamId or organizationId is required" },
+        { status: 400 },
+      );
+    }
+
+    const hasScopeAccess = await canUserAccessTeamOrOrgScope({
+      userId: session.user.userId,
+      teamId: teamId || undefined,
+      organizationId: organizationId || undefined,
+    });
+    if (!hasScopeAccess) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const files = await getScopedFiles({
+      teamId: teamId ?? "",
+      organizationId: organizationId ?? "",
+      includeContactFiles,
+      searchQuery: "",
+      ids,
+    });
+
+    await prisma.file.deleteMany({
+      where: {
+        id: { in: files.map((file) => file.id) },
+      },
+    });
+
+    return NextResponse.json(
+      { data: { deleted: files.length } },
+      { status: 200 },
+    );
   } catch (e) {
     const { message } = handlePrismaError(e);
     return NextResponse.json({ error: message }, { status: 400 });

@@ -58,6 +58,7 @@ export async function GET(
 
     const relatedTeamId =
       fileWithRelations?.FundingRequest?.teamId ||
+      fileWithRelations?.contact?.teamId ||
       fileWithRelations?.donationAgreement?.[0]?.teamId ||
       fileWithRelations?.Transaction?.[0]?.teamId ||
       undefined;

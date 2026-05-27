@@ -52,12 +52,14 @@ const getAssociatedResource = (
 export const getFileColumns = (
   teamId: string,
   organizationId: string,
+  includeContactFiles = false,
+  onDelete?: (file: File) => void,
 ): ColumnDef<File>[] => [
   {
     id: "actions",
     header: () => <div className="text-left w-28">Actions</div>,
     cell: ({ row }) => (
-      <div className="text-left">
+      <div className="flex items-center gap-2 text-left">
         <Button asChild size="sm" variant="outline">
           <Link
             href={`${process.env.NEXT_PUBLIC_BASE_URL}/api/files/${row.original?.id}`}
@@ -65,6 +67,16 @@ export const getFileColumns = (
             Download
           </Link>
         </Button>
+        {onDelete ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            onClick={() => onDelete(row.original)}
+          >
+            Delete
+          </Button>
+        ) : null}
       </div>
     ),
   },
@@ -72,6 +84,19 @@ export const getFileColumns = (
     id: "associatedResource",
     header: () => <div className="text-left w-64">Associated Resource</div>,
     cell: ({ row }) => {
+      if (includeContactFiles && row.original.contact?.id) {
+        return (
+          <div className="text-left w-64">
+            <Link
+              className="text-blue-600 hover:underline"
+              href={`/teams/${row.original.contact.teamId}/crm/contacts/${row.original.contact.id}`}
+            >
+              Contact: {row.original.contact.name}
+            </Link>
+          </div>
+        );
+      }
+
       const resource = getAssociatedResource(
         row.original,
         teamId,
@@ -90,6 +115,28 @@ export const getFileColumns = (
       );
     },
   },
+  ...(includeContactFiles
+    ? [
+        {
+          id: "contact",
+          header: () => <div className="text-left w-44">Contact</div>,
+          cell: ({ row }) => (
+            <div className="text-left w-44">
+              {row.original.contact?.id ? (
+                <Link
+                  className="text-blue-600 hover:underline"
+                  href={`/teams/${row.original.contact.teamId}/crm/contacts/${row.original.contact.id}`}
+                >
+                  {row.original.contact.name}
+                </Link>
+              ) : (
+                "N/A"
+              )}
+            </div>
+          ),
+        } satisfies ColumnDef<File>,
+      ]
+    : []),
   {
     accessorKey: "organization",
     header: () => <div className="text-left w-36">Organization</div>,

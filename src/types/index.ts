@@ -393,6 +393,8 @@ export interface File {
   OrganizationTaxExemptionCertificate?: Organization;
   OrganizationArticlesOfAssociation?: Organization;
   FundingRequest?: FundingRequest;
+  contactId?: string;
+  contact?: Pick<Contact, "id" | "teamId" | "name" | "email">;
   donationAgreement?: DonationAgreement[];
   Transaction?: Transaction[];
   downloadAudits?: FileDownloadAudit[];
