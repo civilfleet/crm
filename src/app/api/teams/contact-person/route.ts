@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import { getTeamsUsers } from "@/services/users";
-import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 export async function GET(req: Request) {
   try {

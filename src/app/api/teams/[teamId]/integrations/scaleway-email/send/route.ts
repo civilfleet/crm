@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import { sendMassEmailToContacts } from "@/services/integrations/scaleway-email";
-import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 const sendMassEmailSchema = z
   .object({
@@ -20,13 +20,10 @@ const sendMassEmailSchema = z
     html: z.string().trim().min(1, "Email body is required"),
     senderLabelMode: z.enum(["default", "user"]).default("default"),
   })
-  .refine(
-    (value) => value.contactIds.length > 0 || value.eventIds.length > 0,
-    {
+  .refine((value) => value.contactIds.length > 0 || value.eventIds.length > 0, {
       message: "Select at least one contact or event",
       path: ["contactIds"],
-    },
-  );
+  });
 
 export async function POST(
   request: Request,

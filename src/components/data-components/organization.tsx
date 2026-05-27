@@ -56,7 +56,7 @@ function LinkedContactsOverview({
   organizationId: string;
   teamId?: string | null;
   contacts: LinkedContact[];
-  onLinkedContactsChange: () => void | Promise<unknown>;
+  onLinkedContactsChange: () => undefined | Promise<unknown>;
 }) {
   const [contactSearch, setContactSearch] = useState("");
   const [actionContactId, setActionContactId] = useState<string | null>(null);

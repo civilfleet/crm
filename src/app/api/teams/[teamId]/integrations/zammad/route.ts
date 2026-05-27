@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import {
   getZammadIntegration,
   saveZammadIntegration,
 } from "@/services/integrations/zammad";
-import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 const updateIntegrationSchema = z.object({
   apiKey: z.string().trim().min(1, "API token is required").optional(),

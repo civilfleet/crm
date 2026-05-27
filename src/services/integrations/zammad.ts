@@ -1,5 +1,5 @@
-import { IntegrationProvider as PrismaIntegrationProvider } from "@prisma/client";
 import crypto from "node:crypto";
+import { IntegrationProvider as PrismaIntegrationProvider } from "@prisma/client";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import { enqueueZammadTicketSyncJob } from "@/services/integrations/zammad-queue";

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import {
   createEmailTemplate,
   getEmailTemplates,
   updateEmailTemplate,
 } from "@/services/email-templates";
-import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 const emailTemplateSchema = z.object({
   name: z.string(),

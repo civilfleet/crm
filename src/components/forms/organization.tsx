@@ -15,11 +15,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
+import type { AppModule } from "@/types";
 import {
   createOrganizationSchema,
   updateOrganizationSchema,
 } from "@/validations/organizations";
-import type { AppModule } from "@/types";
 import FileUpload from "../file-uploader";
 import Alert from "../helper/alert";
 import ButtonControl from "../helper/button-control";
@@ -241,7 +241,9 @@ export default function OrganizationForm({ data }: { data: Organization }) {
       });
       const organizationId = responseData?.data?.id;
       if (!isUpdate && organizationId) {
-        router.push(`${pathname.replace(/\/create\/?$/, "")}/${organizationId}`);
+        router.push(
+          `${pathname.replace(/\/create\/?$/, "")}/${organizationId}`,
+        );
       }
     } catch (e) {
       toast({
@@ -544,8 +546,7 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                       name="taxExemptionCertificate"
                       data={
                         data?.Files?.find(
-                          (file) =>
-                            file.type === "TAX_EXEMPTION_CERTIFICATE",
+                          (file) => file.type === "TAX_EXEMPTION_CERTIFICATE",
                         )?.id as string
                       }
                       onFileUpload={(url) =>
@@ -576,9 +577,7 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                       form={form}
                       name="bankDetails.accountHolder"
                       placeholder="Account holder"
-                      isFilled={isFieldFilled(
-                        data?.bankDetails?.accountHolder,
-                      )}
+                      isFilled={isFieldFilled(data?.bankDetails?.accountHolder)}
                     />
                     <FormInputControl
                       form={form}
@@ -617,7 +616,9 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                           />
                         </FormControl>
                         <div className="space-y-1">
-                          <FormLabel>Enable organization portal access</FormLabel>
+                          <FormLabel>
+                            Enable organization portal access
+                          </FormLabel>
                           <CardDescription>
                             Show this organization in the team selector even if
                             no login user is assigned yet.
@@ -628,9 +629,7 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                     )}
                   />
                   <div>
-                    <h4 className="text-lg font-semibold">
-                      Portal login user
-                    </h4>
+                    <h4 className="text-lg font-semibold">Portal login user</h4>
                     <CardDescription>
                       Optional. Use this when someone from the organization
                       should be able to sign in.
@@ -676,8 +675,7 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                         name="articlesOfAssociation"
                         data={
                           data?.Files?.find(
-                            (file) =>
-                              file.type === "ARTICLES_OF_ASSOCIATION",
+                            (file) => file.type === "ARTICLES_OF_ASSOCIATION",
                           )?.id
                         }
                         error={

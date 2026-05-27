@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import { getZammadIntegration } from "@/services/integrations/zammad";
 import { enqueueZammadSyncJob } from "@/services/integrations/zammad-queue";
-import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 export async function POST(
   request: Request,

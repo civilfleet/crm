@@ -1,5 +1,5 @@
-import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { getAdminUser, getUserCurrent } from "@/services/users";
 import { Roles } from "@/types";
 

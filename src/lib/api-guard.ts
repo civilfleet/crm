@@ -1,9 +1,9 @@
-import { auth } from "@/auth";
 import { NextResponse } from "next/server";
-import { getTeamAdminAccess } from "@/services/teams/access";
-import prisma from "@/lib/prisma";
-import { type AppModule, Roles } from "@/types";
+import { auth } from "@/auth";
 import { hasModuleAccess } from "@/lib/permissions";
+import prisma from "@/lib/prisma";
+import { getTeamAdminAccess } from "@/services/teams/access";
+import { type AppModule, Roles } from "@/types";
 export class ApiError extends Error {
   constructor(
     public status: number,

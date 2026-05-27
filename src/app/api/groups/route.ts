@@ -1,9 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import { createGroup, deleteGroups, getTeamGroups } from "@/services/groups";
 import { createGroupSchema, deleteGroupsSchema } from "@/validations/groups";
-import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 export async function GET(request: NextRequest) {
   try {

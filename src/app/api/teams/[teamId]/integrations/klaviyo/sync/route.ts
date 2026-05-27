@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import { syncKlaviyoIntegration } from "@/services/integrations/klaviyo";
-import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 export async function POST(
   _request: Request,

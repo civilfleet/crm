@@ -494,8 +494,8 @@ const EventEmailDialog = ({
           <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
             {events.length} event{events.length === 1 ? "" : "s"} selected with{" "}
             {registrantCount} current registrant
-            {registrantCount === 1 ? "" : "s"}. Duplicate contacts across
-            events are only included once.
+            {registrantCount === 1 ? "" : "s"}. Duplicate contacts across events
+            are only included once.
           </div>
 
           <div className="space-y-2">
@@ -511,9 +511,7 @@ const EventEmailDialog = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="default">
-                  Default sender label
-                </SelectItem>
+                <SelectItem value="default">Default sender label</SelectItem>
                 <SelectItem value="user">My user name</SelectItem>
               </SelectContent>
             </Select>

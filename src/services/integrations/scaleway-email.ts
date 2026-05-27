@@ -369,7 +369,9 @@ export const sendMassEmailToContacts = async ({
   const uniqueContactIds = Array.from(
     new Set([
       ...uniqueDirectContactIds,
-      ...eventRegistrantContactIds.map((registration) => registration.contactId),
+      ...eventRegistrantContactIds.map(
+        (registration) => registration.contactId,
+      ),
     ]),
   );
 

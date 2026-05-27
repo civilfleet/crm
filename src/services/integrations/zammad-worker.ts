@@ -1,5 +1,5 @@
-import { type ZammadSyncJob, ZammadSyncJobType } from "@prisma/client";
 import os from "node:os";
+import { type ZammadSyncJob, ZammadSyncJobType } from "@prisma/client";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import {

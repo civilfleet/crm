@@ -1,6 +1,6 @@
-import dotenv from "dotenv";
 import fs from "node:fs";
 import path from "node:path";
+import dotenv from "dotenv";
 
 const loadDotenv = () => {
   const cwd = process.cwd();
@@ -55,7 +55,9 @@ const run = async () => {
         port: Number(process.env.SMTP_PORT ?? 587),
         secure:
           process.env.SMTP_SECURE ??
-          (Number(process.env.SMTP_PORT ?? 587) === 465 ? "auto:true" : "auto:false"),
+          (Number(process.env.SMTP_PORT ?? 587) === 465
+            ? "auto:true"
+            : "auto:false"),
         requireTLS: process.env.SMTP_REQUIRE_TLS,
         user: maskValue(process.env.SMTP_USER),
         from: senderEmail,

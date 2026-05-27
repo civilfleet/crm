@@ -1575,7 +1575,9 @@ const ContactImportDialog = ({
                           <SelectValue placeholder="Do not import" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="__none__">Do not import</SelectItem>
+                          <SelectItem value="__none__">
+                            Do not import
+                          </SelectItem>
                           {CONTACT_IMPORT_FIELDS.map(
                             ({ field, label, required }) => (
                               <SelectItem key={field} value={field}>
@@ -1709,9 +1711,7 @@ const MassEmailDialog = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="default">
-                  Default sender label
-                </SelectItem>
+                <SelectItem value="default">Default sender label</SelectItem>
                 <SelectItem value="user">My user name</SelectItem>
               </SelectContent>
             </Select>

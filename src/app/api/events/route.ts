@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import { createEvent, deleteEvents, getTeamEvents } from "@/services/events";
 import { createEventSchema, deleteEventsSchema } from "@/validations/events";
-import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 export async function GET(req: Request) {
   try {

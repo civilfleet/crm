@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import {
   getKlaviyoIntegration,
   saveKlaviyoIntegration,
 } from "@/services/integrations/klaviyo";
-import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 
 const updateIntegrationSchema = z.object({
   apiKey: z.string().trim().min(1, "API key is required").optional(),

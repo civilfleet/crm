@@ -258,9 +258,7 @@ const EventRegistrantsEmailDialog = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="default">
-                  Default sender label
-                </SelectItem>
+                <SelectItem value="default">Default sender label</SelectItem>
                 <SelectItem value="user">My user name</SelectItem>
               </SelectContent>
             </Select>
