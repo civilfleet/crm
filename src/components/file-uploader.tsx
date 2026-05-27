@@ -13,6 +13,8 @@ interface FileUploadProps {
   label?: string;
   onUploadError?: (message: string) => void;
   onUploadingChange?: (isUploading: boolean) => void;
+  uploadUrl?: string;
+  teamId?: string;
 }
 
 const FileUpload = ({
@@ -25,6 +27,8 @@ const FileUpload = ({
   label,
   onUploadError,
   onUploadingChange,
+  uploadUrl = "/api/upload",
+  teamId,
 }: FileUploadProps) => {
   const [_fileUrl, setFileUrl] = useState<string | null>(data || null);
   const [loading, setLoading] = useState(false);
@@ -43,10 +47,14 @@ const FileUpload = ({
     onUploadingChange?.(true);
 
     try {
-      const upload = await fetch("/api/upload", {
+      const upload = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: file.name, fileType: file.type }),
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type,
+          ...(teamId ? { teamId } : {}),
+        }),
       });
 
       if (!upload.ok) {

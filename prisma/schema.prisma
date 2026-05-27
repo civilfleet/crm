@@ -124,6 +124,9 @@ model File {
 
   Transaction Transaction[]
   downloadAudits FileDownloadAudit[]
+
+  contactId String?  @db.VarChar(255)
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
 }
 
 enum FileDownloadType {
@@ -498,6 +501,7 @@ model Contact {
   lists             ContactListMember[]
   organizationsAsContactPerson Organization[] @relation("OrganizationContactPerson")
   organizations     ContactOrganization[]
+  files             File[]
 
   @@index([groupId])
   @@index([teamId, groupId])

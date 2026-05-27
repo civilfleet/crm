@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedSession, handleApiError } from "@/lib/api-guard";
+import { handleApiError } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import { uploadFile } from "@/services/file/s3-service";
 
 export async function POST(req: Request) {
   try {
-    await getAuthenticatedSession();
-    const values = (await req.json()) as {
-      fileName: string;
-      fileType: string;
-      teamId?: string;
-    };
+    const values = await req.json();
 
     const putUrl = await uploadFile({
       fileName: values.fileName,

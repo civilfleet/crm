@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import useSWR from "swr";
 import type { z } from "zod";
+import FileUpload from "@/components/file-uploader";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -171,6 +172,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
         : []),
       ...(canAccessSubmodule("SHOP") ? [{ value: "shop", label: "Shop" }] : []),
       { value: "attributes", label: "Attributes" },
+      { value: "files", label: "Files" },
     ],
     [canAccessSubmodule],
   );
@@ -220,6 +222,12 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
           groupId: contact?.groupId ?? undefined,
           profileAttributes: (contact?.profileAttributes ??
             []) as CreateContactFormValues["profileAttributes"],
+          files:
+            contact?.files?.map((f) => ({
+              name: f.name ?? "",
+              type: f.type ?? "",
+              url: f.url ?? "",
+            })) ?? [],
         }
       : {
           teamId,
@@ -245,6 +253,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
           organizationIds: [],
           groupId: undefined,
           profileAttributes: [] as CreateContactFormValues["profileAttributes"],
+          files: [],
         },
   });
 
@@ -267,6 +276,14 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
   } = useFieldArray({
     control,
     name: "socialLinks",
+  });
+  const {
+    fields: fileFields,
+    append: appendFile,
+    remove: removeFile,
+  } = useFieldArray({
+    control,
+    name: "files",
   });
 
   const attributeTypes = useMemo(
@@ -1615,6 +1632,132 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                       </div>
                     );
                   })}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="files" className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-medium">Compliance Documents</h3>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => appendFile({ name: "", type: "", url: "" })}
+                  >
+                    <PlusCircle className="h-4 w-4 mr-2" />
+                    Add File
+                  </Button>
+                </div>
+
+                <div className="space-y-4">
+                  {fileFields.map((field, index) => (
+                    <div
+                      key={field.id}
+                      className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-start p-4 border rounded-md"
+                    >
+                      <div className="sm:col-span-5 space-y-4">
+                        <FormField
+                          control={form.control}
+                          name={`files.${index}.name`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Document Name</FormLabel>
+                              <FormControl>
+                                <Input placeholder="e.g. NDA 2024" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`files.${index}.type`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Document Type</FormLabel>
+                              <Select
+                                onValueChange={field.onChange}
+                                defaultValue={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select type" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="NDA">NDA</SelectItem>
+                                  <SelectItem value="Code of Conduct">
+                                    Code of Conduct
+                                  </SelectItem>
+                                  <SelectItem value="Other">Other</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <div className="sm:col-span-6 space-y-4">
+                        <FormField
+                          control={form.control}
+                          name={`files.${index}.url`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>File Upload</FormLabel>
+                              <FormControl>
+                                <div className="space-y-2">
+                                  {field.value ? (
+                                    <div className="flex items-center gap-2">
+                                      <a
+                                        href={field.value}
+                                        target="_blank"
+                                        rel="noopener"
+                                        className="text-blue-500 hover:underline break-all text-sm"
+                                      >
+                                        {field.value}
+                                      </a>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => field.onChange("")}
+                                      >
+                                        Change
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <FileUpload
+                                      uploadUrl={`/api/teams/${teamId}/files/upload`}
+                                      onFileUpload={field.onChange}
+                                    />
+                                  )}
+                                </div>
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                      <div className="sm:col-span-1 flex justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => removeFile(index)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {fileFields.length === 0 && (
+                    <div className="text-center py-8 text-muted-foreground border rounded-md border-dashed">
+                      No documents attached. Click "Add File" to upload
+                      compliance documents.
+                    </div>
+                  )}
                 </div>
               </TabsContent>
             </Tabs>

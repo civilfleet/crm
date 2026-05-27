@@ -21,9 +21,11 @@ const getFiles = async (
   {
     organizationId,
     teamId,
+    contactId,
   }: {
-    organizationId: string | undefined;
-    teamId: string | undefined;
+    organizationId?: string;
+    teamId?: string;
+    contactId?: string;
   },
   searchQuery: string,
 ) => {
@@ -55,6 +57,10 @@ const getFiles = async (
         { donationAgreement: { some: { organizationId } } },
         { Transaction: { some: { organizationId } } },
       ],
+    };
+  } else if (contactId) {
+    where = {
+      contactId,
     };
   }
 
@@ -169,6 +175,11 @@ const getFileByIdWithRelations = async (id: string) => {
           organizationId: true,
         },
       },
+      contact: {
+        select: {
+          teamId: true,
+        },
+      },
     },
   });
 };
@@ -211,6 +222,26 @@ const canUserAccessTeamOrOrgScope = async ({
   return false;
 };
 
+const canUserAccessContactScope = async ({
+  userId,
+  contactId,
+}: {
+  userId: string;
+  contactId: string;
+}) => {
+  const [scope, contact] = await Promise.all([
+    getUserAccessScope(userId),
+    prisma.contact.findUnique({
+      where: { id: contactId },
+      select: { teamId: true },
+    }),
+  ]);
+
+  if (!contact) return false;
+  if (scope.roles.includes(Roles.Admin)) return true;
+  return scope.teamIds.includes(contact.teamId);
+};
+
 const canUserAccessFile = async ({
   userId,
   fileId,
@@ -229,6 +260,10 @@ const canUserAccessFile = async ({
     file.organizationId &&
     scope.organizationIds.includes(file.organizationId)
   ) {
+    return true;
+  }
+
+  if (file.contact?.teamId && scope.teamIds.includes(file.contact.teamId)) {
     return true;
   }
 
@@ -361,6 +396,7 @@ const getFileDownloadAudits = async ({
 
 export {
   canUserAccessFile,
+  canUserAccessContactScope,
   canUserAccessTeamOrOrgScope,
   getFileById,
   getFileByIdWithRelations,

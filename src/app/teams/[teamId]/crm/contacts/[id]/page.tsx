@@ -3,6 +3,7 @@ import {
   AtSign,
   Calendar,
   CalendarDays,
+  FileText,
   Globe,
   Hash,
   Mail,
@@ -615,6 +616,50 @@ export default async function ContactDetailPage({
     </>
   );
 
+  const filesTabContent = (
+    <>
+      <div>
+        <h3 className="text-base font-semibold">Compliance Documents</h3>
+        <p className="text-sm text-muted-foreground">
+          Attached compliance and legal documents
+        </p>
+      </div>
+
+      {!contact.files || contact.files.length === 0 ? (
+        <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+          No documents attached.
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {contact.files.map((file) => (
+            <div
+              key={file.id}
+              className="flex items-start gap-3 rounded-md border bg-muted/30 p-4"
+            >
+              <FileText className="mt-0.5 h-5 w-5 text-muted-foreground" />
+              <div className="flex-1 space-y-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-medium">{file.name}</p>
+                  <Badge variant="outline" className="text-xs">
+                    {file.type}
+                  </Badge>
+                </div>
+                <a
+                  href={file.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:underline break-all"
+                >
+                  View Document
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
   const tabItems = [
     {
       value: "general",
@@ -662,6 +707,12 @@ export default async function ContactDetailPage({
       value: "attributes",
       label: "Attributes",
       content: attributesTabContent,
+      contentClassName: "space-y-4",
+    },
+    {
+      value: "files",
+      label: "Files",
+      content: filesTabContent,
       contentClassName: "space-y-4",
     },
   ];

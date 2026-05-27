@@ -84,6 +84,7 @@ type CreateContactInput = {
   organizationIds?: string[];
   groupId?: string;
   profileAttributes?: ContactProfileAttribute[];
+  files?: { name: string; type: string; url: string }[];
 };
 
 type UpdateContactInput = {
@@ -111,6 +112,7 @@ type UpdateContactInput = {
   organizationIds?: string[];
   groupId?: string;
   profileAttributes?: ContactProfileAttribute[];
+  files?: { name: string; type: string; url: string }[];
 };
 
 type ImportContactsFromCsvInput = {
@@ -1214,6 +1216,19 @@ async function getTeamContacts(
     });
   }
 
+  const contactIdsFilters = resolvedFilters.filter(
+    (filter): filter is Extract<ContactFilter, { type: "contactIds" }> =>
+      filter.type === "contactIds" &&
+      Array.isArray(filter.contactIds) &&
+      filter.contactIds.length > 0,
+  );
+  if (contactIdsFilters.length > 0) {
+    const allContactIds = contactIdsFilters.flatMap((f) => f.contactIds);
+    andConditions.push({
+      id: { in: allContactIds },
+    });
+  }
+
   const eventRoleIds = resolvedFilters
     .filter(
       (filter): filter is Extract<ContactFilter, { type: "eventRole" }> =>
@@ -1433,6 +1448,7 @@ const getContactById = async (
           },
         },
       },
+      files: true,
     },
   });
 
@@ -1483,6 +1499,7 @@ const createContact = async (
     organizationIds,
     groupId,
     profileAttributes,
+    files,
   } = sanitizedInput;
   const normalizedAttributes = normalizeAttributes(profileAttributes);
   const normalizedSocialLinks = normalizeSocialLinks(socialLinks);
@@ -1606,7 +1623,9 @@ const createContact = async (
       });
 
       if (organizations.length !== normalizedOrganizationIds.length) {
-        throw new Error("One or more selected organizations could not be found.");
+        throw new Error(
+          "One or more selected organizations could not be found.",
+        );
       }
 
       await tx.contactOrganization.createMany({
@@ -1615,6 +1634,22 @@ const createContact = async (
           organizationId,
         })),
       });
+    }
+
+    if (files && files.length > 0 && userId) {
+      const fileData = files
+        .filter((f) => f.name && f.url && f.type)
+        .map((f) => ({
+          name: f.name,
+          type: f.type,
+          url: f.url,
+          contactId: contact.id,
+          createdById: userId,
+          updatedById: userId,
+        }));
+      if (fileData.length > 0) {
+        await tx.file.createMany({ data: fileData });
+      }
     }
 
     // Log contact creation
@@ -1857,6 +1892,7 @@ const updateContact = async (
     profileAttributes,
     socialLinks,
     organizationIds,
+    files,
   } = sanitizedInput;
   const normalizedName = typeof name === "string" ? name.trim() : undefined;
   const pronounsProvided = Object.hasOwn(input, "pronouns");
@@ -2435,7 +2471,9 @@ const updateContact = async (
       });
 
       if (organizations.length !== normalizedOrganizationIds.length) {
-        throw new Error("One or more selected organizations could not be found.");
+        throw new Error(
+          "One or more selected organizations could not be found.",
+        );
       }
 
       const existingOrganizationIds = new Set(
@@ -2465,6 +2503,40 @@ const updateContact = async (
             },
           });
         }
+      }
+    }
+
+    if (files !== undefined && userId) {
+      const existingFiles = await tx.file.findMany({
+        where: { contactId },
+        select: { id: true, url: true },
+      });
+
+      const newUrls = new Set(files.map((f) => f.url));
+
+      const toRemove = existingFiles.filter((f) => !newUrls.has(f.url));
+      if (toRemove.length > 0) {
+        await tx.file.deleteMany({
+          where: { id: { in: toRemove.map((f) => f.id) } },
+        });
+      }
+
+      const existingUrls = new Set(existingFiles.map((f) => f.url));
+      const toAdd = files.filter(
+        (f) => !existingUrls.has(f.url) && f.name && f.type,
+      );
+
+      if (toAdd.length > 0) {
+        await tx.file.createMany({
+          data: toAdd.map((f) => ({
+            name: f.name,
+            type: f.type,
+            url: f.url,
+            contactId,
+            createdById: userId,
+            updatedById: userId,
+          })),
+        });
       }
     }
 
@@ -2630,6 +2702,7 @@ const updateContact = async (
             },
           },
         },
+        files: true,
       },
     });
 

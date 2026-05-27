@@ -102,6 +102,12 @@ const contactSocialLinkSchema = z.object({
   handle: z.string().trim().min(1, "Handle is required").max(255),
 });
 
+const contactFileSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(255),
+  type: z.string().trim().min(1, "Type is required").max(50),
+  url: z.string().trim().min(1, "File reference is required"),
+});
+
 const contactFieldFilterSchema = z
   .object({
     type: z.literal("contactField"),
@@ -206,8 +212,11 @@ export const createContactSchema = z.object({
   signal: optionalText(z.string()),
   website: optionalWebsite,
   socialLinks: z.array(contactSocialLinkSchema).default([]),
-  organizationIds: z.array(z.uuid("Organization id must be a valid UUID")).default([]),
+  organizationIds: z
+    .array(z.uuid("Organization id must be a valid UUID"))
+    .default([]),
   profileAttributes: z.array(contactAttributeSchema).default([]),
+  files: z.array(contactFileSchema).default([]),
   groupId: z.preprocess(
     preprocessEmptyString,
     z.uuid("Group id must be a valid UUID").optional(),
@@ -250,6 +259,7 @@ export const updateContactSchema = z.object({
     .array(z.uuid("Organization id must be a valid UUID"))
     .optional(),
   profileAttributes: z.array(contactAttributeSchema).optional(),
+  files: z.array(contactFileSchema).optional(),
   groupId: z.preprocess(
     preprocessEmptyString,
     z.uuid("Group id must be a valid UUID").optional(),

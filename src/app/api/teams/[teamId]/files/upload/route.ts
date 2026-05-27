@@ -1,16 +1,30 @@
 import { NextResponse } from "next/server";
-import { getAuthenticatedSession, handleApiError } from "@/lib/api-guard";
+import {
+  getAuthenticatedSession,
+  handleApiError,
+  verifyTeamAccess,
+} from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import { uploadFile } from "@/services/file/s3-service";
 
-export async function POST(req: Request) {
+export async function POST(
+  req: Request,
+  { params }: { params: Promise<{ teamId: string }> },
+) {
   try {
     await getAuthenticatedSession();
-    const values = (await req.json()) as {
-      fileName: string;
-      fileType: string;
-      teamId?: string;
-    };
+    const teamId = (await params).teamId;
+
+    if (!teamId) {
+      return NextResponse.json(
+        { error: "teamId is required for team file uploads" },
+        { status: 400 },
+      );
+    }
+
+    await verifyTeamAccess(teamId);
+
+    const values = await req.json();
 
     const putUrl = await uploadFile({
       fileName: values.fileName,

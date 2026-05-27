@@ -285,16 +285,19 @@ export default function PublicOrganizationRegistration({
                   <div className="space-y-4">
                     <FileUpload
                       label="Organization logo"
+                      uploadUrl="/api/public/upload"
                       onFileUpload={(fileUrl) => form.setValue("logo", fileUrl)}
                     />
                     <FileUpload
                       label="Tax exemption certificate"
+                      uploadUrl="/api/public/upload"
                       onFileUpload={(fileUrl) =>
                         form.setValue("taxExemptionCertificate", fileUrl)
                       }
                     />
                     <FileUpload
                       label="Articles of association"
+                      uploadUrl="/api/public/upload"
                       onFileUpload={(fileUrl) =>
                         form.setValue("articlesOfAssociation", fileUrl)
                       }

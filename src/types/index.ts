@@ -209,6 +209,7 @@ export interface Contact {
   group?: Group;
   profileAttributes: ContactProfileAttribute[];
   events?: ContactEvent[];
+  files?: { id?: string; name: string; type: string; url: string }[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -260,6 +261,10 @@ export type ContactFilter =
       postalCode: string;
       countryCode: string;
       radiusKm: number;
+    }
+  | {
+      type: "contactIds";
+      contactIds: string[];
     };
 
 export type ContactFilterType = ContactFilter["type"];
