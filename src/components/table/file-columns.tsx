@@ -61,11 +61,7 @@ export const getFileColumns = (
     cell: ({ row }) => (
       <div className="flex items-center gap-2 text-left">
         <Button asChild size="sm" variant="outline">
-          <Link
-            href={`${process.env.NEXT_PUBLIC_BASE_URL}/api/files/${row.original?.id}`}
-          >
-            Download
-          </Link>
+          <Link href={`/api/files/${row.original?.id}`}>Download</Link>
         </Button>
         {onDelete ? (
           <Button
@@ -116,36 +112,18 @@ export const getFileColumns = (
     },
   },
   ...(includeContactFiles
-    ? [
+    ? []
+    : [
         {
-          id: "contact",
-          header: () => <div className="text-left w-44">Contact</div>,
+          accessorKey: "organization",
+          header: () => <div className="text-left w-36">Organization</div>,
           cell: ({ row }) => (
-            <div className="text-left w-44">
-              {row.original.contact?.id ? (
-                <Link
-                  className="text-blue-600 hover:underline"
-                  href={`/teams/${row.original.contact.teamId}/crm/contacts/${row.original.contact.id}`}
-                >
-                  {row.original.contact.name}
-                </Link>
-              ) : (
-                "N/A"
-              )}
+            <div className="text-left">
+              {row.original?.organization?.name || "N/A"}
             </div>
           ),
         } satisfies ColumnDef<File>,
-      ]
-    : []),
-  {
-    accessorKey: "organization",
-    header: () => <div className="text-left w-36">Organization</div>,
-    cell: ({ row }) => (
-      <div className="text-left">
-        {row.original?.organization?.name || "N/A"}
-      </div>
-    ),
-  },
+      ]),
   {
     accessorKey: "type",
     header: () => <div className="text-left w-36">Type</div>,
@@ -180,9 +158,7 @@ export const getFileColumns = (
     header: () => <div className="text-left w-36">File</div>,
     cell: ({ row }) => (
       <div className="text-left text-blue-500">
-        <Link
-          href={`${process.env.NEXT_PUBLIC_BASE_URL}/api/files/${row.original?.id}`}
-        >
+        <Link href={`/api/files/${row.original?.id}`}>
           {row.original?.name || row.original?.url || "N/A"}
         </Link>
       </div>
