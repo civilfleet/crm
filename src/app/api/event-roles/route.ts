@@ -8,7 +8,7 @@ import {
 import {
   createEventRoleSchema,
   deleteEventRolesSchema,
-} from "@/validations/eventRoles";
+} from "@/validations/event-roles";
 
 export async function GET(req: Request) {
   try {

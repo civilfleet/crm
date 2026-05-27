@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { createEventRoleSchema } from "@/validations/eventRoles";
+import { createEventRoleSchema } from "@/validations/event-roles";
 
 type EventRole = {
   id: string;

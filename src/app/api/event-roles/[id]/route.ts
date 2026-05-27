@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { handlePrismaError } from "@/lib/utils";
 import { getEventRoleById, updateEventRole } from "@/services/event-roles";
-import { updateEventRoleSchema } from "@/validations/eventRoles";
+import { updateEventRoleSchema } from "@/validations/event-roles";
 
 interface RouteParams {
   params: Promise<{

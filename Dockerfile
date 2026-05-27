@@ -11,6 +11,7 @@ RUN apt-get update \
 FROM base AS deps
 
 COPY package.json yarn.lock .yarnrc.yml prisma.config.ts ./
+COPY .yarn ./.yarn
 COPY prisma ./prisma
 RUN yarn install --immutable
 
