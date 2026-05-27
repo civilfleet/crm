@@ -1021,26 +1021,26 @@ export default function ContactEngagementHistory({
                         )}
                       </div>
                     </button>
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => toggleThread(item.ticketId)}
+                      >
+                        {isExpanded ? "Collapse" : "Open thread"}
+                      </Button>
+                      {latest ? (
                         <Button
-                          variant="outline"
+                          variant="secondary"
                           size="sm"
                           className="h-7 px-2 text-xs"
-                          onClick={() => toggleThread(item.ticketId)}
+                          onClick={() => handleReplyOpen(latest)}
                         >
-                          {isExpanded ? "Collapse" : "Open thread"}
+                          Reply
                         </Button>
-                        {latest ? (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="h-7 px-2 text-xs"
-                            onClick={() => handleReplyOpen(latest)}
-                          >
-                            Reply
-                          </Button>
-                        ) : null}
-                      </div>
+                      ) : null}
+                    </div>
                   </div>
                   {isExpanded && (
                     <div className="space-y-4 p-4">

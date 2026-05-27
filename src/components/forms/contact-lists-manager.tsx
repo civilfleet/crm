@@ -129,124 +129,124 @@ export default function ContactListsManager({
 
   const handleDelete = useCallback(
     async (listId: string, listName: string) => {
-    if (!confirm(`Are you sure you want to delete "${listName}"?`)) {
-      return;
-    }
-
-    try {
-      setDeletingId(listId);
-      const response = await fetch("/api/contact-lists", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          teamId,
-          ids: [listId],
-        }),
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody.error || "Failed to delete list");
+      if (!confirm(`Are you sure you want to delete "${listName}"?`)) {
+        return;
       }
 
-      toast({
-        title: "List deleted",
-        description: `${listName} has been removed.`,
-      });
+      try {
+        setDeletingId(listId);
+        const response = await fetch("/api/contact-lists", {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            teamId,
+            ids: [listId],
+          }),
+        });
 
-      mutate();
-      router.refresh();
-    } catch (error) {
-      toast({
-        title: "Unable to delete list",
-        description:
-          error instanceof Error
-            ? error.message
-            : "An unexpected error occurred.",
-        variant: "destructive",
-      });
-    } finally {
-      setDeletingId(null);
-    }
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          throw new Error(errorBody.error || "Failed to delete list");
+        }
+
+        toast({
+          title: "List deleted",
+          description: `${listName} has been removed.`,
+        });
+
+        mutate();
+        router.refresh();
+      } catch (error) {
+        toast({
+          title: "Unable to delete list",
+          description:
+            error instanceof Error
+              ? error.message
+              : "An unexpected error occurred.",
+          variant: "destructive",
+        });
+      } finally {
+        setDeletingId(null);
+      }
     },
     [mutate, router, teamId, toast],
   );
 
   const handleCopyContacts = useCallback(
     async (list: ContactList) => {
-    if (!list.contacts?.length) {
-      toast({
-        title: "No contacts to copy",
-        description: "Add contacts to this list to copy them.",
-      });
-      return;
-    }
+      if (!list.contacts?.length) {
+        toast({
+          title: "No contacts to copy",
+          description: "Add contacts to this list to copy them.",
+        });
+        return;
+      }
 
-    if (typeof navigator === "undefined" || !navigator.clipboard) {
-      toast({
-        title: "Clipboard unavailable",
-        description: "Copying contacts is not supported in this environment.",
-        variant: "destructive",
-      });
-      return;
-    }
+      if (typeof navigator === "undefined" || !navigator.clipboard) {
+        toast({
+          title: "Clipboard unavailable",
+          description: "Copying contacts is not supported in this environment.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    const contactsText = list.contacts
-      .map((contact) => {
-        const name = contact.name?.trim();
-        const email = contact.email?.trim();
+      const contactsText = list.contacts
+        .map((contact) => {
+          const name = contact.name?.trim();
+          const email = contact.email?.trim();
 
-        if (name && email) {
-          return `${name} <${email}>`;
-        }
+          if (name && email) {
+            return `${name} <${email}>`;
+          }
 
-        if (email) {
-          return email;
-        }
+          if (email) {
+            return email;
+          }
 
-        return name ?? "";
-      })
-      .filter((entry) => entry.length > 0)
-      .join("\n");
+          return name ?? "";
+        })
+        .filter((entry) => entry.length > 0)
+        .join("\n");
 
-    if (!contactsText) {
-      toast({
-        title: "Nothing to copy",
-        description:
-          "Contacts in this list are missing names or emails to copy.",
-      });
-      return;
-    }
+      if (!contactsText) {
+        toast({
+          title: "Nothing to copy",
+          description:
+            "Contacts in this list are missing names or emails to copy.",
+        });
+        return;
+      }
 
-    try {
-      await navigator.clipboard.writeText(contactsText);
-      setCopiedListId(list.id);
-      toast({
-        title: "Contacts copied",
-        description: `Copied ${list.contacts.length} contact${
-          list.contacts.length === 1 ? "" : "s"
-        } to your clipboard.`,
-      });
-      setTimeout(
-        () =>
+      try {
+        await navigator.clipboard.writeText(contactsText);
+        setCopiedListId(list.id);
+        toast({
+          title: "Contacts copied",
+          description: `Copied ${list.contacts.length} contact${
+            list.contacts.length === 1 ? "" : "s"
+          } to your clipboard.`,
+        });
+        setTimeout(
+          () =>
             setCopiedListId((current) =>
               current === list.id ? null : current,
             ),
-        2000,
-      );
-    } catch (error) {
-      toast({
-        title: "Unable to copy contacts",
-        description:
-          error instanceof Error ? error.message : "Please try again.",
-        variant: "destructive",
-      });
-    }
+          2000,
+        );
+      } catch (error) {
+        toast({
+          title: "Unable to copy contacts",
+          description:
+            error instanceof Error ? error.message : "Please try again.",
+          variant: "destructive",
+        });
+      }
     },
     [toast],
-    );
+  );
 
   const handleDeleteSelected = async (
     selectedRows: ContactList[],
@@ -306,24 +306,24 @@ export default function ContactListsManager({
 
   const getEmailRecipientsFromLists = useCallback(
     (selectedRows: ContactList[]) => {
-    const recipientsById = new Map<string, ListEmailRecipient>();
+      const recipientsById = new Map<string, ListEmailRecipient>();
 
-    selectedRows.forEach((list) => {
-      list.contacts.forEach((contact) => {
-        const email = contact.email?.trim();
-        if (!email || recipientsById.has(contact.id)) {
-          return;
-        }
+      selectedRows.forEach((list) => {
+        list.contacts.forEach((contact) => {
+          const email = contact.email?.trim();
+          if (!email || recipientsById.has(contact.id)) {
+            return;
+          }
 
-        recipientsById.set(contact.id, {
-          id: contact.id,
-          name: contact.name,
-          email,
+          recipientsById.set(contact.id, {
+            id: contact.id,
+            name: contact.name,
+            email,
+          });
         });
       });
-    });
 
-    return Array.from(recipientsById.values());
+      return Array.from(recipientsById.values());
     },
     [],
   );

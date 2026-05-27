@@ -21,8 +21,8 @@ const sendMassEmailSchema = z
     senderLabelMode: z.enum(["default", "user"]).default("default"),
   })
   .refine((value) => value.contactIds.length > 0 || value.eventIds.length > 0, {
-      message: "Select at least one contact or event",
-      path: ["contactIds"],
+    message: "Select at least one contact or event",
+    path: ["contactIds"],
   });
 
 export async function POST(
