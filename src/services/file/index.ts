@@ -195,6 +195,88 @@ const getFileByIdWithRelations = async (id: string) => {
   });
 };
 
+const getFileDetails = async (id: string) => {
+  return prisma.file.findUnique({
+    where: { id },
+    include: {
+      organization: {
+        select: {
+          id: true,
+          teamId: true,
+          name: true,
+        },
+      },
+      FundingRequest: {
+        select: {
+          id: true,
+          name: true,
+          teamId: true,
+          organizationId: true,
+        },
+      },
+      donationAgreement: {
+        select: {
+          id: true,
+          teamId: true,
+          organizationId: true,
+          fundingRequest: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+      Transaction: {
+        select: {
+          id: true,
+          teamId: true,
+          organizationId: true,
+          fundingRequest: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+      contact: {
+        select: {
+          id: true,
+          teamId: true,
+          name: true,
+          email: true,
+        },
+      },
+      createdBy: {
+        select: {
+          email: true,
+        },
+      },
+      updatedBy: {
+        select: {
+          email: true,
+        },
+      },
+      downloadAudits: {
+        orderBy: {
+          createdAt: "desc",
+        },
+        select: {
+          id: true,
+          type: true,
+          fileCount: true,
+          query: true,
+          createdAt: true,
+          user: {
+            select: {
+              email: true,
+            },
+          },
+        },
+      },
+    },
+  });
+};
+
 const getUserAccessScope = async (userId: string) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -411,6 +493,7 @@ export {
   canUserAccessTeamOrOrgScope,
   getFileById,
   getFileByIdWithRelations,
+  getFileDetails,
   getFileDownloadAudits,
   getFiles,
   recordFileDownloadAudit,

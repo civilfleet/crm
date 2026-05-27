@@ -77,6 +77,23 @@ export const getFileColumns = (
     ),
   },
   {
+    accessorKey: "url",
+    header: () => <div className="text-left w-36">File</div>,
+    cell: ({ row }) => (
+      <div className="text-left text-blue-500">
+        <Link
+          href={
+            includeContactFiles
+              ? `/teams/${teamId}/crm/files/${row.original.id}`
+              : `/api/files/${row.original?.id}`
+          }
+        >
+          {row.original?.name || row.original?.url || "N/A"}
+        </Link>
+      </div>
+    ),
+  },
+  {
     id: "associatedResource",
     header: () => <div className="text-left w-64">Associated Resource</div>,
     cell: ({ row }) => {
@@ -150,17 +167,6 @@ export const getFileColumns = (
         {row.original?.updatedAt
           ? new Date(row.original.updatedAt).toLocaleString()
           : "N/A"}
-      </div>
-    ),
-  },
-  {
-    accessorKey: "url",
-    header: () => <div className="text-left w-36">File</div>,
-    cell: ({ row }) => (
-      <div className="text-left text-blue-500">
-        <Link href={`/api/files/${row.original?.id}`}>
-          {row.original?.name || row.original?.url || "N/A"}
-        </Link>
       </div>
     ),
   },

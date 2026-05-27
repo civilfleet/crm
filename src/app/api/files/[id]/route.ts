@@ -12,7 +12,7 @@ import {
 import { FileDownloadType } from "@/types";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   {
     params,
   }: {
@@ -26,6 +26,8 @@ export async function GET(
     }
 
     const fileId = (await params).id;
+    const { searchParams } = new URL(req.url);
+    const isPreview = searchParams.get("preview") === "true";
     if (!fileId) {
       return NextResponse.json({ error: "ID is required" }, { status: 400 });
     }
@@ -52,36 +54,38 @@ export async function GET(
       Key: dataUrl,
     });
 
-    const { Body } = await s3Client.send(command); // Get file stream
+    const { Body, ContentType } = await s3Client.send(command); // Get file stream
 
     if (!Body) throw new Error("File not found");
 
-    const relatedTeamId =
-      fileWithRelations?.FundingRequest?.teamId ||
-      fileWithRelations?.contact?.teamId ||
-      fileWithRelations?.donationAgreement?.[0]?.teamId ||
-      fileWithRelations?.Transaction?.[0]?.teamId ||
-      undefined;
-    const relatedOrganizationId =
-      fileWithRelations?.organizationId ||
-      fileWithRelations?.FundingRequest?.organizationId ||
-      fileWithRelations?.donationAgreement?.[0]?.organizationId ||
-      fileWithRelations?.Transaction?.[0]?.organizationId ||
-      undefined;
+    if (!isPreview) {
+      const relatedTeamId =
+        fileWithRelations?.FundingRequest?.teamId ||
+        fileWithRelations?.contact?.teamId ||
+        fileWithRelations?.donationAgreement?.[0]?.teamId ||
+        fileWithRelations?.Transaction?.[0]?.teamId ||
+        undefined;
+      const relatedOrganizationId =
+        fileWithRelations?.organizationId ||
+        fileWithRelations?.FundingRequest?.organizationId ||
+        fileWithRelations?.donationAgreement?.[0]?.organizationId ||
+        fileWithRelations?.Transaction?.[0]?.organizationId ||
+        undefined;
 
-    await recordFileDownloadAudit({
-      userId: session.user.userId,
-      type: FileDownloadType.SINGLE,
-      fileId,
-      teamId: relatedTeamId,
-      organizationId: relatedOrganizationId,
-      fileCount: 1,
-    });
+      await recordFileDownloadAudit({
+        userId: session.user.userId,
+        type: FileDownloadType.SINGLE,
+        fileId,
+        teamId: relatedTeamId,
+        organizationId: relatedOrganizationId,
+        fileCount: 1,
+      });
+    }
 
     return new NextResponse(Body as ReadableStream, {
       headers: {
-        "Content-Disposition": `attachment; filename=${name}`,
-        "Content-Type": "application/octet-stream",
+        "Content-Disposition": `${isPreview ? "inline" : "attachment"}; filename=${name}`,
+        "Content-Type": ContentType || "application/octet-stream",
       },
     });
   } catch (e) {
