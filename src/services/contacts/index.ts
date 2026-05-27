@@ -12,6 +12,10 @@ import {
   logContactCreation,
   logFieldUpdate,
 } from "@/services/contact-change-logs";
+import {
+  assertPendingUploadsAvailable,
+  consumePendingUploads,
+} from "@/services/file/pending-uploads";
 import { ensureDefaultGroup, mapGroup } from "@/services/groups";
 import {
   ContactAttributeType,
@@ -84,7 +88,12 @@ type CreateContactInput = {
   organizationIds?: string[];
   groupId?: string;
   profileAttributes?: ContactProfileAttribute[];
-  files?: { name: string; type: string; url: string }[];
+  files?: {
+    name: string;
+    type: string;
+    url: string;
+    pendingUploadId?: string;
+  }[];
 };
 
 type UpdateContactInput = {
@@ -112,7 +121,12 @@ type UpdateContactInput = {
   organizationIds?: string[];
   groupId?: string;
   profileAttributes?: ContactProfileAttribute[];
-  files?: { name: string; type: string; url: string }[];
+  files?: {
+    name: string;
+    type: string;
+    url: string;
+    pendingUploadId?: string;
+  }[];
 };
 
 type ImportContactsFromCsvInput = {
@@ -1653,21 +1667,36 @@ const createContact = async (
       });
     }
 
+    const nextFiles = files?.filter((f) => f.name && f.url && f.type) ?? [];
+
+    if (nextFiles.length > 0 && userId) {
+      await assertPendingUploadsAvailable({
+        files: nextFiles,
+        teamId,
+        userId,
+        tx,
+      });
+    }
+
     const fileData = userId
-      ? (files
-          ?.filter((f) => f.name && f.url && f.type)
-          .map((f) => ({
+      ? nextFiles.map((f) => ({
             name: f.name,
             type: f.type,
             url: f.url,
             contactId: contact.id,
             createdById: userId,
             updatedById: userId,
-          })) ?? [])
+          }))
       : [];
 
-    if (fileData.length > 0) {
+    if (fileData.length > 0 && userId) {
       await tx.file.createMany({ data: fileData });
+      await consumePendingUploads({
+        files: nextFiles,
+        teamId,
+        userId,
+        tx,
+      });
     }
 
     // Log contact creation
@@ -2566,6 +2595,15 @@ const updateContact = async (
       );
 
       if (toAdd.length > 0) {
+        await assertPendingUploadsAvailable({
+          files: toAdd,
+          teamId,
+          userId,
+          tx,
+        });
+      }
+
+      if (toAdd.length > 0) {
         await tx.file.createMany({
           data: toAdd.map((f) => ({
             name: f.name,
@@ -2575,6 +2613,12 @@ const updateContact = async (
             createdById: userId,
             updatedById: userId,
           })),
+        });
+        await consumePendingUploads({
+          files: toAdd,
+          teamId,
+          userId,
+          tx,
         });
       }
     }

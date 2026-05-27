@@ -7,7 +7,7 @@ import s3Client, { s3PresignClient } from "@/lib/s3-client";
 
 import { cleanFileName } from "@/lib/utils";
 
-export const uploadFile = async ({
+export const createFileUpload = async ({
   fileName,
   fileType,
 }: {
@@ -15,11 +15,10 @@ export const uploadFile = async ({
   fileType: string;
 }) => {
   try {
-    fileName = cleanFileName(fileName);
-    fileName = `${Date.now()}-${fileName}`;
+    const key = `${Date.now()}-${cleanFileName(fileName)}`;
 
     const command = new PutObjectCommand({
-      Key: `${fileName}`,
+      Key: key,
       ContentType: fileType,
       Bucket: process.env.NEXT_AWS_S3_BUCKET_NAME,
     });
@@ -29,11 +28,22 @@ export const uploadFile = async ({
       expiresIn: 500,
     });
 
-    return putUrl;
+    return { putUrl, key };
   } catch (error) {
     logger.error({ error, fileName, fileType }, "Error uploading file to S3");
     throw error;
   }
+};
+
+export const uploadFile = async ({
+  fileName,
+  fileType,
+}: {
+  fileName: string;
+  fileType: string;
+}) => {
+  const upload = await createFileUpload({ fileName, fileType });
+  return upload.putUrl;
 };
 
 // Filename: s3Service.ts

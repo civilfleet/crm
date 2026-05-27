@@ -106,6 +106,7 @@ const contactFileSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(255),
   type: z.string().trim().min(1, "Type is required").max(50),
   url: z.string().trim().min(1, "File reference is required"),
+  pendingUploadId: z.uuid("Pending upload id must be a valid UUID").optional(),
 });
 
 const contactFieldFilterSchema = z

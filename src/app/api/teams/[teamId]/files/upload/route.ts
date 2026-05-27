@@ -5,15 +5,21 @@ import {
   verifyTeamAccess,
 } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
-import { uploadFile } from "@/services/file/s3-service";
+import { createPendingUpload } from "@/services/file/pending-uploads";
+import { createFileUpload } from "@/services/file/s3-service";
 
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ teamId: string }> },
 ) {
   try {
-    await getAuthenticatedSession();
+    const session = await getAuthenticatedSession();
+    const userId = session.user.userId;
     const teamId = (await params).teamId;
+
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
     if (!teamId) {
       return NextResponse.json(
@@ -26,9 +32,16 @@ export async function POST(
 
     const values = await req.json();
 
-    const putUrl = await uploadFile({
+    const { putUrl, key } = await createFileUpload({
       fileName: values.fileName,
       fileType: values.fileType,
+    });
+    const pendingUpload = await createPendingUpload({
+      key,
+      originalName: values.fileName,
+      contentType: values.fileType,
+      teamId,
+      userId,
     });
 
     if (!putUrl) {
@@ -37,6 +50,9 @@ export async function POST(
 
     return NextResponse.json(
       {
+        key,
+        pendingUploadId: pendingUpload.id,
+        expiresAt: pendingUpload.expiresAt,
         putUrl,
       },
       {

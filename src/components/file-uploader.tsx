@@ -3,8 +3,14 @@ import { useId, useState } from "react";
 import { Loader } from "@/components/helper/loader";
 import { FloatingLabelInput } from "@/components/ui/floating-label-input";
 
+type UploadedFileReference = {
+  key?: string;
+  pendingUploadId?: string;
+  expiresAt?: string;
+};
+
 interface FileUploadProps {
-  onFileUpload: (fileUrl: string) => void;
+  onFileUpload: (fileUrl: string, upload?: UploadedFileReference) => void;
   placeholder?: string;
   name?: string;
   error?: string;
@@ -61,7 +67,7 @@ const FileUpload = ({
         throw new Error("Failed to request upload URL");
       }
 
-      const { putUrl } = await upload.json();
+      const { expiresAt, key, pendingUploadId, putUrl } = await upload.json();
       if (!putUrl) {
         throw new Error("Upload URL is missing");
       }
@@ -82,7 +88,7 @@ const FileUpload = ({
       }
 
       setFileUrl(fileUrl);
-      onFileUpload(fileUrl);
+      onFileUpload(fileUrl, { expiresAt, key, pendingUploadId });
     } catch (error) {
       console.error("File upload failed:", error);
       const message = "File upload failed. Please try again.";

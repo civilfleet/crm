@@ -227,6 +227,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
               name: f.name ?? "",
               type: f.type ?? "",
               url: f.url ?? "",
+              pendingUploadId: undefined,
             })) ?? [],
         }
       : {
@@ -1642,7 +1643,14 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => appendFile({ name: "", type: "", url: "" })}
+                    onClick={() =>
+                      appendFile({
+                        name: "",
+                        type: "",
+                        url: "",
+                        pendingUploadId: undefined,
+                      })
+                    }
                   >
                     <PlusCircle className="h-4 w-4 mr-2" />
                     Add File
@@ -1720,7 +1728,14 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                                         type="button"
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => field.onChange("")}
+                                        onClick={() => {
+                                          field.onChange("");
+                                          form.setValue(
+                                            `files.${index}.pendingUploadId`,
+                                            undefined,
+                                            { shouldDirty: true },
+                                          );
+                                        }}
                                       >
                                         Change
                                       </Button>
@@ -1728,7 +1743,14 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                                   ) : (
                                     <FileUpload
                                       uploadUrl={`/api/teams/${teamId}/files/upload`}
-                                      onFileUpload={field.onChange}
+                                      onFileUpload={(fileUrl, upload) => {
+                                        field.onChange(fileUrl);
+                                        form.setValue(
+                                          `files.${index}.pendingUploadId`,
+                                          upload?.pendingUploadId,
+                                          { shouldDirty: true },
+                                        );
+                                      }}
                                     />
                                   )}
                                 </div>

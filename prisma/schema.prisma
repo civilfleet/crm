@@ -129,6 +129,24 @@ model File {
   contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
 }
 
+model PendingUpload {
+  id            String    @id @default(uuid()) @unique
+  key           String    @unique
+  originalName  String?   @db.VarChar(255)
+  contentType   String?   @db.VarChar(255)
+  teamId        String
+  team          Teams     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  consumedAt    DateTime? @db.Timestamptz(6)
+  consumedByFileId String?
+  expiresAt     DateTime  @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([teamId, userId, consumedAt])
+  @@index([expiresAt, consumedAt])
+}
+
 enum FileDownloadType {
   SINGLE
   BULK
@@ -223,6 +241,7 @@ model Teams {
   contactFieldAccesses ContactFieldAccess[]
   organizationEngagements OrganizationEngagement[]
   fileDownloadAudits FileDownloadAudit[]
+  pendingUploads PendingUpload[]
 }
 
 model OrganizationType {
@@ -359,6 +378,7 @@ model User {
   createdBy       File[]           @relation("CreatedByRelation") // One-to-Many relation
   updatedBy       File[]           @relation("UpdatedByRelation") // One-to-Many relation
   fileDownloadAudits FileDownloadAudit[]
+  pendingUploads PendingUpload[]
   accounts      Account[]
   sessions      Session[]
 
