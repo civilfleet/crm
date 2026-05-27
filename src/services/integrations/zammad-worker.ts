@@ -2,6 +2,7 @@ import os from "node:os";
 import { type ZammadSyncJob, ZammadSyncJobType } from "@prisma/client";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
+import { cleanupExpiredPendingUploads } from "@/services/file/pending-uploads";
 import {
   claimNextEmailBatch,
   markEmailBatchFailed,
@@ -21,6 +22,8 @@ import {
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_STALE_LOCK_MS = 60 * 60 * 1000;
+const DEFAULT_PENDING_UPLOAD_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+const DEFAULT_PENDING_UPLOAD_CLEANUP_LIMIT = 100;
 
 const parsePositiveInteger = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
@@ -55,9 +58,18 @@ export const runZammadWorker = async () => {
     process.env.ZAMMAD_WORKER_STALE_LOCK_MS,
     DEFAULT_STALE_LOCK_MS,
   );
+  const pendingUploadCleanupIntervalMs = parsePositiveInteger(
+    process.env.PENDING_UPLOAD_CLEANUP_INTERVAL_MS,
+    DEFAULT_PENDING_UPLOAD_CLEANUP_INTERVAL_MS,
+  );
+  const pendingUploadCleanupLimit = parsePositiveInteger(
+    process.env.PENDING_UPLOAD_CLEANUP_LIMIT,
+    DEFAULT_PENDING_UPLOAD_CLEANUP_LIMIT,
+  );
   const workerId =
     process.env.ZAMMAD_WORKER_ID ?? `${os.hostname()}-${process.pid}`;
   let shouldStop = false;
+  let nextPendingUploadCleanupAt = 0;
 
   const stop = () => {
     shouldStop = true;
@@ -82,9 +94,46 @@ export const runZammadWorker = async () => {
     );
   }
 
-  logger.info({ workerId, pollIntervalMs }, "[ZammadWorker] Started");
+  logger.info(
+    {
+      workerId,
+      pollIntervalMs,
+      pendingUploadCleanupIntervalMs,
+      pendingUploadCleanupLimit,
+    },
+    "[ZammadWorker] Started",
+  );
+
+  const runPendingUploadCleanup = async () => {
+    const now = Date.now();
+    if (now < nextPendingUploadCleanupAt) {
+      return;
+    }
+
+    nextPendingUploadCleanupAt = now + pendingUploadCleanupIntervalMs;
+
+    try {
+      const result = await cleanupExpiredPendingUploads({
+        limit: pendingUploadCleanupLimit,
+      });
+
+      if (result.scanned > 0 || result.failed > 0) {
+        logger.info(
+          { workerId, result },
+          "[ZammadWorker] Pending upload cleanup finished",
+        );
+      }
+    } catch (error) {
+      logger.error(
+        { workerId, error },
+        "[ZammadWorker] Pending upload cleanup failed",
+      );
+    }
+  };
 
   while (!shouldStop) {
+    await runPendingUploadCleanup();
+
     const job = await claimNextZammadSyncJob(workerId);
 
     if (!job) {
