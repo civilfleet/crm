@@ -49,13 +49,15 @@ const processZammadSyncJob = async (job: ZammadSyncJob) => {
   }
 };
 
-export const runZammadWorker = async () => {
+export const runBackgroundWorker = async () => {
   const pollIntervalMs = parsePositiveInteger(
-    process.env.ZAMMAD_WORKER_POLL_INTERVAL_MS,
+    process.env.BACKGROUND_WORKER_POLL_INTERVAL_MS ??
+      process.env.ZAMMAD_WORKER_POLL_INTERVAL_MS,
     DEFAULT_POLL_INTERVAL_MS,
   );
   const staleLockMs = parsePositiveInteger(
-    process.env.ZAMMAD_WORKER_STALE_LOCK_MS,
+    process.env.BACKGROUND_WORKER_STALE_LOCK_MS ??
+      process.env.ZAMMAD_WORKER_STALE_LOCK_MS,
     DEFAULT_STALE_LOCK_MS,
   );
   const pendingUploadCleanupIntervalMs = parsePositiveInteger(
@@ -67,7 +69,9 @@ export const runZammadWorker = async () => {
     DEFAULT_PENDING_UPLOAD_CLEANUP_LIMIT,
   );
   const workerId =
-    process.env.ZAMMAD_WORKER_ID ?? `${os.hostname()}-${process.pid}`;
+    process.env.BACKGROUND_WORKER_ID ??
+    process.env.ZAMMAD_WORKER_ID ??
+    `${os.hostname()}-${process.pid}`;
   let shouldStop = false;
   let nextPendingUploadCleanupAt = 0;
 
@@ -82,7 +86,7 @@ export const runZammadWorker = async () => {
   if (recovered.count > 0) {
     logger.warn(
       { workerId, recovered: recovered.count },
-      "[ZammadWorker] Recovered stale jobs",
+      "[BackgroundWorker] Recovered stale Zammad jobs",
     );
   }
 
@@ -90,7 +94,7 @@ export const runZammadWorker = async () => {
   if (recoveredEmailBatches.count > 0) {
     logger.warn(
       { workerId, recovered: recoveredEmailBatches.count },
-      "[ZammadWorker] Recovered stale email batches",
+      "[BackgroundWorker] Recovered stale email batches",
     );
   }
 
@@ -101,7 +105,7 @@ export const runZammadWorker = async () => {
       pendingUploadCleanupIntervalMs,
       pendingUploadCleanupLimit,
     },
-    "[ZammadWorker] Started",
+    "[BackgroundWorker] Started",
   );
 
   const runPendingUploadCleanup = async () => {
@@ -120,13 +124,13 @@ export const runZammadWorker = async () => {
       if (result.scanned > 0 || result.failed > 0) {
         logger.info(
           { workerId, result },
-          "[ZammadWorker] Pending upload cleanup finished",
+          "[BackgroundWorker] Pending upload cleanup finished",
         );
       }
     } catch (error) {
       logger.error(
         { workerId, error },
-        "[ZammadWorker] Pending upload cleanup failed",
+        "[BackgroundWorker] Pending upload cleanup failed",
       );
     }
   };
@@ -146,14 +150,14 @@ export const runZammadWorker = async () => {
 
       logger.info(
         { workerId, batchId: emailBatch.id, teamId: emailBatch.teamId },
-        "[ZammadWorker] Processing email batch",
+        "[BackgroundWorker] Processing email batch",
       );
 
       try {
         const result = await processEmailBatch(emailBatch);
         logger.info(
           { workerId, batchId: emailBatch.id, result },
-          "[ZammadWorker] Email batch processed",
+          "[BackgroundWorker] Email batch processed",
         );
       } catch (error) {
         const updated = await markEmailBatchFailed(emailBatch, error);
@@ -165,7 +169,7 @@ export const runZammadWorker = async () => {
             status: updated.status,
             error,
           },
-          "[ZammadWorker] Email batch failed",
+          "[BackgroundWorker] Email batch failed",
         );
       }
 
@@ -174,7 +178,7 @@ export const runZammadWorker = async () => {
 
     logger.info(
       { workerId, jobId: job.id, type: job.type, teamId: job.teamId },
-      "[ZammadWorker] Processing job",
+      "[BackgroundWorker] Processing Zammad job",
     );
 
     try {
@@ -182,7 +186,7 @@ export const runZammadWorker = async () => {
       await markZammadSyncJobSucceeded(job.id, result);
       logger.info(
         { workerId, jobId: job.id, result },
-        "[ZammadWorker] Job succeeded",
+        "[BackgroundWorker] Zammad job succeeded",
       );
     } catch (error) {
       const updated = await markZammadSyncJobFailed(job, error);
@@ -194,11 +198,11 @@ export const runZammadWorker = async () => {
           status: updated.status,
           error,
         },
-        "[ZammadWorker] Job failed",
+        "[BackgroundWorker] Zammad job failed",
       );
     }
   }
 
   await prisma.$disconnect();
-  logger.info({ workerId }, "[ZammadWorker] Stopped");
+  logger.info({ workerId }, "[BackgroundWorker] Stopped");
 };

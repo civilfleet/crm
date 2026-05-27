@@ -110,13 +110,13 @@ Application URL: `http://localhost:3000`
 
 ### Docker Compose
 
-To run the app, Postgres, migrations, and the Zammad worker together:
+To run the app, Postgres, migrations, and the background worker together:
 
 ```bash
 docker compose up --build
 ```
 
-The `seaweedfs` service provides local S3-compatible storage, `seaweedfs-init` creates the default `crm` bucket, and `seaweedfs-cors` applies the upload CORS policy before the web app and worker start. The `migrate` service runs `prisma migrate deploy` before the web app and worker start. The `worker` service runs the Zammad worker from the same image as the web app and processes queued sync jobs outside API requests.
+The `seaweedfs` service provides local S3-compatible storage, `seaweedfs-init` creates the default `crm` bucket, and `seaweedfs-cors` applies the upload CORS policy before the web app and worker start. The `migrate` service runs `prisma migrate deploy` before the web app and worker start. The `worker` service runs the background worker from the same image as the web app and processes queued jobs and maintenance tasks outside API requests.
 
 To bootstrap an initial admin on a fresh database, set `BOOTSTRAP_ADMIN_EMAIL` and optionally `BOOTSTRAP_ADMIN_NAME`:
 
@@ -134,7 +134,7 @@ yarn dev
 yarn build
 yarn start
 yarn bootstrap:admin
-yarn zammad:worker
+yarn worker
 
 # Quality checks
 yarn lint          # biome lint .

@@ -98,7 +98,7 @@ This document maps requested requirements to what is currently implemented in th
 - Direct email send flow from CRM to selected contacts.
   - `components/table/contact-table.tsx`, `app/api/teams/[teamId]/integrations/scaleway-email/send/route.ts`
 - Queued email delivery through the worker with per-recipient status.
-  - `services/integrations/scaleway-email.ts`, `services/integrations/zammad-worker.ts`, `prisma/schema.prisma` (`EmailBatch`, `EmailRecipient`)
+  - `services/integrations/scaleway-email.ts`, `services/background-worker.ts`, `prisma/schema.prisma` (`EmailBatch`, `EmailRecipient`)
 - Successful CRM email sends are logged to contact engagement history.
   - `services/integrations/scaleway-email.ts`
 - Zammad sync, webhook-triggered ticket sync, ticket creation, and replies create/update contact engagement records.

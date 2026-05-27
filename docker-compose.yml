@@ -132,11 +132,11 @@ services:
     build:
       context: .
       target: runner-tools
-    command: [ "node", "--import", "tsx", "scripts/zammad-worker.ts" ]
+    command: [ "node", "--import", "tsx", "scripts/background-worker.ts" ]
     environment:
       <<: *app-env
-      ZAMMAD_WORKER_POLL_INTERVAL_MS: "5000"
-      ZAMMAD_WORKER_STALE_LOCK_MS: "3600000"
+      BACKGROUND_WORKER_POLL_INTERVAL_MS: "5000"
+      BACKGROUND_WORKER_STALE_LOCK_MS: "3600000"
     depends_on:
       bootstrap:
         condition: service_completed_successfully

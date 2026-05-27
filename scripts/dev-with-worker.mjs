@@ -59,4 +59,4 @@ process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
 
 start("web", "next", ["dev", "--turbopack"]);
-start("worker", "tsx", ["scripts/zammad-worker.ts"]);
+start("worker", "tsx", ["scripts/background-worker.ts"]);
