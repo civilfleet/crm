@@ -1680,13 +1680,13 @@ const createContact = async (
 
     const fileData = userId
       ? nextFiles.map((f) => ({
-            name: f.name,
-            type: f.type,
-            url: f.url,
-            contactId: contact.id,
-            createdById: userId,
-            updatedById: userId,
-          }))
+          name: f.name,
+          type: f.type,
+          url: f.url,
+          contactId: contact.id,
+          createdById: userId,
+          updatedById: userId,
+        }))
       : [];
 
     if (fileData.length > 0 && userId) {

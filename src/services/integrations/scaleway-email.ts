@@ -353,9 +353,7 @@ export const sendMassEmailToContacts = async ({
   const uniqueEventIds = Array.from(new Set(eventIds));
   const normalizedBccEmails = Array.from(
     new Set(
-      bccEmails
-        .map((email) => email.trim().toLowerCase())
-        .filter(Boolean),
+      bccEmails.map((email) => email.trim().toLowerCase()).filter(Boolean),
     ),
   );
 
