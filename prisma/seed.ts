@@ -218,7 +218,7 @@ async function main() {
     });
 
     const contact5Email = "charlie.brown@example.com";
-    const c5 = await prisma.contact.upsert({
+    await prisma.contact.upsert({
       where: { teamId_email: { teamId: team.id, email: contact5Email } },
       update: {},
       create: {
@@ -232,7 +232,7 @@ async function main() {
     });
 
     const contact6Email = "sarah.connor@example.com";
-    const c6 = await prisma.contact.upsert({
+    await prisma.contact.upsert({
       where: { teamId_email: { teamId: team.id, email: contact6Email } },
       update: {},
       create: {

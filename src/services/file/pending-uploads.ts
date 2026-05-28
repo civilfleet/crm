@@ -5,8 +5,6 @@ import { deleteFile } from "@/services/file/s3-service";
 
 const DEFAULT_PENDING_UPLOAD_TTL_HOURS = 24;
 
-type PrismaClientLike = typeof prisma | Prisma.TransactionClient;
-
 type PendingUploadFileInput = {
   url: string;
   pendingUploadId?: string;
