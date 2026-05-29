@@ -1,7 +1,16 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Filter, Loader2, Mail, Plus, Send, Upload, X } from "lucide-react";
+import {
+  Download,
+  Filter,
+  Loader2,
+  Mail,
+  Plus,
+  Send,
+  Upload,
+  X,
+} from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -9,6 +18,7 @@ import { useForm } from "react-hook-form";
 import useSWR from "swr";
 import { z } from "zod";
 import { DataTable } from "@/components/data-table";
+import { ContactExportDialog } from "@/components/forms/contact-export-dialog";
 import ButtonControl from "@/components/helper/button-control";
 import FormInputControl from "@/components/helper/form-input-control";
 import TableLoadingState from "@/components/loading/table-loading-state";
@@ -370,6 +380,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
     null,
   );
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [emailRecipients, setEmailRecipients] = useState<ContactRow[]>([]);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -1408,7 +1419,23 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                   >
                     Clear
                   </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isDeleting || selectedRows.length === 0}
+                    onClick={() => setIsExportDialogOpen(true)}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                  </Button>
                 </div>
+                <ContactExportDialog
+                  teamId={teamId}
+                  contactIds={selectedRows.map((row) => row.id)}
+                  open={isExportDialogOpen}
+                  onOpenChange={setIsExportDialogOpen}
+                />
                 <MassEmailDialog
                   open={isEmailDialogOpen}
                   recipients={emailRecipients}

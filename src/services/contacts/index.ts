@@ -5,7 +5,7 @@ import {
   type ContactSubmodule,
 } from "@/constants/contact-submodules";
 import { normalizeCountryCode } from "@/lib/countries";
-import { parseCsv } from "@/lib/csv";
+import { parseCsv, stringifyCsv } from "@/lib/csv";
 import { normalizePostalCode } from "@/lib/geo";
 import prisma from "@/lib/prisma";
 import {
@@ -2897,6 +2897,69 @@ const getTeamContactAttributeKeys = async (
   return Array.from(keys).sort((a, b) => a.localeCompare(b));
 };
 
+const exportContacts = async (
+  teamId: string,
+  userId?: string,
+  roles: Roles[] = [],
+  options: { contactIds?: string[]; fields: string[]; attributes: string[] } = {
+    contactIds: [],
+    fields: [],
+    attributes: [],
+  },
+) => {
+  let contacts: ContactType[] = [];
+
+  if (options.contactIds && options.contactIds.length > 0) {
+    contacts = await getTeamContacts(
+      teamId,
+      undefined,
+      userId,
+      [{ type: "contactIds", contactIds: options.contactIds }],
+      roles,
+    );
+  } else {
+    contacts = await getTeamContacts(
+      teamId,
+      undefined,
+      userId,
+      undefined,
+      roles,
+    );
+  }
+
+  const { fields, attributes } = options;
+  const headers = [...fields, ...attributes];
+
+  const rows = contacts.map((contact) => {
+    return headers.map((header) => {
+      if (fields.includes(header)) {
+        const val = contact[header as keyof typeof contact];
+        if (val instanceof Date) {
+          return val.toISOString();
+        }
+        return val ? String(val) : "";
+      } else {
+        const attr = contact.profileAttributes?.find((a) => a.key === header);
+        if (!attr) return "";
+        if (attr.type === "LOCATION") {
+          const locationVal = attr.value as {
+            label?: string;
+            latitude?: number;
+            longitude?: number;
+          };
+          return (
+            locationVal.label ??
+            `${locationVal.latitude},${locationVal.longitude}`
+          );
+        }
+        return String(attr.value);
+      }
+    });
+  });
+
+  return stringifyCsv(headers, rows);
+};
+
 export {
   createContact,
   deleteContactFile,
@@ -2907,4 +2970,5 @@ export {
   getTeamContacts,
   importContactsFromCsv,
   updateContact,
+  exportContacts,
 };
