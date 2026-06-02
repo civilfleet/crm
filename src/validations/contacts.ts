@@ -24,6 +24,11 @@ const optionalWebsite = z.preprocess(
   z.url("Invalid website URL").optional(),
 );
 
+const groupIdsSchema = z
+  .array(z.uuid("Group id must be a valid UUID"))
+  .default([])
+  .transform((value) => Array.from(new Set(value)));
+
 const optionalDate = z.preprocess(
   preprocessEmptyString,
   z
@@ -222,7 +227,16 @@ export const createContactSchema = z.object({
     preprocessEmptyString,
     z.uuid("Group id must be a valid UUID").optional(),
   ),
-});
+  groupIds: groupIdsSchema.optional(),
+}).transform((value) => ({
+  ...value,
+  groupIds:
+    value.groupIds && value.groupIds.length > 0
+      ? value.groupIds
+      : value.groupId
+        ? [value.groupId]
+        : [],
+}));
 
 export type CreateContactInput = z.infer<typeof createContactSchema>;
 
@@ -265,7 +279,18 @@ export const updateContactSchema = z.object({
     preprocessEmptyString,
     z.uuid("Group id must be a valid UUID").optional(),
   ),
-});
+  groupIds: groupIdsSchema.optional(),
+}).transform((value) => ({
+  ...value,
+  groupIds:
+    value.groupIds !== undefined
+      ? value.groupIds
+      : value.groupId
+        ? [value.groupId]
+        : value.groupId === undefined
+          ? undefined
+          : [],
+}));
 
 export type UpdateContactInput = z.infer<typeof updateContactSchema>;
 

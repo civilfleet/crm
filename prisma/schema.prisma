@@ -522,6 +522,7 @@ model Contact {
   organizationsAsContactPerson Organization[] @relation("OrganizationContactPerson")
   organizations     ContactOrganization[]
   files             File[]
+  groups            ContactGroup[]
 
   @@index([groupId])
   @@index([teamId, groupId])
@@ -537,6 +538,18 @@ model ContactOrganization {
 
   @@id([contactId, organizationId])
   @@index([organizationId])
+}
+
+model ContactGroup {
+  contactId String
+  groupId   String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  group     Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([contactId, groupId])
+  @@index([contactId])
+  @@index([groupId])
 }
 
 model EmailBatch {
@@ -1039,6 +1052,7 @@ model Group {
 
   users       UserGroup[]
   contacts    Contact[]
+  contactGroups ContactGroup[]
   contactFieldAccesses ContactFieldAccess[]
   teamsDefaultOidcFor Teams[] @relation("DefaultOidcGroup")
 

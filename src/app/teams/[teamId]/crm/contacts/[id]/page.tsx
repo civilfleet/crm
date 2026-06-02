@@ -197,7 +197,12 @@ export default async function ContactDetailPage({
   const { teamId, id } = await params;
   const session = await auth();
   const userId = session?.user?.userId;
-  const contact = await getContactById(id, teamId, userId);
+  const contact = await getContactById(
+    id,
+    teamId,
+    userId,
+    session?.user?.roles,
+  );
 
   if (!contact) {
     notFound();
@@ -381,20 +386,21 @@ export default async function ContactDetailPage({
         </div>
 
         <div className="grid gap-3">
-          {contact.group && (
+          {contact.groups && contact.groups.length > 0 && (
             <div className="rounded-md border bg-muted/30 p-3">
               <div className="mb-1 flex items-center gap-2">
                 <Users className="h-4 w-4 text-muted-foreground" />
                 <p className="text-sm font-medium text-muted-foreground">
-                  Group
+                  Groups
                 </p>
               </div>
-              <p className="text-base">{contact.group.name}</p>
-              {contact.group.description && (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {contact.group.description}
-                </p>
-              )}
+              <div className="flex flex-wrap gap-2">
+                {contact.groups.map((group) => (
+                  <Badge key={group.id} variant="secondary">
+                    {group.name}
+                  </Badge>
+                ))}
+              </div>
             </div>
           )}
           <div className="rounded-md border bg-muted/30 p-3">

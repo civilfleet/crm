@@ -87,6 +87,7 @@ type CreateContactInput = {
   socialLinks?: ContactSocialLink[];
   organizationIds?: string[];
   groupId?: string;
+  groupIds?: string[];
   profileAttributes?: ContactProfileAttribute[];
   files?: {
     name: string;
@@ -120,6 +121,7 @@ type UpdateContactInput = {
   socialLinks?: ContactSocialLink[];
   organizationIds?: string[];
   groupId?: string;
+  groupIds?: string[];
   profileAttributes?: ContactProfileAttribute[];
   files?: {
     name: string;
@@ -169,6 +171,15 @@ type ContactWithAttributes = Prisma.ContactGetPayload<{
         modulePermissions: true;
       };
     };
+    groups: {
+      include: {
+        group: {
+          include: {
+            modulePermissions: true;
+          };
+        };
+      };
+    };
     events: {
       include: {
         event: true;
@@ -198,6 +209,109 @@ type ContactWithAttributes = Prisma.ContactGetPayload<{
     files: true;
   };
 }>;
+
+const contactInclude = {
+  attributes: true,
+  socialLinks: true,
+  group: {
+    include: {
+      modulePermissions: true,
+    },
+  },
+  groups: {
+    include: {
+      group: {
+        include: {
+          modulePermissions: true,
+        },
+      },
+    },
+  },
+  events: {
+    include: {
+      event: true,
+      roles: {
+        include: {
+          eventRole: true,
+        },
+      },
+    },
+  },
+  registrations: {
+    include: {
+      event: true,
+    },
+  },
+  organizations: {
+    include: {
+      organization: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  },
+  files: true,
+} satisfies Prisma.ContactInclude;
+
+const normalizeGroupIds = (groupIds?: string[], groupId?: string) =>
+  Array.from(new Set([...(groupIds ?? []), ...(groupId ? [groupId] : [])]));
+
+const validateContactGroupIds = async (
+  tx: Prisma.TransactionClient,
+  teamId: string,
+  groupIds: string[],
+) => {
+  if (!groupIds.length) {
+    return;
+  }
+
+  const matchingGroups = await tx.group.findMany({
+    where: {
+      teamId,
+      id: {
+        in: groupIds,
+      },
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (matchingGroups.length !== groupIds.length) {
+    throw new Error("One or more selected groups do not belong to this team.");
+  }
+};
+
+const syncContactGroups = async (
+  tx: Prisma.TransactionClient,
+  contactId: string,
+  teamId: string,
+  groupIds: string[],
+) => {
+  await validateContactGroupIds(tx, teamId, groupIds);
+
+  await tx.contactGroup.deleteMany({
+    where: {
+      contactId,
+      groupId: {
+        notIn: groupIds,
+      },
+    },
+  });
+
+  if (groupIds.length) {
+    await tx.contactGroup.createMany({
+      data: groupIds.map((groupId) => ({
+        contactId,
+        groupId,
+      })),
+      skipDuplicates: true,
+    });
+  }
+};
 
 const getContactFieldAccessMap = async (teamId: string) => {
   const entries = await prisma.contactFieldAccess.findMany({
@@ -657,8 +771,26 @@ const mapContact = (contact: ContactWithAttributes): ContactType => ({
     name: organization.name,
     email: organization.email,
   })),
-  groupId: contact.groupId ?? undefined,
-  group: contact.group ? mapGroup(contact.group) : undefined,
+  groupId:
+    contact.groups[0]?.groupId ?? contact.groupId ?? undefined,
+  groupIds:
+    contact.groups.length > 0
+      ? contact.groups.map((entry) => entry.groupId)
+      : contact.groupId
+        ? [contact.groupId]
+        : [],
+  group:
+    contact.groups[0]?.group
+      ? mapGroup(contact.groups[0].group)
+      : contact.group
+        ? mapGroup(contact.group)
+        : undefined,
+  groups:
+    contact.groups.length > 0
+      ? contact.groups.map((entry) => mapGroup(entry.group))
+      : contact.group
+        ? [mapGroup(contact.group)]
+        : [],
   profileAttributes: contact.attributes
     .map(toProfileAttribute)
     .filter((attribute): attribute is ContactProfileAttribute =>
@@ -861,7 +993,12 @@ async function getTeamContacts(
 
   if (userId) {
     const userGroups = await prisma.userGroup.findMany({
-      where: { userId },
+      where: {
+        userId,
+        group: {
+          teamId,
+        },
+      },
       include: {
         group: {
           select: {
@@ -886,11 +1023,14 @@ async function getTeamContacts(
 
         if (groupIds.length > 0) {
           andConditions.push({
-            OR: [{ groupId: null }, { groupId: { in: groupIds } }],
+            OR: [
+              { groups: { none: {} } },
+              { groups: { some: { groupId: { in: groupIds } } } },
+            ],
           });
         } else {
           andConditions.push({
-            groupId: null,
+            groups: { none: {} },
           });
         }
       }
@@ -1242,7 +1382,13 @@ async function getTeamContacts(
   );
   if (groupFilters.length > 0) {
     andConditions.push({
-      OR: groupFilters.map((filter) => ({ groupId: filter.groupId })),
+      OR: groupFilters.map((filter) => ({
+        groups: {
+          some: {
+            groupId: filter.groupId,
+          },
+        },
+      })),
     });
   }
 
@@ -1378,42 +1524,7 @@ async function getTeamContacts(
   const [contacts, total] = await Promise.all([
     prisma.contact.findMany({
       where,
-      include: {
-        attributes: true,
-        socialLinks: true,
-        group: {
-          include: {
-            modulePermissions: true,
-          },
-        },
-        events: {
-          include: {
-            event: true,
-            roles: {
-              include: {
-                eventRole: true,
-              },
-            },
-          },
-        },
-        registrations: {
-          include: {
-            event: true,
-          },
-        },
-        organizations: {
-          include: {
-            organization: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
-        files: true,
-      },
+      include: contactInclude,
       orderBy: {
         createdAt: "desc",
       },
@@ -1439,48 +1550,14 @@ const getContactById = async (
   contactId: string,
   teamId: string,
   userId?: string,
+  roles: Roles[] = [],
 ) => {
   const contact = await prisma.contact.findFirst({
     where: {
       id: contactId,
       teamId,
     },
-    include: {
-      attributes: true,
-      socialLinks: true,
-      group: {
-        include: {
-          modulePermissions: true,
-        },
-      },
-      events: {
-        include: {
-          event: true,
-          roles: {
-            include: {
-              eventRole: true,
-            },
-          },
-        },
-      },
-      registrations: {
-        include: {
-          event: true,
-        },
-      },
-      organizations: {
-        include: {
-          organization: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-      },
-      files: true,
-    },
+    include: contactInclude,
   });
 
   if (!contact) {
@@ -1489,6 +1566,39 @@ const getContactById = async (
 
   if (!userId) {
     return mapContact(contact);
+  }
+
+  if (!roles.includes(Roles.Admin)) {
+    const userGroups = await prisma.userGroup.findMany({
+      where: {
+        userId,
+        group: {
+          teamId,
+        },
+      },
+      select: {
+        groupId: true,
+        group: {
+          select: {
+            canAccessAllContacts: true,
+          },
+        },
+      },
+    });
+    const hasAllAccessPermission = userGroups.some(
+      (entry) => entry.group.canAccessAllContacts,
+    );
+
+    if (!hasAllAccessPermission && contact.groups.length > 0) {
+      const userGroupIds = new Set(userGroups.map((entry) => entry.groupId));
+      const canAccessContact = contact.groups.some((entry) =>
+        userGroupIds.has(entry.groupId),
+      );
+
+      if (!canAccessContact) {
+        return null;
+      }
+    }
   }
 
   const [accessMap, userGroupIds] = await Promise.all([
@@ -1529,9 +1639,11 @@ const createContact = async (
     socialLinks,
     organizationIds,
     groupId,
+    groupIds,
     profileAttributes,
     files,
   } = sanitizedInput;
+  const normalizedGroupIds = normalizeGroupIds(groupIds, groupId);
   const normalizedAttributes = normalizeAttributes(profileAttributes);
   const normalizedSocialLinks = normalizeSocialLinks(socialLinks);
   const normalizedOrganizationIds = Array.from(new Set(organizationIds ?? []));
@@ -1582,6 +1694,8 @@ const createContact = async (
   }
 
   return prisma.$transaction(async (tx) => {
+    await validateContactGroupIds(tx, teamId, normalizedGroupIds);
+
     const centroid = await resolvePostalCentroid(
       tx,
       normalizedCountryCode,
@@ -1612,9 +1726,11 @@ const createContact = async (
         phone: normalizedPhone,
         signal: normalizedSignal,
         website: normalizedWebsite,
-        groupId,
+        groupId: normalizedGroupIds[0],
       },
     });
+
+    await syncContactGroups(tx, contact.id, teamId, normalizedGroupIds);
 
     if (normalizedAttributes.length > 0) {
       for (const attribute of normalizedAttributes) {
@@ -1712,42 +1828,7 @@ const createContact = async (
 
     const created = await tx.contact.findUniqueOrThrow({
       where: { id: contact.id },
-      include: {
-        attributes: true,
-        socialLinks: true,
-        group: {
-          include: {
-            modulePermissions: true,
-          },
-        },
-        events: {
-          include: {
-            event: true,
-            roles: {
-              include: {
-                eventRole: true,
-              },
-            },
-          },
-        },
-        registrations: {
-          include: {
-            event: true,
-          },
-        },
-        organizations: {
-          include: {
-            organization: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
-        files: true,
-      },
+      include: contactInclude,
     });
 
     return mapContact(created);
@@ -1887,7 +1968,7 @@ const importContactsFromCsv = async ({
           website: getCsvValue(row, headerMap, "website"),
           socialLinks: [],
           profileAttributes: [],
-          groupId,
+          groupIds: groupId ? [groupId] : [],
         },
         userId,
         userName,
@@ -1942,11 +2023,17 @@ const updateContact = async (
     signal,
     website,
     groupId,
+    groupIds,
     profileAttributes,
     socialLinks,
     organizationIds,
     files,
   } = sanitizedInput;
+  const groupsProvided =
+    Object.hasOwn(input, "groupIds") || Object.hasOwn(input, "groupId");
+  const normalizedGroupIds = groupsProvided
+    ? normalizeGroupIds(groupIds, groupId)
+    : undefined;
   const normalizedName = typeof name === "string" ? name.trim() : undefined;
   const pronounsProvided = Object.hasOwn(input, "pronouns");
   const addressProvided = Object.hasOwn(input, "address");
@@ -2122,6 +2209,7 @@ const updateContact = async (
       include: {
         attributes: true,
         socialLinks: true,
+        groups: true,
         organizations: {
           include: {
             organization: {
@@ -2623,7 +2711,27 @@ const updateContact = async (
       }
     }
 
-    if (groupId !== undefined && groupId !== existing.groupId) {
+    if (normalizedGroupIds !== undefined) {
+      const existingGroupIds = existing.groups.map((entry) => entry.groupId);
+      const groupsChanged =
+        existingGroupIds.length !== normalizedGroupIds.length ||
+        existingGroupIds.some((id) => !normalizedGroupIds.includes(id));
+
+      if (groupsChanged) {
+        await logFieldUpdate(
+          contactId,
+          "groupIds",
+          existingGroupIds,
+          normalizedGroupIds,
+          userId,
+          userName,
+          tx,
+        );
+      }
+
+      await syncContactGroups(tx, contactId, teamId, normalizedGroupIds);
+      updates.groupId = normalizedGroupIds[0] ?? null;
+    } else if (groupId !== undefined && groupId !== existing.groupId) {
       await logFieldUpdate(
         contactId,
         "groupId",
@@ -2751,42 +2859,7 @@ const updateContact = async (
     // Return updated contact
     const updated = await tx.contact.findUniqueOrThrow({
       where: { id: contactId },
-      include: {
-        attributes: true,
-        socialLinks: true,
-        group: {
-          include: {
-            modulePermissions: true,
-          },
-        },
-        events: {
-          include: {
-            event: true,
-            roles: {
-              include: {
-                eventRole: true,
-              },
-            },
-          },
-        },
-        registrations: {
-          include: {
-            event: true,
-          },
-        },
-        organizations: {
-          include: {
-            organization: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
-        files: true,
-      },
+      include: contactInclude,
     });
 
     return mapContact(updated);

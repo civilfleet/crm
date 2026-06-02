@@ -16,7 +16,12 @@ export default async function EditContactPage({
   const { teamId, id } = await params;
   const session = await auth();
   const userId = session?.user?.userId;
-  const contact = await getContactById(id, teamId, userId);
+  const contact = await getContactById(
+    id,
+    teamId,
+    userId,
+    session?.user?.roles,
+  );
 
   if (!contact) {
     notFound();

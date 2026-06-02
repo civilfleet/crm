@@ -93,14 +93,19 @@ const buildContactVisibilityFilter = async (
   if (!accessibleGroupIds.length) {
     return {
       contact: {
-        groupId: null,
+        groups: {
+          none: {},
+        },
       },
     };
   }
 
   return {
     contact: {
-      OR: [{ groupId: null }, { groupId: { in: accessibleGroupIds } }],
+      OR: [
+        { groups: { none: {} } },
+        { groups: { some: { groupId: { in: accessibleGroupIds } } } },
+      ],
     },
   };
 };

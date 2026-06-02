@@ -24,6 +24,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Combobox } from "@/components/ui/combobox";
 import {
   Form,
@@ -219,7 +220,8 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
           organizationIds:
             contact?.organizations?.map((organization) => organization.id) ??
             [],
-          groupId: contact?.groupId ?? undefined,
+          groupIds:
+            contact?.groupIds ?? (contact?.groupId ? [contact.groupId] : []),
           profileAttributes: (contact?.profileAttributes ??
             []) as CreateContactFormValues["profileAttributes"],
           files:
@@ -252,7 +254,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
           website: "",
           socialLinks: [],
           organizationIds: [],
-          groupId: undefined,
+          groupIds: [],
           profileAttributes: [] as CreateContactFormValues["profileAttributes"],
           files: [],
         },
@@ -938,30 +940,58 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                   />
                   <FormField
                     control={typedControl}
-                    name="groupId"
+                    name="groupIds"
                     render={({ field }) => (
                       <FormItem className="sm:col-span-2 lg:col-span-3">
-                        <FormLabel>Group (optional)</FormLabel>
-                        <Select
-                          onValueChange={(value) =>
-                            field.onChange(value === "none" ? undefined : value)
-                          }
-                          value={field.value || "none"}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="No group" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="none">No group</SelectItem>
-                            {groups.map((group) => (
-                              <SelectItem key={group.id} value={group.id}>
-                                {group.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <FormLabel>Groups (optional)</FormLabel>
+                        <FormDescription>
+                          Restrict visibility to members of any selected group.
+                        </FormDescription>
+                        <div className="grid gap-3 rounded-md border p-3 sm:grid-cols-2">
+                          {groups.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                              No groups available.
+                            </p>
+                          ) : (
+                            groups.map((group) => {
+                              const selectedGroupIds = field.value ?? [];
+                              const checked = selectedGroupIds.includes(
+                                group.id,
+                              );
+
+                              return (
+                                <label
+                                  key={group.id}
+                                  className="flex items-center gap-2 text-sm"
+                                >
+                                  <Checkbox
+                                    checked={checked}
+                                    onCheckedChange={(value) => {
+                                      if (value) {
+                                        field.onChange(
+                                          Array.from(
+                                            new Set([
+                                              ...selectedGroupIds,
+                                              group.id,
+                                            ]),
+                                          ),
+                                        );
+                                        return;
+                                      }
+
+                                      field.onChange(
+                                        selectedGroupIds.filter(
+                                          (id) => id !== group.id,
+                                        ),
+                                      );
+                                    }}
+                                  />
+                                  <span>{group.name}</span>
+                                </label>
+                              );
+                            })
+                          )}
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}

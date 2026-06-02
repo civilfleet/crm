@@ -206,7 +206,9 @@ export interface Contact {
     email: string;
   }>;
   groupId?: string;
+  groupIds?: string[];
   group?: Group;
+  groups?: Group[];
   profileAttributes: ContactProfileAttribute[];
   events?: ContactEvent[];
   files?: { id?: string; name: string; type: string; url: string }[];
