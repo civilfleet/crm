@@ -50,6 +50,103 @@ type GroupWithDefaults = Prisma.GroupGetPayload<{
 }>;
 
 const DEFAULT_GROUP_NAME = "Default Access";
+const ADMIN_GROUP_NAME = "Admin";
+
+const getAdminGroupModules = (teamModules: AppModule[]): AppModule[] =>
+  Array.from(new Set<AppModule>(["ADMIN", ...teamModules]));
+
+const syncGroupModules = async (
+  groupId: string,
+  modules: AppModule[],
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+) => {
+  await client.groupModulePermission.deleteMany({
+    where: {
+      groupId,
+      module: {
+        notIn: modules,
+      },
+    },
+  });
+
+  await client.groupModulePermission.createMany({
+    data: modules.map((module) => ({
+      groupId,
+      module,
+    })),
+    skipDuplicates: true,
+  });
+};
+
+const ensureAdminGroup = async (
+  teamId: string,
+  teamModules: AppModule[],
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+) => {
+  const adminModules = getAdminGroupModules(teamModules);
+  let adminGroup = await client.group.findFirst({
+    where: {
+      teamId,
+      name: ADMIN_GROUP_NAME,
+    },
+    include: {
+      modulePermissions: true,
+    },
+  });
+
+  if (!adminGroup) {
+    adminGroup = await client.group.create({
+      data: {
+        teamId,
+        name: ADMIN_GROUP_NAME,
+        description: "Team administrators",
+        canAccessAllContacts: true,
+        modulePermissions: {
+          create: adminModules.map((module) => ({ module })),
+        },
+      },
+      include: {
+        modulePermissions: true,
+      },
+    });
+  }
+
+  if (!adminGroup.canAccessAllContacts) {
+    adminGroup = await client.group.update({
+      where: { id: adminGroup.id },
+      data: { canAccessAllContacts: true },
+      include: {
+        modulePermissions: true,
+      },
+    });
+  }
+
+  await syncGroupModules(adminGroup.id, adminModules, client);
+
+  const team = await client.teams.findUnique({
+    where: { id: teamId },
+    select: { ownerId: true },
+  });
+
+  if (team?.ownerId) {
+    await client.userGroup.createMany({
+      data: [
+        {
+          groupId: adminGroup.id,
+          userId: team.ownerId,
+        },
+      ],
+      skipDuplicates: true,
+    });
+  }
+
+  return client.group.findUniqueOrThrow({
+    where: { id: adminGroup.id },
+    include: {
+      modulePermissions: true,
+    },
+  });
+};
 
 const resolveTeamModules = (modules?: AppModule[] | null) =>
   modules && modules.length > 0 ? modules : [...DEFAULT_TEAM_MODULES];
@@ -155,6 +252,8 @@ const ensureDefaultGroup = async (
       },
     });
   }
+
+  await ensureAdminGroup(teamId, teamModules, client);
 
   const teamUsers = await client.teams.findUnique({
     where: { id: teamId },
@@ -493,30 +592,48 @@ const updateGroup = async (input: UpdateGroupInput) => {
   } = input;
 
   const result = await prisma.$transaction(async (tx) => {
+    const existingGroup = await tx.group.findFirst({
+      where: {
+        id,
+        teamId,
+      },
+      select: {
+        name: true,
+      },
+    });
+
+    if (!existingGroup) {
+      throw new Error("Group not found");
+    }
+
+    const isAdminGroup = existingGroup.name === ADMIN_GROUP_NAME;
+
     await tx.group.update({
       where: {
         id,
         teamId,
       },
       data: {
-        name,
+        name: isAdminGroup ? undefined : name,
         description,
-        canAccessAllContacts,
+        canAccessAllContacts: isAdminGroup ? true : canAccessAllContacts,
       },
     });
 
-    if (modules !== undefined) {
+    if (modules !== undefined || isAdminGroup) {
       const teamModules = await getTeamModules(teamId, tx);
       const allowedModules = new Set<AppModule>([...teamModules, "ADMIN"]);
-      const baseModules = modules.length ? modules : [...teamModules];
-      const modulesToAssign: AppModule[] = Array.from(
-        new Set(
-          baseModules.filter(
-            (module): module is AppModule =>
-              APP_MODULES.includes(module) && allowedModules.has(module),
-          ),
-        ),
-      );
+      const requestedModules = modules ?? [];
+      const modulesToAssign: AppModule[] = isAdminGroup
+        ? getAdminGroupModules(teamModules)
+        : Array.from(
+            new Set(
+              (requestedModules.length ? requestedModules : [...teamModules]).filter(
+                (module): module is AppModule =>
+                  APP_MODULES.includes(module) && allowedModules.has(module),
+              ),
+            ),
+          );
 
       await tx.groupModulePermission.deleteMany({
         where: { groupId: id },
@@ -556,9 +673,22 @@ const deleteGroups = async (teamId: string, ids: string[]) => {
 
   await prisma.$transaction(async (tx) => {
     const defaultGroup = await ensureDefaultGroup(teamId, tx);
+    const adminGroup = await tx.group.findFirst({
+      where: {
+        teamId,
+        name: ADMIN_GROUP_NAME,
+      },
+      select: {
+        id: true,
+      },
+    });
 
     if (ids.includes(defaultGroup.id)) {
       throw new Error("Default group cannot be deleted");
+    }
+
+    if (adminGroup && ids.includes(adminGroup.id)) {
+      throw new Error("Admin group cannot be deleted");
     }
 
     await tx.group.deleteMany({

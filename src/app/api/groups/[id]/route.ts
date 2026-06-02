@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import {
   getGroupById,
@@ -51,11 +52,15 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     const validated = updateGroupSchema.parse({ ...body, id });
+    await verifyTeamAccess(validated.teamId, { requireAdmin: true });
 
     const group = await updateGroup(validated);
 
     return NextResponse.json({ data: group }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
+
     if (e instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: e.issues },

@@ -99,6 +99,8 @@ const MODULE_DESCRIPTIONS: Record<AppModule, string> = {
   ADMIN: "Manage settings, users, groups, and integrations.",
 };
 
+const ADMIN_GROUP_NAME = "Admin";
+
 export default function GroupsManager({
   teamId,
   teamModules,
@@ -177,6 +179,7 @@ export default function GroupsManager({
   const typedControl =
     form.control as unknown as import("react-hook-form").Control<FormValues>;
   const isEditingDefaultGroup = editingGroup?.isDefaultGroup ?? false;
+  const isEditingAdminGroup = editingGroup?.name === ADMIN_GROUP_NAME;
 
   const handleOpenDialog = (group?: Group) => {
     setMemberSearch("");
@@ -462,7 +465,9 @@ export default function GroupsManager({
                       size="sm"
                       aria-label={`Delete group ${group.name}`}
                       title={`Delete group ${group.name}`}
-                      disabled={group.isDefaultGroup}
+                      disabled={
+                        group.isDefaultGroup || group.name === ADMIN_GROUP_NAME
+                      }
                       onClick={() => handleDelete(group.id, group.name)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -483,7 +488,9 @@ export default function GroupsManager({
             </DialogTitle>
             <DialogDescription>
               {editingGroup
-                ? "Update the group name, description, and members."
+                ? isEditingAdminGroup
+                  ? "Update the admin group members. Admin permissions are managed automatically."
+                  : "Update the group name, description, and members."
                 : "Create a new group and assign users to it. New groups start with the same module permissions as Default Access (CRM + Funding)."}
             </DialogDescription>
           </DialogHeader>
@@ -505,6 +512,7 @@ export default function GroupsManager({
                           placeholder="e.g., Finance Team, West Region"
                           {...field}
                           value={field.value}
+                          disabled={isEditingAdminGroup}
                         />
                       </FormControl>
                       <FormMessage />
@@ -577,6 +585,7 @@ export default function GroupsManager({
                                   onCheckedChange={(checked) =>
                                     toggleModule(module, checked === true)
                                   }
+                                  disabled={isEditingAdminGroup}
                                 />
                               </FormControl>
                               <div className="space-y-1 leading-none">
@@ -675,6 +684,7 @@ export default function GroupsManager({
                         <Checkbox
                           checked={field.value}
                           onCheckedChange={field.onChange}
+                          disabled={isEditingAdminGroup}
                         />
                       </FormControl>
                       <div className="space-y-1 leading-none">
