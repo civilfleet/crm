@@ -1779,9 +1779,11 @@ const MassEmailDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="mass-email-subject">Subject</Label>
+            <Label htmlFor="mass-message-subject">Subject</Label>
             <Input
-              id="mass-email-subject"
+              id="mass-message-subject"
+              name="subject"
+              autoComplete="off"
               value={subject}
               onChange={(event) => onSubjectChange(event.target.value)}
               disabled={isSending}

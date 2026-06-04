@@ -2,16 +2,9 @@
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   DEFAULT_INTERNAL_COPY_MODE,
-  INTERNAL_COPY_MODE_LABELS,
   type InternalCopyMode,
 } from "@/constants/email";
 
@@ -33,13 +26,12 @@ export const InternalCopyFields = ({
   onModeChange,
 }: InternalCopyFieldsProps) => {
   const hasInternalCopyRecipients = emails.trim().length > 0;
+  const includeRecipientList = mode === "summary_with_recipients";
 
   return (
     <div className="space-y-3 rounded-md border bg-muted/20 p-3">
       <div className="space-y-2">
-        <Label htmlFor={`${idPrefix}-internal-copy`}>
-          Internal copy recipients
-        </Label>
+        <Label htmlFor={`${idPrefix}-internal-copy`}>Send report to</Label>
         <Input
           id={`${idPrefix}-internal-copy`}
           value={emails}
@@ -48,35 +40,36 @@ export const InternalCopyFields = ({
           placeholder="internal@example.org, finance@example.org"
         />
         <p className="text-xs text-muted-foreground">
-          Receives one batch-level copy. Separate multiple addresses with
-          commas, spaces, or new lines.
+          Sends one batch-level report. Separate multiple addresses with commas,
+          spaces, or new lines.
         </p>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor={`${idPrefix}-internal-copy-mode`}>Copy content</Label>
-        <Select
-          value={mode}
-          onValueChange={(value) => onModeChange(value as InternalCopyMode)}
+      <div className="flex items-start gap-3 rounded-md bg-background/60 p-3">
+        <Switch
+          id={`${idPrefix}-include-recipient-list`}
+          checked={includeRecipientList}
+          onCheckedChange={(checked) =>
+            onModeChange(
+              checked ? "summary_with_recipients" : DEFAULT_INTERNAL_COPY_MODE,
+            )
+          }
           disabled={disabled || !hasInternalCopyRecipients}
-        >
-          <SelectTrigger id={`${idPrefix}-internal-copy-mode`}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={DEFAULT_INTERNAL_COPY_MODE}>
-              {INTERNAL_COPY_MODE_LABELS.summary}
-            </SelectItem>
-            <SelectItem value="summary_with_recipients">
-              {INTERNAL_COPY_MODE_LABELS.summary_with_recipients}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          {mode === "summary_with_recipients"
-            ? "This internal copy will include the full recipient list for this batch, including names and email addresses. Only use this for recipients who may see that information."
-            : "The internal copy includes batch metadata and the original email template, without listing every recipient."}
-        </p>
+          aria-describedby={`${idPrefix}-include-recipient-list-description`}
+        />
+        <div className="space-y-1">
+          <Label htmlFor={`${idPrefix}-include-recipient-list`}>
+            Include recipient list in report
+          </Label>
+          <p
+            id={`${idPrefix}-include-recipient-list-description`}
+            className="text-xs text-muted-foreground"
+          >
+            {includeRecipientList
+              ? "The report will include all recipient names and email addresses. Only send it to people who may see that information."
+              : "The report includes batch metadata and the original email template, without listing every recipient."}
+          </p>
+        </div>
       </div>
     </div>
   );

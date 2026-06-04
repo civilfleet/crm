@@ -552,9 +552,11 @@ const EventEmailDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="event-email-subject">Subject</Label>
+            <Label htmlFor="event-message-subject">Subject</Label>
             <Input
-              id="event-email-subject"
+              id="event-message-subject"
+              name="subject"
+              autoComplete="off"
               value={subject}
               onChange={(event) => onSubjectChange(event.target.value)}
               disabled={isSending}

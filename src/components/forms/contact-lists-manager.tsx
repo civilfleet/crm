@@ -844,9 +844,11 @@ const ListEmailDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="list-email-subject">Subject</Label>
+            <Label htmlFor="list-message-subject">Subject</Label>
             <Input
-              id="list-email-subject"
+              id="list-message-subject"
+              name="subject"
+              autoComplete="off"
               value={subject}
               onChange={(event) => onSubjectChange(event.target.value)}
               disabled={isSending}
