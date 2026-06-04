@@ -32,6 +32,8 @@ export type EmailHistoryBatch = {
   html: string;
   text?: string;
   bccEmails: string[];
+  internalCopyMode: string;
+  internalCopySentAt?: string;
   senderEmail?: string;
   senderName?: string;
   status: string;
@@ -76,6 +78,8 @@ const mapEmailBatch = (batch: EmailBatchWithRecipients): EmailHistoryBatch => ({
   html: batch.html,
   text: batch.text ?? undefined,
   bccEmails: batch.bccEmails,
+  internalCopyMode: batch.internalCopyMode,
+  internalCopySentAt: toIso(batch.internalCopySentAt),
   senderEmail: batch.senderEmail ?? undefined,
   senderName: batch.senderName ?? undefined,
   status: batch.status,
@@ -206,6 +210,7 @@ export const retryEmailBatch = async (teamId: string, batchId: string) =>
         lockedBy: null,
         startedAt: null,
         completedAt: null,
+        internalCopySentAt: null,
         lastError: null,
       },
       select: {

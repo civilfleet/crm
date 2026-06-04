@@ -22,6 +22,7 @@ export async function POST(
       subject: validated.subject,
       html: validated.html,
       bccEmails: validated.bccEmails,
+      internalCopyMode: validated.internalCopyMode,
       userId: session.user.userId,
       userName: session.user.name ?? session.user.email ?? undefined,
       senderLabelMode: validated.senderLabelMode,

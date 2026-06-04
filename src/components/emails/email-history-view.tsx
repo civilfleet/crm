@@ -27,6 +27,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  INTERNAL_COPY_MODE_LABELS,
+  type InternalCopyMode,
+} from "@/constants/email";
 import { useToast } from "@/hooks/use-toast";
 import type { EmailHistoryBatch } from "@/services/emails";
 
@@ -102,6 +106,9 @@ const getFailedRetryCount = (batch: EmailHistoryBatch) =>
   batch.recipients.filter((recipient) =>
     ["FAILED", "BOUNCED"].includes(recipient.status),
   ).length;
+
+const formatInternalCopyMode = (mode: string) =>
+  INTERNAL_COPY_MODE_LABELS[mode as InternalCopyMode] ?? mode;
 
 export default function EmailHistoryView({
   teamId,
@@ -390,8 +397,16 @@ const EmailBatchDetails = ({
         <DetailItem label="Locked at" value={formatDateTime(batch.lockedAt)} />
         <DetailItem label="Locked by" value={batch.lockedBy || "-"} />
         <DetailItem
-          label="BCC"
+          label="Internal copy"
           value={batch.bccEmails.length ? batch.bccEmails.join(", ") : "-"}
+        />
+        <DetailItem
+          label="Copy content"
+          value={formatInternalCopyMode(batch.internalCopyMode)}
+        />
+        <DetailItem
+          label="Internal copy sent"
+          value={formatDateTime(batch.internalCopySentAt)}
         />
       </div>
       {batch.lastError ? (

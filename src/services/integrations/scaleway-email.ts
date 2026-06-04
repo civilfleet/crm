@@ -4,6 +4,11 @@ import {
   EmailRecipientStatus,
   IntegrationProvider as PrismaIntegrationProvider,
 } from "@prisma/client";
+import {
+  DEFAULT_INTERNAL_COPY_MODE,
+  INTERNAL_COPY_MODE_LABELS,
+  type InternalCopyMode,
+} from "@/constants/email";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import {
@@ -43,6 +48,7 @@ export type SendMassEmailInput = {
   subject: string;
   html: string;
   bccEmails?: string[];
+  internalCopyMode?: InternalCopyMode;
   userId?: string;
   userName?: string;
   senderLabelMode?: SenderLabelMode;
@@ -213,6 +219,173 @@ const sendScalewayEmail = async ({
   return (body.email ?? body) as ScalewayEmailRecord;
 };
 
+type InternalCopyRecipient = {
+  email: string;
+  name: string | null;
+  status: EmailRecipientStatus;
+  errorMessage: string | null;
+  sentAt: Date | null;
+  contact: {
+    name: string | null;
+    email: string | null;
+  } | null;
+};
+
+type InternalCopyStats = {
+  status: EmailBatchStatus;
+  sentCount: number;
+  failedCount: number;
+  skippedCount: number;
+};
+
+const formatInternalCopyDate = (value?: Date | null) =>
+  value?.toISOString() ?? "-";
+
+const buildInternalCopyHtml = ({
+  batch,
+  recipients,
+  stats,
+}: {
+  batch: EmailBatch;
+  recipients: InternalCopyRecipient[];
+  stats: InternalCopyStats;
+}) => {
+  const internalCopyMode: InternalCopyMode =
+    batch.internalCopyMode === "summary_with_recipients"
+      ? "summary_with_recipients"
+      : DEFAULT_INTERNAL_COPY_MODE;
+  const shouldIncludeRecipients =
+    internalCopyMode === "summary_with_recipients";
+  const sender = batch.senderName
+    ? `${batch.senderName} <${batch.senderEmail ?? ""}>`
+    : batch.senderEmail || "-";
+  const metadataRows = [
+    ["Subject", batch.subject],
+    ["Status", stats.status],
+    ["Sent by", batch.userName || "-"],
+    ["From", sender],
+    ["Created at", formatInternalCopyDate(batch.createdAt)],
+    ["Requested", String(batch.requestedCount)],
+    ["Sent", String(stats.sentCount)],
+    ["Failed", String(stats.failedCount)],
+    ["Skipped", String(stats.skippedCount)],
+    ["Copy content", INTERNAL_COPY_MODE_LABELS[internalCopyMode]],
+  ];
+
+  const metadataHtml = metadataRows
+    .map(
+      ([label, value]) => `
+        <tr>
+          <th style="padding: 8px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; width: 180px;">${escapeHtml(label)}</th>
+          <td style="padding: 8px 12px; border-bottom: 1px solid #e5e7eb;">${escapeHtml(value)}</td>
+        </tr>
+      `,
+    )
+    .join("");
+
+  const recipientListHtml = shouldIncludeRecipients
+    ? `
+      <h2 style="margin: 24px 0 8px; font-size: 16px;">Recipients</h2>
+      <p style="margin: 0 0 12px; color: #4b5563;">This internal copy includes the full recipient list for the batch.</p>
+      <table style="border-collapse: collapse; width: 100%; font-size: 13px;">
+        <thead>
+          <tr>
+            <th style="padding: 8px 10px; text-align: left; border-bottom: 1px solid #d1d5db;">Name</th>
+            <th style="padding: 8px 10px; text-align: left; border-bottom: 1px solid #d1d5db;">Email</th>
+            <th style="padding: 8px 10px; text-align: left; border-bottom: 1px solid #d1d5db;">Status</th>
+            <th style="padding: 8px 10px; text-align: left; border-bottom: 1px solid #d1d5db;">Sent at</th>
+            <th style="padding: 8px 10px; text-align: left; border-bottom: 1px solid #d1d5db;">Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${recipients
+            .map((recipient) => {
+              const name = recipient.name || recipient.contact?.name || "-";
+              const email = recipient.email || recipient.contact?.email || "-";
+              return `
+                <tr>
+                  <td style="padding: 8px 10px; border-bottom: 1px solid #f3f4f6;">${escapeHtml(name)}</td>
+                  <td style="padding: 8px 10px; border-bottom: 1px solid #f3f4f6;">${escapeHtml(email)}</td>
+                  <td style="padding: 8px 10px; border-bottom: 1px solid #f3f4f6;">${escapeHtml(recipient.status)}</td>
+                  <td style="padding: 8px 10px; border-bottom: 1px solid #f3f4f6;">${escapeHtml(formatInternalCopyDate(recipient.sentAt))}</td>
+                  <td style="padding: 8px 10px; border-bottom: 1px solid #f3f4f6;">${escapeHtml(recipient.errorMessage || "-")}</td>
+                </tr>
+              `;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    `
+    : `
+      <p style="margin: 24px 0 0; color: #4b5563;">
+        This internal copy does not include the recipient list.
+      </p>
+    `;
+
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; line-height: 1.5;">
+      <h1 style="margin: 0 0 12px; font-size: 20px;">Internal copy of CRM email batch</h1>
+      <p style="margin: 0 0 16px; color: #4b5563;">
+        This is one batch-level copy. Individual recipients received separately rendered emails.
+      </p>
+      <table style="border-collapse: collapse; width: 100%; font-size: 14px;">
+        <tbody>${metadataHtml}</tbody>
+      </table>
+      ${recipientListHtml}
+      <h2 style="margin: 24px 0 8px; font-size: 16px;">Original email template</h2>
+      <p style="margin: 0 0 12px; color: #4b5563;">
+        Contact placeholders are shown as the original template, not as any one recipient's personalized copy.
+      </p>
+      <div style="border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px;">
+        ${batch.html}
+      </div>
+    </div>
+  `;
+};
+
+const sendInternalCopyEmails = async ({
+  batch,
+  integration,
+  from,
+  region,
+  recipients,
+  stats,
+}: {
+  batch: EmailBatch;
+  integration: { apiKey: string; defaultListId: string };
+  from: { email: string; name?: string };
+  region: string;
+  recipients: InternalCopyRecipient[];
+  stats: InternalCopyStats;
+}) => {
+  const html = buildInternalCopyHtml({ batch, recipients, stats });
+  const subject = `Internal copy: ${batch.subject}`;
+
+  for (const internalCopyEmail of batch.bccEmails) {
+    try {
+      await sendScalewayEmail({
+        apiKey: integration.apiKey,
+        region,
+        projectId: integration.defaultListId,
+        from,
+        to: { email: internalCopyEmail },
+        subject,
+        html,
+      });
+    } catch (error) {
+      logger.error(
+        {
+          teamId: batch.teamId,
+          batchId: batch.id,
+          internalCopyEmail,
+          error,
+        },
+        "Scaleway internal copy failed",
+      );
+    }
+  }
+};
+
 export const getScalewayEmailIntegration = async (
   teamId: string,
 ): Promise<ScalewayEmailIntegrationSettings | null> => {
@@ -345,6 +518,7 @@ export const sendMassEmailToContacts = async ({
   subject,
   html,
   bccEmails = [],
+  internalCopyMode = DEFAULT_INTERNAL_COPY_MODE,
   userId,
   userName,
   senderLabelMode = "default",
@@ -434,6 +608,7 @@ export const sendMassEmailToContacts = async ({
       html,
       text: stripHtml(html),
       bccEmails: normalizedBccEmails,
+      internalCopyMode,
       senderEmail: from.email,
       senderName: from.name,
       requestedCount: uniqueContactIds.length,
@@ -638,31 +813,6 @@ export const processEmailBatch = async (batch: EmailBatch) => {
       });
 
       const sentAt = new Date();
-      for (const bccEmail of batch.bccEmails) {
-        try {
-          await sendScalewayEmail({
-            apiKey: integration.apiKey,
-            region,
-            projectId: integration.defaultListId,
-            from,
-            to: { email: bccEmail },
-            subject: renderedSubject,
-            html: renderedHtml,
-          });
-        } catch (bccError) {
-          logger.error(
-            {
-              teamId: batch.teamId,
-              batchId: batch.id,
-              recipientId: recipient.id,
-              bccEmail,
-              error: bccError,
-            },
-            "Scaleway BCC copy failed",
-          );
-        }
-      }
-
       await prisma.emailRecipient.update({
         where: { id: recipient.id },
         data: {
@@ -738,6 +888,50 @@ export const processEmailBatch = async (batch: EmailBatch) => {
         : sentCount > 0
           ? EmailBatchStatus.PARTIAL
           : EmailBatchStatus.FAILED;
+  const internalCopySentAt =
+    pendingCount === 0 &&
+    sentCount > 0 &&
+    batch.bccEmails.length > 0 &&
+    !batch.internalCopySentAt
+      ? new Date()
+      : undefined;
+
+  if (internalCopySentAt) {
+    const recipients = await prisma.emailRecipient.findMany({
+      where: { batchId: batch.id },
+      orderBy: { createdAt: "asc" },
+      select: {
+        email: true,
+        name: true,
+        status: true,
+        errorMessage: true,
+        sentAt: true,
+        contact: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    await sendInternalCopyEmails({
+      batch,
+      integration: {
+        apiKey: integration.apiKey,
+        defaultListId: integration.defaultListId,
+      },
+      from,
+      region,
+      recipients,
+      stats: {
+        status,
+        sentCount,
+        failedCount,
+        skippedCount,
+      },
+    });
+  }
 
   const updated = await prisma.emailBatch.update({
     where: { id: batch.id },
@@ -749,6 +943,7 @@ export const processEmailBatch = async (batch: EmailBatch) => {
       lockedAt: null,
       lockedBy: null,
       completedAt: pendingCount > 0 ? null : new Date(),
+      internalCopySentAt,
       lastError: null,
     },
   });

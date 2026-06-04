@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
 import { DataTable } from "@/components/data-table";
+import { InternalCopyFields } from "@/components/emails/internal-copy-fields";
 import { ContactListExportDialog } from "@/components/forms/contact-list-export-dialog";
 import { RichEmailEditor } from "@/components/rich-email-editor";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +40,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DEFAULT_INTERNAL_COPY_MODE,
+  type InternalCopyMode,
+} from "@/constants/email";
 import { useToast } from "@/hooks/use-toast";
 import { ContactListType } from "@/types";
 
@@ -91,6 +96,8 @@ export default function ContactListsManager({
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [emailBcc, setEmailBcc] = useState("");
+  const [emailInternalCopyMode, setEmailInternalCopyMode] =
+    useState<InternalCopyMode>(DEFAULT_INTERNAL_COPY_MODE);
   const [emailSenderLabelMode, setEmailSenderLabelMode] =
     useState<SenderLabelMode>("default");
   const [copiedListId, setCopiedListId] = useState<string | null>(null);
@@ -371,6 +378,7 @@ export default function ContactListsManager({
             subject: emailSubject,
             html: emailBody,
             bccEmails: parseEmailList(emailBcc),
+            internalCopyMode: emailInternalCopyMode,
             senderLabelMode: emailSenderLabelMode,
           }),
         },
@@ -398,6 +406,7 @@ export default function ContactListsManager({
       setEmailSubject("");
       setEmailBody("");
       setEmailBcc("");
+      setEmailInternalCopyMode(DEFAULT_INTERNAL_COPY_MODE);
       setEmailSenderLabelMode("default");
       clearSelection();
     } catch (error) {
@@ -676,12 +685,14 @@ export default function ContactListsManager({
                   subject={emailSubject}
                   body={emailBody}
                   bcc={emailBcc}
+                  internalCopyMode={emailInternalCopyMode}
                   senderLabelMode={emailSenderLabelMode}
                   isSending={isSendingEmail}
                   onOpenChange={setIsEmailDialogOpen}
                   onSubjectChange={setEmailSubject}
                   onBodyChange={setEmailBody}
                   onBccChange={setEmailBcc}
+                  onInternalCopyModeChange={setEmailInternalCopyMode}
                   onSenderLabelModeChange={setEmailSenderLabelMode}
                   onSend={() => handleSendEmail(clearSelection)}
                 />
@@ -753,12 +764,14 @@ type ListEmailDialogProps = {
   subject: string;
   body: string;
   bcc: string;
+  internalCopyMode: InternalCopyMode;
   senderLabelMode: SenderLabelMode;
   isSending: boolean;
   onOpenChange: (open: boolean) => void;
   onSubjectChange: (value: string) => void;
   onBodyChange: (value: string) => void;
   onBccChange: (value: string) => void;
+  onInternalCopyModeChange: (value: InternalCopyMode) => void;
   onSenderLabelModeChange: (value: SenderLabelMode) => void;
   onSend: () => void;
 };
@@ -769,12 +782,14 @@ const ListEmailDialog = ({
   subject,
   body,
   bcc,
+  internalCopyMode,
   senderLabelMode,
   isSending,
   onOpenChange,
   onSubjectChange,
   onBodyChange,
   onBccChange,
+  onInternalCopyModeChange,
   onSenderLabelModeChange,
   onSend,
 }: ListEmailDialogProps) => {
@@ -839,20 +854,14 @@ const ListEmailDialog = ({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="list-email-bcc">BCC</Label>
-            <Input
-              id="list-email-bcc"
-              value={bcc}
-              onChange={(event) => onBccChange(event.target.value)}
-              disabled={isSending}
-              placeholder="internal@example.org, finance@example.org"
-            />
-            <p className="text-xs text-muted-foreground">
-              Separate multiple hidden copy recipients with commas, spaces, or
-              new lines.
-            </p>
-          </div>
+          <InternalCopyFields
+            idPrefix="list-email"
+            emails={bcc}
+            mode={internalCopyMode}
+            disabled={isSending}
+            onEmailsChange={onBccChange}
+            onModeChange={onInternalCopyModeChange}
+          />
 
           <div className="space-y-2">
             <Label htmlFor="list-email-body">Email body</Label>

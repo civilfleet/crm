@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form";
 import useSWR from "swr";
 import { z } from "zod";
 import { DataTable } from "@/components/data-table";
+import { InternalCopyFields } from "@/components/emails/internal-copy-fields";
 import ButtonControl from "@/components/helper/button-control";
 import FormInputControl from "@/components/helper/form-input-control";
 import TableLoadingState from "@/components/loading/table-loading-state";
@@ -44,6 +45,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DEFAULT_INTERNAL_COPY_MODE,
+  type InternalCopyMode,
+} from "@/constants/email";
 import { useToast } from "@/hooks/use-toast";
 import { parseCsv } from "@/lib/csv";
 import type { ContactFilter, ContactFilterType } from "@/types";
@@ -374,6 +379,8 @@ export default function ContactTable({ teamId }: ContactTableProps) {
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [emailBcc, setEmailBcc] = useState("");
+  const [emailInternalCopyMode, setEmailInternalCopyMode] =
+    useState<InternalCopyMode>(DEFAULT_INTERNAL_COPY_MODE);
   const [emailSenderLabelMode, setEmailSenderLabelMode] =
     useState<SenderLabelMode>("default");
   const [filters, setFilters] = useState<ContactFilter[]>([]);
@@ -1061,6 +1068,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
             subject: emailSubject,
             html: emailBody,
             bccEmails: parseEmailList(emailBcc),
+            internalCopyMode: emailInternalCopyMode,
             senderLabelMode: emailSenderLabelMode,
           }),
         },
@@ -1091,6 +1099,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
       setEmailSubject("");
       setEmailBody("");
       setEmailBcc("");
+      setEmailInternalCopyMode(DEFAULT_INTERNAL_COPY_MODE);
       setEmailSenderLabelMode("default");
       clearSelection();
       await mutate();
@@ -1415,12 +1424,14 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                   subject={emailSubject}
                   body={emailBody}
                   bcc={emailBcc}
+                  internalCopyMode={emailInternalCopyMode}
                   senderLabelMode={emailSenderLabelMode}
                   isSending={isSendingEmail}
                   onOpenChange={setIsEmailDialogOpen}
                   onSubjectChange={setEmailSubject}
                   onBodyChange={setEmailBody}
                   onBccChange={setEmailBcc}
+                  onInternalCopyModeChange={setEmailInternalCopyMode}
                   onSenderLabelModeChange={setEmailSenderLabelMode}
                   onSend={() => handleSendEmail(clearSelection)}
                 />
@@ -1659,12 +1670,14 @@ type MassEmailDialogProps = {
   subject: string;
   body: string;
   bcc: string;
+  internalCopyMode: InternalCopyMode;
   senderLabelMode: SenderLabelMode;
   isSending: boolean;
   onOpenChange: (open: boolean) => void;
   onSubjectChange: (value: string) => void;
   onBodyChange: (value: string) => void;
   onBccChange: (value: string) => void;
+  onInternalCopyModeChange: (value: InternalCopyMode) => void;
   onSenderLabelModeChange: (value: SenderLabelMode) => void;
   onSend: () => void;
 };
@@ -1675,12 +1688,14 @@ const MassEmailDialog = ({
   subject,
   body,
   bcc,
+  internalCopyMode,
   senderLabelMode,
   isSending,
   onOpenChange,
   onSubjectChange,
   onBodyChange,
   onBccChange,
+  onInternalCopyModeChange,
   onSenderLabelModeChange,
   onSend,
 }: MassEmailDialogProps) => {
@@ -1747,20 +1762,14 @@ const MassEmailDialog = ({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="mass-email-bcc">BCC</Label>
-            <Input
-              id="mass-email-bcc"
-              value={bcc}
-              onChange={(event) => onBccChange(event.target.value)}
-              disabled={isSending}
-              placeholder="internal@example.org, finance@example.org"
-            />
-            <p className="text-xs text-muted-foreground">
-              Separate multiple hidden copy recipients with commas, spaces, or
-              new lines.
-            </p>
-          </div>
+          <InternalCopyFields
+            idPrefix="mass-email"
+            emails={bcc}
+            mode={internalCopyMode}
+            disabled={isSending}
+            onEmailsChange={onBccChange}
+            onModeChange={onInternalCopyModeChange}
+          />
 
           <div className="space-y-2">
             <Label htmlFor="mass-email-body">Email body</Label>
