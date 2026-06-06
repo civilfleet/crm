@@ -39,10 +39,13 @@ export function NavMain({ items = [] }: { items?: NavItem[] }) {
   const pathSegments = pathname.split("/").filter(Boolean);
   const subUrl = pathSegments[0] ?? null;
   const id = pathSegments[1] ?? null;
+  const isProfilePage = subUrl === "teams" && id === "profile";
 
   // Determine if we have an active context based on the URL
   const hasActiveContext = Boolean(
-    id && (subUrl === "organizations" || subUrl === "teams"),
+    id &&
+      !isProfilePage &&
+      (subUrl === "organizations" || subUrl === "teams"),
   );
   const isAdminSection = pathname.startsWith("/admin");
 

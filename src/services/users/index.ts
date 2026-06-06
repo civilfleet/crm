@@ -250,6 +250,79 @@ const getUserCurrent = async (userId: string) => {
   };
 };
 
+const getCurrentUserProfile = async (userId: string, isAdmin: boolean) => {
+  const [user, memberships] = await Promise.all([
+    isAdmin ? getAdminUser(userId) : getUserCurrent(userId),
+    prisma.userGroup.findMany({
+      where: {
+        userId,
+      },
+      select: {
+        createdAt: true,
+        group: {
+          select: {
+            id: true,
+            name: true,
+            teamId: true,
+            isDefaultGroup: true,
+            canAccessAllContacts: true,
+            modulePermissions: {
+              select: {
+                module: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    }),
+  ]);
+
+  if (!user) {
+    return user;
+  }
+
+  const membershipsByTeam = new Map<
+    string,
+    Array<{
+      id: string;
+      name: string;
+      isDefaultGroup: boolean;
+      canAccessAllContacts: boolean;
+      modules: AppModule[];
+      joinedAt: Date;
+    }>
+  >();
+
+  for (const membership of memberships) {
+    const teamMemberships =
+      membershipsByTeam.get(membership.group.teamId) ?? [];
+
+    teamMemberships.push({
+      id: membership.group.id,
+      name: membership.group.name,
+      isDefaultGroup: membership.group.isDefaultGroup,
+      canAccessAllContacts: membership.group.canAccessAllContacts,
+      modules: membership.group.modulePermissions.map(
+        (permission) => permission.module as AppModule,
+      ),
+      joinedAt: membership.createdAt,
+    });
+
+    membershipsByTeam.set(membership.group.teamId, teamMemberships);
+  }
+
+  return {
+    ...user,
+    teams: user.teams.map((team) => ({
+      ...team,
+      memberships: membershipsByTeam.get(team.id) ?? [],
+    })),
+  };
+};
+
 const getUsers = async (
   {
     teamId,
@@ -564,6 +637,7 @@ export {
   createUser,
   deleteUser,
   getAdminUser,
+  getCurrentUserProfile,
   getTeamsUsers,
   getUserById,
   getUserCurrent,

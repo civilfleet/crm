@@ -46,14 +46,18 @@ export function AppSidebar({
 
   // Extract the active ID and type from the URL
   const pathSegments = pathname.split("/").filter(Boolean);
+  const isProfilePage =
+    pathSegments[0] === "teams" && pathSegments[1] === "profile";
   const activeType =
-    pathSegments[0] === "teams"
-      ? "team"
-      : pathSegments[0] === "organizations"
-        ? "organization"
-        : pathSegments[0] === "admin"
-          ? "admin"
-          : null;
+    isProfilePage
+      ? null
+      : pathSegments[0] === "teams"
+        ? "team"
+        : pathSegments[0] === "organizations"
+          ? "organization"
+          : pathSegments[0] === "admin"
+            ? "admin"
+            : null;
   const activeId =
     pathSegments[0] === "admin" ? "admin" : (pathSegments[1] ?? null);
 

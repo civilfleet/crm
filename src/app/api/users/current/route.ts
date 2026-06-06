@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { handlePrismaError } from "@/lib/utils";
-import { getAdminUser, getUserCurrent } from "@/services/users";
+import { getCurrentUserProfile } from "@/services/users";
 import { Roles } from "@/types";
 
 export async function GET() {
@@ -12,9 +12,10 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const data = session.user?.roles?.includes(Roles.Admin)
-      ? await getAdminUser(userId)
-      : await getUserCurrent(userId);
+    const data = await getCurrentUserProfile(
+      userId,
+      Boolean(session.user?.roles?.includes(Roles.Admin)),
+    );
 
     return NextResponse.json(
       {

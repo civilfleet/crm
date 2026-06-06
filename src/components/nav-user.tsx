@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronsUpDown, LogOut } from "lucide-react";
+import { ChevronsUpDown, LogOut, UserRound } from "lucide-react";
+import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -72,6 +73,12 @@ export function NavUser({
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/teams/profile">
+                <UserRound />
+                My profile
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => {
                 signOut({ redirectTo: "/" });
