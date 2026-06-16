@@ -601,17 +601,19 @@ export default async function ContactDetailPage({
             return (
               <div
                 key={`${attribute.key}-${attribute.type}`}
-                className="flex items-start gap-3 rounded-md border bg-muted/30 p-3"
+                className="min-w-0 flex items-start gap-3 rounded-md border bg-muted/30 p-3"
               >
-                <Icon className="mt-0.5 h-5 w-5 text-muted-foreground" />
-                <div className="flex-1">
-                  <div className="mb-1 flex items-center gap-2">
-                    <p className="text-sm font-medium">{attribute.key}</p>
+                <Icon className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <p className="min-w-0 break-words text-sm font-medium [overflow-wrap:anywhere]">
+                      {attribute.key}
+                    </p>
                     <Badge variant="outline" className="text-xs">
                       {attribute.type}
                     </Badge>
                   </div>
-                  <p className="text-base">
+                  <p className="break-words text-base [overflow-wrap:anywhere]">
                     {formatAttributeValue(attribute.type, attribute.value)}
                   </p>
                 </div>
