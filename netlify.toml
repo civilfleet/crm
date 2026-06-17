@@ -1,0 +1,2 @@
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_AWS_S3_BUCKET_REGION"
