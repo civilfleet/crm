@@ -99,7 +99,8 @@ type FilterOption = {
     | "state"
     | "city"
     | "country"
-    | "website";
+    | "website"
+    | "notes";
 };
 
 const FILTER_OPTIONS: FilterOption[] = [
@@ -131,6 +132,12 @@ const FILTER_OPTIONS: FilterOption[] = [
     type: "contactField",
     field: "website",
     label: "Website",
+    allowMultiple: true,
+  },
+  {
+    type: "contactField",
+    field: "notes",
+    label: "Notes",
     allowMultiple: true,
   },
   {
@@ -191,7 +198,8 @@ const CONTACT_FIELD_LABELS: Record<
   | "state"
   | "city"
   | "country"
-  | "website",
+  | "website"
+  | "notes",
   string
 > = {
   name: "Name",
@@ -205,6 +213,7 @@ const CONTACT_FIELD_LABELS: Record<
   city: "City",
   country: "Country",
   website: "Website",
+  notes: "Notes",
 };
 
 const CONTACT_IMPORT_FIELDS: ReadonlyArray<{
@@ -223,6 +232,7 @@ const CONTACT_IMPORT_FIELDS: ReadonlyArray<{
   { field: "state", label: "State" },
   { field: "country", label: "Country" },
   { field: "website", label: "Website" },
+  { field: "notes", label: "Notes" },
   { field: "group", label: "Group name" },
   { field: "groupId", label: "Group ID" },
 ] as const;
@@ -239,6 +249,7 @@ type ContactImportField =
   | "state"
   | "country"
   | "website"
+  | "notes"
   | "group"
   | "groupId";
 type ContactImportColumnMapping = Partial<Record<ContactImportField, string>>;
@@ -259,6 +270,7 @@ const CONTACT_IMPORT_HEADER_ALIASES: Record<ContactImportField, string[]> = {
   city: ["city", "town"],
   country: ["country"],
   website: ["website", "url", "homepage"],
+  notes: ["notes", "note", "additionalinfo", "additionalinformation"],
   group: ["group", "groupname"],
   groupId: ["groupid"],
 };

@@ -199,6 +199,7 @@ export interface Contact {
   phone?: string;
   signal?: string;
   website?: string;
+  notes?: string;
   socialLinks: ContactSocialLink[];
   organizations?: Array<{
     id: string;
@@ -235,7 +236,8 @@ export type ContactFilter =
         | "state"
         | "city"
         | "country"
-        | "website";
+        | "website"
+        | "notes";
       operator: "has" | "missing" | "contains";
       value?: string;
     }

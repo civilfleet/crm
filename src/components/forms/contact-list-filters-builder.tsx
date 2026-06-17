@@ -36,7 +36,8 @@ type FilterOption = {
     | "state"
     | "city"
     | "country"
-    | "website";
+    | "website"
+    | "notes";
 };
 
 const FILTER_OPTIONS: FilterOption[] = [
@@ -68,6 +69,12 @@ const FILTER_OPTIONS: FilterOption[] = [
     type: "contactField",
     field: "website",
     label: "Has website / website contains...",
+    allowMultiple: true,
+  },
+  {
+    type: "contactField",
+    field: "notes",
+    label: "Has notes / notes contain...",
     allowMultiple: true,
   },
   {
@@ -136,7 +143,8 @@ const CONTACT_FIELD_LABELS: Record<
   | "state"
   | "city"
   | "country"
-  | "website",
+  | "website"
+  | "notes",
   string
 > = {
   name: "Name",
@@ -150,6 +158,7 @@ const CONTACT_FIELD_LABELS: Record<
   city: "City",
   country: "Country",
   website: "Website",
+  notes: "Notes",
 };
 
 export function ContactListFiltersBuilder({

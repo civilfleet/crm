@@ -212,6 +212,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
           phone: contact?.phone ?? "",
           signal: contact?.signal ?? "",
           website: contact?.website ?? "",
+          notes: contact?.notes ?? "",
           socialLinks:
             contact?.socialLinks?.map((link) => ({
               platform: link.platform,
@@ -252,6 +253,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
           phone: "",
           signal: "",
           website: "",
+          notes: "",
           socialLinks: [],
           organizationIds: [],
           groupIds: [],
@@ -799,6 +801,24 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                   />
                   <FormField
                     control={typedControl}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem className="sm:col-span-2 lg:col-span-3">
+                        <FormLabel>Notes / additional info</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Add context, preferences, or internal notes"
+                            {...field}
+                            value={field.value ?? ""}
+                            rows={4}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={typedControl}
                     name="pronouns"
                     render={({ field }) => (
                       <FormItem>
@@ -958,13 +978,16 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                               const checked = selectedGroupIds.includes(
                                 group.id,
                               );
+                              const checkboxId = `contact-group-${group.id}`;
 
                               return (
                                 <label
                                   key={group.id}
+                                  htmlFor={checkboxId}
                                   className="flex items-center gap-2 text-sm"
                                 >
                                   <Checkbox
+                                    id={checkboxId}
                                     checked={checked}
                                     onCheckedChange={(value) => {
                                       if (value) {

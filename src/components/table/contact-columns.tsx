@@ -37,6 +37,7 @@ export type ContactRow = {
   phone?: string | null;
   signal?: string | null;
   website?: string | null;
+  notes?: string | null;
   profileAttributes: ContactProfileAttribute[];
   events?: ContactEvent[];
   createdAt: string | Date;

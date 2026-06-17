@@ -377,6 +377,20 @@ export default async function ContactDetailPage({
             )}
           </div>
         )}
+
+        {contact.notes && (
+          <div className="rounded-md border bg-muted/30 p-3">
+            <div className="mb-2 flex items-center gap-2">
+              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <p className="text-sm font-medium text-muted-foreground">
+                Notes / additional info
+              </p>
+            </div>
+            <p className="whitespace-pre-wrap break-words text-base [overflow-wrap:anywhere]">
+              {contact.notes}
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="space-y-4">

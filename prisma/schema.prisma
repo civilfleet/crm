@@ -507,6 +507,7 @@ model Contact {
   phone             String?              @db.VarChar(255)
   signal            String?              @db.VarChar(255)
   website           String?             @db.VarChar(255)
+  notes             String?             @db.Text
   groupId           String?              // Optional group for access control
   group             Group?               @relation(fields: [groupId], references: [id], onDelete: SetNull)
   createdAt         DateTime             @default(now()) @db.Timestamptz(6)

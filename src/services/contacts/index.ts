@@ -84,6 +84,7 @@ type CreateContactInput = {
   phone?: string;
   signal?: string;
   website?: string;
+  notes?: string;
   socialLinks?: ContactSocialLink[];
   organizationIds?: string[];
   groupId?: string;
@@ -118,6 +119,7 @@ type UpdateContactInput = {
   phone?: string;
   signal?: string;
   website?: string;
+  notes?: string;
   socialLinks?: ContactSocialLink[];
   organizationIds?: string[];
   groupId?: string;
@@ -581,6 +583,7 @@ const CONTACT_IMPORT_HEADER_ALIASES = {
   city: ["city", "town"],
   country: ["country"],
   website: ["website", "url", "homepage"],
+  notes: ["notes", "note", "additionalinfo", "additionalinformation"],
   group: ["group", "groupname"],
   groupId: ["groupid"],
 } as const;
@@ -762,6 +765,7 @@ const mapContact = (contact: ContactWithAttributes): ContactType => ({
   phone: contact.phone ?? undefined,
   signal: contact.signal ?? undefined,
   website: contact.website ?? undefined,
+  notes: contact.notes ?? undefined,
   socialLinks: contact.socialLinks.map((link) => ({
     platform: link.platform,
     handle: link.handle,
@@ -1051,6 +1055,7 @@ async function getTeamContacts(
       { phone: { contains: query, mode: "insensitive" } },
       { signal: { contains: query, mode: "insensitive" } },
       { website: { contains: query, mode: "insensitive" } },
+      { notes: { contains: query, mode: "insensitive" } },
       {
         attributes: {
           some: {
@@ -1152,6 +1157,13 @@ async function getTeamContacts(
               mode: Prisma.QueryMode.insensitive,
             },
           };
+        case "notes":
+          return {
+            notes: {
+              contains: trimmedValue,
+              mode: Prisma.QueryMode.insensitive,
+            },
+          };
         default:
           return {
             name: {
@@ -1184,6 +1196,8 @@ async function getTeamContacts(
           return { country: { not: null } };
         case "website":
           return { website: { not: null } };
+        case "notes":
+          return { notes: { not: null } };
         default:
           return null;
       }
@@ -1211,6 +1225,8 @@ async function getTeamContacts(
           return { NOT: { country: { equals: "" } } };
         case "website":
           return { NOT: { website: { equals: "" } } };
+        case "notes":
+          return { NOT: { notes: { equals: "" } } };
         default:
           return { NOT: { name: { equals: "" } } };
       }
@@ -1260,6 +1276,10 @@ async function getTeamContacts(
         case "website":
           return {
             OR: [{ website: { equals: null } }, { website: { equals: "" } }],
+          };
+        case "notes":
+          return {
+            OR: [{ notes: { equals: null } }, { notes: { equals: "" } }],
           };
         default:
           return { name: { equals: "" } };
@@ -1636,6 +1656,7 @@ const createContact = async (
     phone,
     signal,
     website,
+    notes,
     socialLinks,
     organizationIds,
     groupId,
@@ -1681,6 +1702,7 @@ const createContact = async (
   const normalizedPhone = phone ? phone.trim() : undefined;
   const normalizedSignal = signal ? signal.trim() : undefined;
   const normalizedWebsite = website?.trim() || undefined;
+  const normalizedNotes = notes?.trim() || undefined;
 
   const existingContact = await prisma.contact.findFirst({
     where: {
@@ -1726,6 +1748,7 @@ const createContact = async (
         phone: normalizedPhone,
         signal: normalizedSignal,
         website: normalizedWebsite,
+        notes: normalizedNotes,
         groupId: normalizedGroupIds[0],
       },
     });
@@ -1966,6 +1989,7 @@ const importContactsFromCsv = async ({
           phone: getCsvValue(row, headerMap, "phone"),
           signal: getCsvValue(row, headerMap, "signal"),
           website: getCsvValue(row, headerMap, "website"),
+          notes: getCsvValue(row, headerMap, "notes"),
           socialLinks: [],
           profileAttributes: [],
           groupIds: groupId ? [groupId] : [],
@@ -2022,6 +2046,7 @@ const updateContact = async (
     phone,
     signal,
     website,
+    notes,
     groupId,
     groupIds,
     profileAttributes,
@@ -2188,6 +2213,17 @@ const updateContact = async (
       return null;
     }
     const trimmed = website.trim();
+    return trimmed === "" ? null : trimmed;
+  })();
+  const notesProvided = Object.hasOwn(input, "notes");
+  const normalizedNotes = (() => {
+    if (!notesProvided) {
+      return undefined;
+    }
+    if (typeof notes !== "string") {
+      return null;
+    }
+    const trimmed = notes.trim();
     return trimmed === "" ? null : trimmed;
   })();
   const socialLinksProvided = Object.hasOwn(input, "socialLinks");
@@ -2538,6 +2574,19 @@ const updateContact = async (
         tx,
       );
       updates.website = normalizedWebsite;
+    }
+
+    if (normalizedNotes !== undefined && normalizedNotes !== existing.notes) {
+      await logFieldUpdate(
+        contactId,
+        "notes",
+        existing.notes,
+        normalizedNotes,
+        userId,
+        userName,
+        tx,
+      );
+      updates.notes = normalizedNotes;
     }
 
     if (socialLinksProvided) {

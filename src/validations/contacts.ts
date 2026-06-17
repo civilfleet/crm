@@ -129,6 +129,7 @@ const contactFieldFilterSchema = z
       "city",
       "country",
       "website",
+      "notes",
     ]),
     operator: z.enum(["has", "missing", "contains"]),
     value: z.string().optional(),
@@ -217,6 +218,7 @@ export const createContactSchema = z.object({
   phone: optionalText(z.string()),
   signal: optionalText(z.string()),
   website: optionalWebsite,
+  notes: optionalText(z.string()),
   socialLinks: z.array(contactSocialLinkSchema).default([]),
   organizationIds: z
     .array(z.uuid("Organization id must be a valid UUID"))
@@ -269,6 +271,7 @@ export const updateContactSchema = z.object({
   phone: optionalText(z.string()),
   signal: optionalText(z.string()),
   website: optionalWebsite,
+  notes: optionalText(z.string()),
   socialLinks: z.array(contactSocialLinkSchema).optional(),
   organizationIds: z
     .array(z.uuid("Organization id must be a valid UUID"))
