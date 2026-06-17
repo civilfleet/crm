@@ -350,24 +350,26 @@ export default async function ContactDetailPage({
               ({ icon: Icon, label, value, href, newTab }) => (
                 <div
                   key={label}
-                  className="flex items-center gap-3 rounded-md border bg-muted/30 p-3"
+                  className="flex min-w-0 items-center gap-3 rounded-md border bg-muted/30 p-3"
                 >
-                  <Icon className="h-5 w-5 text-muted-foreground" />
-                  <div>
+                  <Icon className="h-5 w-5 shrink-0 text-muted-foreground" />
+                  <div className="min-w-0">
                     <p className="text-sm font-medium text-muted-foreground">
                       {label}
                     </p>
                     {href ? (
                       <a
                         href={href}
-                        className="text-base hover:underline"
+                        className="break-words text-base [overflow-wrap:anywhere] hover:underline"
                         target={newTab ? "_blank" : undefined}
                         rel={newTab ? "noreferrer" : undefined}
                       >
                         {value}
                       </a>
                     ) : (
-                      <p className="text-base">{value}</p>
+                      <p className="break-words text-base [overflow-wrap:anywhere]">
+                        {value}
+                      </p>
                     )}
                   </div>
                 </div>
