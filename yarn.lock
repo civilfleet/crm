@@ -7857,7 +7857,7 @@ __metadata:
     next: "npm:16.2.4"
     next-auth: "npm:^5.0.0-beta.30"
     nextjs-toploader: "npm:^3.9.17"
-    nodemailer: "npm:^7.0.1"
+    nodemailer: "npm:^9.0.1"
     pg: "npm:^8.20.0"
     pg-copy-streams: "npm:^7.0.0"
     pino: "npm:^10.3.1"
@@ -7934,10 +7934,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nodemailer@npm:^7.0.1":
-  version: 7.0.13
-  resolution: "nodemailer@npm:7.0.13"
-  checksum: 10c0/b26aa5b9fa4a033bbc1e1c16ef75ee2a9c8641fd290c00a8361d6a251b3c1b8bad545a23efa627f59cb266340a448891ea8aa49d8a9307c767b8505219d95079
+"nodemailer@npm:^9.0.1":
+  version: 9.0.1
+  resolution: "nodemailer@npm:9.0.1"
+  checksum: 10c0/4213f01aa211127c1ce33243c5e45e7f831601a933d03fa864cd827b1bd5ea2782cb4b43722bee7028cbc193733d9802dad1120fe67181448eb0b7de52218a37
   languageName: node
   linkType: hard
 
