@@ -9,6 +9,7 @@ import {
   processEmailBatch,
   recoverStaleEmailBatches,
 } from "@/services/integrations/scaleway-email";
+import { syncDueEmailInboxes } from "@/services/inbound-email";
 import {
   syncZammadIntegration,
   syncZammadTicket,
@@ -24,6 +25,8 @@ const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_STALE_LOCK_MS = 60 * 60 * 1000;
 const DEFAULT_PENDING_UPLOAD_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const DEFAULT_PENDING_UPLOAD_CLEANUP_LIMIT = 100;
+const DEFAULT_INBOUND_EMAIL_SYNC_INTERVAL_MS = 60 * 1000;
+const DEFAULT_INBOUND_EMAIL_SYNC_LIMIT = 25;
 
 const parsePositiveInteger = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
@@ -68,12 +71,21 @@ export const runBackgroundWorker = async () => {
     process.env.PENDING_UPLOAD_CLEANUP_LIMIT,
     DEFAULT_PENDING_UPLOAD_CLEANUP_LIMIT,
   );
+  const inboundEmailSyncIntervalMs = parsePositiveInteger(
+    process.env.INBOUND_EMAIL_SYNC_INTERVAL_MS,
+    DEFAULT_INBOUND_EMAIL_SYNC_INTERVAL_MS,
+  );
+  const inboundEmailSyncLimit = parsePositiveInteger(
+    process.env.INBOUND_EMAIL_SYNC_LIMIT,
+    DEFAULT_INBOUND_EMAIL_SYNC_LIMIT,
+  );
   const workerId =
     process.env.BACKGROUND_WORKER_ID ??
     process.env.ZAMMAD_WORKER_ID ??
     `${os.hostname()}-${process.pid}`;
   let shouldStop = false;
   let nextPendingUploadCleanupAt = 0;
+  let nextInboundEmailSyncAt = 0;
 
   const stop = () => {
     shouldStop = true;
@@ -104,6 +116,8 @@ export const runBackgroundWorker = async () => {
       pollIntervalMs,
       pendingUploadCleanupIntervalMs,
       pendingUploadCleanupLimit,
+      inboundEmailSyncIntervalMs,
+      inboundEmailSyncLimit,
     },
     "[BackgroundWorker] Started",
   );
@@ -135,8 +149,43 @@ export const runBackgroundWorker = async () => {
     }
   };
 
+  const runInboundEmailSync = async () => {
+    const now = Date.now();
+    if (now < nextInboundEmailSyncAt) {
+      return;
+    }
+
+    nextInboundEmailSyncAt = now + inboundEmailSyncIntervalMs;
+
+    try {
+      const results = await syncDueEmailInboxes(workerId, {
+        limit: inboundEmailSyncLimit,
+        staleLockMs,
+      });
+      const imported = results.reduce((count, result) => {
+        if ("imported" in result && typeof result.imported === "number") {
+          return count + result.imported;
+        }
+        return count;
+      }, 0);
+
+      if (results.length > 0 || imported > 0) {
+        logger.info(
+          { workerId, inboxes: results.length, imported, results },
+          "[BackgroundWorker] Inbound email sync finished",
+        );
+      }
+    } catch (error) {
+      logger.error(
+        { workerId, error },
+        "[BackgroundWorker] Inbound email sync failed",
+      );
+    }
+  };
+
   while (!shouldStop) {
     await runPendingUploadCleanup();
+    await runInboundEmailSync();
 
     const job = await claimNextZammadSyncJob(workerId);
 

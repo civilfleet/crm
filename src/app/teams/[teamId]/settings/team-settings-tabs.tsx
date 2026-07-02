@@ -7,6 +7,7 @@ import CreateEmailTemplate from "@/components/forms/create-email-template";
 import EventRolesManager from "@/components/forms/event-roles-manager";
 import EventTypesManager from "@/components/forms/event-types-manager";
 import FormConfigurationManager from "@/components/forms/form-configuration-manager";
+import InboundEmailInboxes from "@/components/forms/inbound-email-inboxes";
 import KlaviyoIntegration from "@/components/forms/klaviyo-integration";
 import OrganizationTypesManager from "@/components/forms/organization-types-manager";
 import ScalewayEmailIntegration from "@/components/forms/scaleway-email-integration";
@@ -200,6 +201,7 @@ export default function TeamSettingsTabs({
       </TabsContent>
 
       <TabsContent value="integrations" className="space-y-8">
+        <InboundEmailInboxes teamId={teamId} />
         <KlaviyoIntegration teamId={teamId} />
         <ScalewayEmailIntegration teamId={teamId} />
         <ZammadIntegration teamId={teamId} />

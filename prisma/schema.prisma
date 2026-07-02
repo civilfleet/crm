@@ -231,6 +231,9 @@ model Teams {
   contacts     Contact[]
   contactLists ContactList[]
   emailBatches EmailBatch[]
+  emailInboxes EmailInbox[]
+  inboundEmailMessages InboundEmailMessage[]
+  contactAccessReviews ContactAccessReview[]
   events       Event[]
   eventRoles   EventRole[]
   eventTypes   EventType[]
@@ -518,6 +521,8 @@ model Contact {
   registrations     EventRegistration[]
   engagements       ContactEngagement[]
   emailRecipients   EmailRecipient[]
+  inboundEmailMessages InboundEmailMessage[]
+  contactAccessReviews ContactAccessReview[]
   changeLogs        ContactChangeLog[]
   lists             ContactListMember[]
   organizationsAsContactPerson Organization[] @relation("OrganizationContactPerson")
@@ -610,6 +615,115 @@ model EmailRecipient {
   @@index([contactId])
   @@index([email])
   @@index([status])
+}
+
+enum ContactAccessReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVOKED
+}
+
+model EmailInbox {
+  id           String   @id @default(uuid()) @unique
+  teamId       String
+  team         Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  groupId      String
+  group        Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  name         String   @db.VarChar(255)
+  host         String   @db.VarChar(255)
+  port         Int
+  secure       Boolean  @default(true)
+  username     String   @db.VarChar(255)
+  passwordEncrypted String @db.Text
+  mailbox      String   @default("INBOX") @db.VarChar(255)
+  autoApproveExistingVisible Boolean @default(true)
+  requireReviewForHiddenMatches Boolean @default(true)
+  allowCreateContacts Boolean @default(false)
+  allowedDomains String[] @default([])
+
+  isEnabled    Boolean  @default(true)
+  lastSyncedAt DateTime? @db.Timestamptz(6)
+  uidValidity  BigInt?
+  lastUid      BigInt?
+  syncLockedAt DateTime? @db.Timestamptz(6)
+  syncLockedBy String? @db.VarChar(255)
+  lastSyncError String? @db.Text
+
+  messages     InboundEmailMessage[]
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([teamId])
+  @@index([groupId])
+  @@index([isEnabled])
+  @@index([syncLockedAt])
+}
+
+model InboundEmailMessage {
+  id            String   @id @default(uuid()) @unique
+  teamId        String
+  team          Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  groupId       String
+  group         Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  emailInboxId  String
+  emailInbox    EmailInbox @relation(fields: [emailInboxId], references: [id], onDelete: Cascade)
+
+  mailbox       String   @db.VarChar(255)
+  uidValidity   BigInt
+  uid           BigInt
+  messageId     String?  @db.VarChar(500)
+
+  fromEmail     String   @db.VarChar(255)
+  fromName      String?  @db.VarChar(255)
+  subject       String?  @db.VarChar(500)
+  body          String   @db.Text
+  receivedAt    DateTime @db.Timestamptz(6)
+
+  contactId     String?
+  contact       Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  engagementId  String?
+  engagement    ContactEngagement? @relation(fields: [engagementId], references: [id], onDelete: SetNull)
+  accessReviews ContactAccessReview[]
+  rawHeaders    Json?
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([emailInboxId, mailbox, uidValidity, uid])
+  @@index([teamId, fromEmail])
+  @@index([groupId])
+  @@index([messageId])
+  @@index([contactId])
+  @@index([engagementId])
+}
+
+model ContactAccessReview {
+  id            String   @id @default(uuid()) @unique
+  teamId        String
+  team          Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  groupId       String
+  group         Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  contactId     String
+  contact       Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  source        String   @db.VarChar(64)
+  inboundEmailMessageId String?
+  inboundEmailMessage InboundEmailMessage? @relation(fields: [inboundEmailMessageId], references: [id], onDelete: Cascade)
+  status        ContactAccessReviewStatus @default(PENDING)
+  reviewedAt    DateTime? @db.Timestamptz(6)
+  reviewedByUserId String?
+  reviewedByUserName String? @db.VarChar(255)
+  revokedAt     DateTime? @db.Timestamptz(6)
+  revokedByUserId String?
+  revokedByUserName String? @db.VarChar(255)
+  reviewNote    String? @db.Text
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(6)
+
+  @@unique([source, inboundEmailMessageId, groupId, contactId])
+  @@index([teamId, status])
+  @@index([groupId, status])
+  @@index([contactId])
+  @@index([source])
 }
 
 model PostalCodeCentroid {
@@ -1008,6 +1122,7 @@ model ContactEngagement {
   engagedAt   DateTime             @db.Timestamptz(6) // When the engagement occurred
   createdAt   DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime             @updatedAt @db.Timestamptz(6)
+  inboundEmailMessages InboundEmailMessage[]
 
   @@index([contactId])
   @@index([teamId])
@@ -1057,6 +1172,9 @@ model Group {
   contacts    Contact[]
   contactGroups ContactGroup[]
   contactFieldAccesses ContactFieldAccess[]
+  emailInboxes EmailInbox[]
+  inboundEmailMessages InboundEmailMessage[]
+  contactAccessReviews ContactAccessReview[]
   teamsDefaultOidcFor Teams[] @relation("DefaultOidcGroup")
 
   @@unique([teamId, name])
