@@ -238,7 +238,11 @@ export const runBackgroundWorker = async () => {
             message:
               "error" in result
                 ? `Inbound email sync failed for inbox ${result.inboxId}.`
-                : `Inbound email sync imported ${result.imported} messages from inbox ${result.inboxId}.`,
+                : `Inbound email sync fetched ${
+                    result.stats?.fetched ?? result.imported
+                  } messages and imported ${result.imported} from inbox ${
+                    result.inboxId
+                  }.`,
             workerId,
             source: "INBOUND_EMAIL",
             entityType: "EmailInbox",

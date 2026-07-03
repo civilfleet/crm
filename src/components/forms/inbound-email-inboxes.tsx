@@ -377,15 +377,25 @@ export default function InboundEmailInboxes({
 
   const runInboxAction = async (
     inbox: EmailInboxConfig,
-    action: "test" | "sync" | "delete",
+    action: "test" | "sync" | "resync" | "delete",
   ) => {
     setBusyInboxId(`${action}:${inbox.id}`);
     try {
       const response = await fetch(
         action === "delete"
           ? `/api/teams/${teamId}/email-inboxes/${inbox.id}`
-          : `/api/teams/${teamId}/email-inboxes/${inbox.id}/${action}`,
-        { method: action === "delete" ? "DELETE" : "POST" },
+          : `/api/teams/${teamId}/email-inboxes/${inbox.id}/${
+              action === "resync" ? "sync" : action
+            }`,
+        {
+          method: action === "delete" ? "DELETE" : "POST",
+          headers:
+            action === "resync" ? { "Content-Type": "application/json" } : undefined,
+          body:
+            action === "resync"
+              ? JSON.stringify({ resetCheckpoint: true })
+              : undefined,
+        },
       );
 
       const json = await response.json();
@@ -399,11 +409,11 @@ export default function InboundEmailInboxes({
         title:
           action === "test"
             ? "Connection works"
-            : action === "sync"
+            : action === "sync" || action === "resync"
               ? "Sync finished"
               : "Inbox deleted",
         description:
-          action === "sync" && json?.data
+          (action === "sync" || action === "resync") && json?.data
             ? `Imported ${json.data.imported ?? 0} messages.`
             : undefined,
       });
@@ -412,7 +422,7 @@ export default function InboundEmailInboxes({
         title:
           action === "test"
             ? "Connection failed"
-            : action === "sync"
+            : action === "sync" || action === "resync"
               ? "Sync failed"
               : "Delete failed",
         description: (error as Error).message,
@@ -799,6 +809,19 @@ export default function InboundEmailInboxes({
                           <RefreshCw className="h-4 w-4" />
                         )}
                         Sync now
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => runInboxAction(inbox, "resync")}
+                        disabled={busyInboxId !== null || !inbox.isEnabled}
+                      >
+                        {busyInboxId === `resync:${inbox.id}` ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4" />
+                        )}
+                        Resync
                       </Button>
                       <Button
                         variant="outline"

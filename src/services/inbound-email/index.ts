@@ -462,6 +462,13 @@ type ContactResolution = {
   canCreateEngagement: boolean;
   needsAccessReview: boolean;
   canAutoGrantAccess: boolean;
+  reason:
+    | "existing-visible"
+    | "existing-visible-review"
+    | "existing-hidden-review"
+    | "existing-hidden-auto-grant"
+    | "contact-created"
+    | "unmatched-stored";
 };
 
 const resolveContactForInboundEmail = async ({
@@ -522,6 +529,13 @@ const resolveContactForInboundEmail = async ({
         (isVisibleToInboxGroup && !autoApproveExistingVisible) ||
         (!isVisibleToInboxGroup && requireReviewForHiddenMatches),
       canAutoGrantAccess: !isVisibleToInboxGroup && !requireReviewForHiddenMatches,
+      reason: isVisibleToInboxGroup
+        ? autoApproveExistingVisible
+          ? "existing-visible"
+          : "existing-visible-review"
+        : requireReviewForHiddenMatches
+          ? "existing-hidden-review"
+          : "existing-hidden-auto-grant",
     };
   }
 
@@ -531,6 +545,7 @@ const resolveContactForInboundEmail = async ({
       canCreateEngagement: false,
       needsAccessReview: false,
       canAutoGrantAccess: false,
+      reason: "unmatched-stored",
     };
   }
 
@@ -552,6 +567,7 @@ const resolveContactForInboundEmail = async ({
     canCreateEngagement: true,
     needsAccessReview: false,
     canAutoGrantAccess: false,
+    reason: "contact-created",
   };
 };
 
@@ -591,6 +607,7 @@ const importMessage = async ({
         canCreateEngagement: false,
         needsAccessReview: false,
         canAutoGrantAccess: false,
+        reason: "domain-blocked" as const,
       };
 
   const result = await prisma.$transaction(async (tx) => {
@@ -733,6 +750,8 @@ const importMessage = async ({
     imported: true as const,
     contactId: contactResolution.contactId,
     needsAccessReview: contactResolution.needsAccessReview,
+    reason: contactResolution.reason,
+    fromEmail,
     ...result,
   };
 };
@@ -1085,6 +1104,7 @@ export const syncEmailInbox = async (
     limit?: number;
     staleLockMs?: number;
     teamId?: string;
+    resetCheckpoint?: boolean;
   } = {},
 ) => {
   const workerId = options.workerId ?? `manual-${process.pid}`;
@@ -1103,6 +1123,19 @@ export const syncEmailInbox = async (
   let imported = 0;
   let unmatched = 0;
   let lastUid = inbox.lastUid;
+  const stats = {
+    fetched: 0,
+    missingSource: 0,
+    missingFrom: 0,
+    domainBlocked: 0,
+    unmatchedStored: 0,
+    contactsCreated: 0,
+    existingVisible: 0,
+    existingHiddenReview: 0,
+    existingHiddenAutoGrant: 0,
+    existingVisibleReview: 0,
+    accessReviews: 0,
+  };
 
   try {
     await client.connect();
@@ -1115,7 +1148,7 @@ export const syncEmailInbox = async (
 
       const uidValidity = mailbox.uidValidity;
       const startUid =
-        inbox.uidValidity === uidValidity && inbox.lastUid
+        !options.resetCheckpoint && inbox.uidValidity === uidValidity && inbox.lastUid
           ? inbox.lastUid + BigInt(1)
           : BigInt(1);
       const range = `${startUid.toString()}:*`;
@@ -1131,10 +1164,12 @@ export const syncEmailInbox = async (
         }
 
         if (!message.source) {
+          stats.missingSource += 1;
           continue;
         }
 
         fetched += 1;
+        stats.fetched += 1;
         const uid = BigInt(message.uid);
         const parsed = await simpleParser(message.source);
         const result = await importMessage({
@@ -1149,6 +1184,33 @@ export const syncEmailInbox = async (
           if (!result.contactId) {
             unmatched += 1;
           }
+          switch (result.reason) {
+            case "contact-created":
+              stats.contactsCreated += 1;
+              break;
+            case "domain-blocked":
+              stats.domainBlocked += 1;
+              break;
+            case "unmatched-stored":
+              stats.unmatchedStored += 1;
+              break;
+            case "existing-visible":
+              stats.existingVisible += 1;
+              break;
+            case "existing-hidden-review":
+              stats.existingHiddenReview += 1;
+              stats.accessReviews += 1;
+              break;
+            case "existing-hidden-auto-grant":
+              stats.existingHiddenAutoGrant += 1;
+              break;
+            case "existing-visible-review":
+              stats.existingVisibleReview += 1;
+              stats.accessReviews += 1;
+              break;
+          }
+        } else if (result.reason === "missing-from") {
+          stats.missingFrom += 1;
         }
 
         lastUid = uid;
@@ -1168,6 +1230,8 @@ export const syncEmailInbox = async (
       skipped: false,
       imported,
       unmatched,
+      stats,
+      resetCheckpoint: Boolean(options.resetCheckpoint),
       lastUid: bigintToString(lastUid),
     };
   } catch (error) {
