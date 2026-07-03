@@ -611,34 +611,49 @@ const importMessage = async ({
       };
 
   const result = await prisma.$transaction(async (tx) => {
-    const inbound = await tx.inboundEmailMessage.upsert({
-      where: {
-        emailInboxId_mailbox_uidValidity_uid: {
-          emailInboxId: inbox.id,
-          mailbox: inbox.mailbox,
-          uidValidity,
-          uid,
-        },
-      },
-      update: {},
-      create: {
-        teamId: inbox.teamId,
-        groupId: inbox.groupId,
+    const inboundKey = {
+      emailInboxId_mailbox_uidValidity_uid: {
         emailInboxId: inbox.id,
         mailbox: inbox.mailbox,
         uidValidity,
         uid,
-        messageId: truncate(parsed.messageId ?? undefined, 500),
-        fromEmail,
-        fromName: truncate(from?.name, 255),
-        subject: truncate(parsed.subject ?? undefined, 500),
-        body: message,
-        receivedAt,
-        contactId: contactResolution.contactId,
-        rawHeaders: parseHeaders(parsed),
       },
+    };
+    let inbound = await tx.inboundEmailMessage.findUnique({
+      where: inboundKey,
       select: { id: true, engagementId: true },
     });
+    const alreadyImported = Boolean(inbound);
+
+    if (!inbound) {
+      inbound = await tx.inboundEmailMessage.create({
+        data: {
+          teamId: inbox.teamId,
+          groupId: inbox.groupId,
+          emailInboxId: inbox.id,
+          mailbox: inbox.mailbox,
+          uidValidity,
+          uid,
+          messageId: truncate(parsed.messageId ?? undefined, 500),
+          fromEmail,
+          fromName: truncate(from?.name, 255),
+          subject: truncate(parsed.subject ?? undefined, 500),
+          body: message,
+          receivedAt,
+          contactId: contactResolution.contactId,
+          rawHeaders: parseHeaders(parsed),
+        },
+        select: { id: true, engagementId: true },
+      });
+    }
+
+    if (alreadyImported) {
+      return {
+        inboundId: inbound.id,
+        engagementId: inbound.engagementId,
+        alreadyImported,
+      };
+    }
 
     if (contactResolution.contactId && contactResolution.canAutoGrantAccess) {
       const contact = await tx.contact.findUnique({
@@ -709,7 +724,11 @@ const importMessage = async ({
           },
         });
       }
-      return { inboundId: inbound.id, engagementId: inbound.engagementId };
+      return {
+        inboundId: inbound.id,
+        engagementId: inbound.engagementId,
+        alreadyImported,
+      };
     }
 
     const engagement = await tx.contactEngagement.upsert({
@@ -743,8 +762,19 @@ const importMessage = async ({
       },
     });
 
-    return { inboundId: inbound.id, engagementId: engagement.id };
+    return { inboundId: inbound.id, engagementId: engagement.id, alreadyImported };
   });
+
+  if (result.alreadyImported) {
+    return {
+      imported: false as const,
+      reason: "already-imported" as const,
+      contactId: contactResolution.contactId,
+      needsAccessReview: false,
+      fromEmail,
+      ...result,
+    };
+  }
 
   return {
     imported: true as const,
@@ -1135,6 +1165,7 @@ export const syncEmailInbox = async (
     existingHiddenAutoGrant: 0,
     existingVisibleReview: 0,
     accessReviews: 0,
+    alreadyImported: 0,
   };
 
   try {
@@ -1151,69 +1182,74 @@ export const syncEmailInbox = async (
         !options.resetCheckpoint && inbox.uidValidity === uidValidity && inbox.lastUid
           ? inbox.lastUid + BigInt(1)
           : BigInt(1);
+      const uidNext = mailbox.uidNext ? BigInt(mailbox.uidNext) : null;
       const range = `${startUid.toString()}:*`;
 
       let fetched = 0;
-      for await (const message of client.fetch(
-        range,
-        { source: true, uid: true, internalDate: true },
-        { uid: true },
-      )) {
-        if (fetched >= limit) {
-          break;
-        }
-
-        if (!message.source) {
-          stats.missingSource += 1;
-          continue;
-        }
-
-        fetched += 1;
-        stats.fetched += 1;
-        const uid = BigInt(message.uid);
-        const parsed = await simpleParser(message.source);
-        const result = await importMessage({
-          inbox,
-          uid,
-          uidValidity,
-          parsed,
-        });
-
-        if (result.imported) {
-          imported += 1;
-          if (!result.contactId) {
-            unmatched += 1;
+      if (!uidNext || startUid < uidNext) {
+        for await (const message of client.fetch(
+          range,
+          { source: true, uid: true, internalDate: true },
+          { uid: true },
+        )) {
+          if (fetched >= limit) {
+            break;
           }
-          switch (result.reason) {
-            case "contact-created":
-              stats.contactsCreated += 1;
-              break;
-            case "domain-blocked":
-              stats.domainBlocked += 1;
-              break;
-            case "unmatched-stored":
-              stats.unmatchedStored += 1;
-              break;
-            case "existing-visible":
-              stats.existingVisible += 1;
-              break;
-            case "existing-hidden-review":
-              stats.existingHiddenReview += 1;
-              stats.accessReviews += 1;
-              break;
-            case "existing-hidden-auto-grant":
-              stats.existingHiddenAutoGrant += 1;
-              break;
-            case "existing-visible-review":
-              stats.existingVisibleReview += 1;
-              stats.accessReviews += 1;
-              break;
-          }
-        } else if (result.reason === "missing-from") {
-          stats.missingFrom += 1;
-        }
 
-        lastUid = uid;
+          if (!message.source) {
+            stats.missingSource += 1;
+            continue;
+          }
+
+          fetched += 1;
+          stats.fetched += 1;
+          const uid = BigInt(message.uid);
+          const parsed = await simpleParser(message.source);
+          const result = await importMessage({
+            inbox,
+            uid,
+            uidValidity,
+            parsed,
+          });
+
+          if (result.imported) {
+            imported += 1;
+            if (!result.contactId) {
+              unmatched += 1;
+            }
+            switch (result.reason) {
+              case "contact-created":
+                stats.contactsCreated += 1;
+                break;
+              case "domain-blocked":
+                stats.domainBlocked += 1;
+                break;
+              case "unmatched-stored":
+                stats.unmatchedStored += 1;
+                break;
+              case "existing-visible":
+                stats.existingVisible += 1;
+                break;
+              case "existing-hidden-review":
+                stats.existingHiddenReview += 1;
+                stats.accessReviews += 1;
+                break;
+              case "existing-hidden-auto-grant":
+                stats.existingHiddenAutoGrant += 1;
+                break;
+              case "existing-visible-review":
+                stats.existingVisibleReview += 1;
+                stats.accessReviews += 1;
+                break;
+            }
+          } else if (result.reason === "missing-from") {
+            stats.missingFrom += 1;
+          } else if (result.reason === "already-imported") {
+            stats.alreadyImported += 1;
+          }
+
+          lastUid = uid;
+        }
       }
 
       await releaseInbox(inbox.id, workerId, {
