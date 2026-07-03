@@ -20,6 +20,7 @@ import {
   markZammadSyncJobSucceeded,
   recoverStaleZammadSyncJobs,
 } from "@/services/integrations/zammad-queue";
+import { recordSystemLog } from "@/services/system-logs";
 
 const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const DEFAULT_STALE_LOCK_MS = 60 * 60 * 1000;
@@ -35,6 +36,17 @@ const parsePositiveInteger = (value: string | undefined, fallback: number) => {
 
 const sleep = async (ms: number) =>
   await new Promise((resolve) => setTimeout(resolve, ms));
+
+const logWorkerEvent = async (
+  input: Omit<Parameters<typeof recordSystemLog>[0], "source"> & {
+    source?: string;
+  },
+) => {
+  await recordSystemLog({
+    source: "BACKGROUND_WORKER",
+    ...input,
+  });
+};
 
 const processZammadSyncJob = async (job: ZammadSyncJob) => {
   switch (job.type) {
@@ -100,6 +112,14 @@ export const runBackgroundWorker = async () => {
       { workerId, recovered: recovered.count },
       "[BackgroundWorker] Recovered stale Zammad jobs",
     );
+    await logWorkerEvent({
+      level: "WARN",
+      event: "zammad_jobs_recovered",
+      message: `Recovered ${recovered.count} stale Zammad sync jobs.`,
+      workerId,
+      source: "ZAMMAD",
+      metadata: { recovered: recovered.count },
+    });
   }
 
   const recoveredEmailBatches = await recoverStaleEmailBatches(staleLockMs);
@@ -108,6 +128,14 @@ export const runBackgroundWorker = async () => {
       { workerId, recovered: recoveredEmailBatches.count },
       "[BackgroundWorker] Recovered stale email batches",
     );
+    await logWorkerEvent({
+      level: "WARN",
+      event: "email_batches_recovered",
+      message: `Recovered ${recoveredEmailBatches.count} stale email batches.`,
+      workerId,
+      source: "EMAIL_BATCH",
+      metadata: { recovered: recoveredEmailBatches.count },
+    });
   }
 
   logger.info(
@@ -121,6 +149,18 @@ export const runBackgroundWorker = async () => {
     },
     "[BackgroundWorker] Started",
   );
+  await logWorkerEvent({
+    event: "worker_started",
+    message: "Background worker started.",
+    workerId,
+    metadata: {
+      pollIntervalMs,
+      pendingUploadCleanupIntervalMs,
+      pendingUploadCleanupLimit,
+      inboundEmailSyncIntervalMs,
+      inboundEmailSyncLimit,
+    },
+  });
 
   const runPendingUploadCleanup = async () => {
     const now = Date.now();
@@ -140,12 +180,28 @@ export const runBackgroundWorker = async () => {
           { workerId, result },
           "[BackgroundWorker] Pending upload cleanup finished",
         );
+        await logWorkerEvent({
+          level: result.failed > 0 ? "WARN" : "INFO",
+          event: "pending_upload_cleanup_finished",
+          message: `Pending upload cleanup scanned ${result.scanned} uploads and failed ${result.failed}.`,
+          workerId,
+          source: "PENDING_UPLOAD",
+          metadata: result,
+        });
       }
     } catch (error) {
       logger.error(
         { workerId, error },
         "[BackgroundWorker] Pending upload cleanup failed",
       );
+      await logWorkerEvent({
+        level: "ERROR",
+        event: "pending_upload_cleanup_failed",
+        message: "Pending upload cleanup failed.",
+        workerId,
+        source: "PENDING_UPLOAD",
+        metadata: { error },
+      });
     }
   };
 
@@ -174,12 +230,36 @@ export const runBackgroundWorker = async () => {
           { workerId, inboxes: results.length, imported, results },
           "[BackgroundWorker] Inbound email sync finished",
         );
+        for (const result of results) {
+          await logWorkerEvent({
+            teamId: result.teamId,
+            level: "error" in result ? "ERROR" : "INFO",
+            event: "inbound_email_sync_finished",
+            message:
+              "error" in result
+                ? `Inbound email sync failed for inbox ${result.inboxId}.`
+                : `Inbound email sync imported ${result.imported} messages from inbox ${result.inboxId}.`,
+            workerId,
+            source: "INBOUND_EMAIL",
+            entityType: "EmailInbox",
+            entityId: result.inboxId,
+            metadata: result,
+          });
+        }
       }
     } catch (error) {
       logger.error(
         { workerId, error },
         "[BackgroundWorker] Inbound email sync failed",
       );
+      await logWorkerEvent({
+        level: "ERROR",
+        event: "inbound_email_sync_failed",
+        message: "Inbound email sync loop failed.",
+        workerId,
+        source: "INBOUND_EMAIL",
+        metadata: { error },
+      });
     }
   };
 
@@ -201,6 +281,20 @@ export const runBackgroundWorker = async () => {
         { workerId, batchId: emailBatch.id, teamId: emailBatch.teamId },
         "[BackgroundWorker] Processing email batch",
       );
+      await logWorkerEvent({
+        teamId: emailBatch.teamId,
+        event: "email_batch_processing",
+        message: `Processing email batch ${emailBatch.id}.`,
+        workerId,
+        source: "EMAIL_BATCH",
+        entityType: "EmailBatch",
+        entityId: emailBatch.id,
+        metadata: {
+          subject: emailBatch.subject,
+          requestedCount: emailBatch.requestedCount,
+          attempts: emailBatch.attempts,
+        },
+      });
 
       try {
         const result = await processEmailBatch(emailBatch);
@@ -208,6 +302,16 @@ export const runBackgroundWorker = async () => {
           { workerId, batchId: emailBatch.id, result },
           "[BackgroundWorker] Email batch processed",
         );
+        await logWorkerEvent({
+          teamId: emailBatch.teamId,
+          event: "email_batch_processed",
+          message: `Email batch ${emailBatch.id} processed.`,
+          workerId,
+          source: "EMAIL_BATCH",
+          entityType: "EmailBatch",
+          entityId: emailBatch.id,
+          metadata: result,
+        });
       } catch (error) {
         const updated = await markEmailBatchFailed(emailBatch, error);
         logger.error(
@@ -220,6 +324,21 @@ export const runBackgroundWorker = async () => {
           },
           "[BackgroundWorker] Email batch failed",
         );
+        await logWorkerEvent({
+          teamId: emailBatch.teamId,
+          level: "ERROR",
+          event: "email_batch_failed",
+          message: `Email batch ${emailBatch.id} failed.`,
+          workerId,
+          source: "EMAIL_BATCH",
+          entityType: "EmailBatch",
+          entityId: emailBatch.id,
+          metadata: {
+            attempts: updated.attempts,
+            status: updated.status,
+            error,
+          },
+        });
       }
 
       continue;
@@ -229,6 +348,20 @@ export const runBackgroundWorker = async () => {
       { workerId, jobId: job.id, type: job.type, teamId: job.teamId },
       "[BackgroundWorker] Processing Zammad job",
     );
+    await logWorkerEvent({
+      teamId: job.teamId,
+      event: "zammad_job_processing",
+      message: `Processing Zammad ${job.type} job ${job.id}.`,
+      workerId,
+      source: "ZAMMAD",
+      entityType: "ZammadSyncJob",
+      entityId: job.id,
+      metadata: {
+        type: job.type,
+        ticketId: job.ticketId,
+        attempts: job.attempts,
+      },
+    });
 
     try {
       const result = await processZammadSyncJob(job);
@@ -237,6 +370,16 @@ export const runBackgroundWorker = async () => {
         { workerId, jobId: job.id, result },
         "[BackgroundWorker] Zammad job succeeded",
       );
+      await logWorkerEvent({
+        teamId: job.teamId,
+        event: "zammad_job_succeeded",
+        message: `Zammad ${job.type} job ${job.id} succeeded.`,
+        workerId,
+        source: "ZAMMAD",
+        entityType: "ZammadSyncJob",
+        entityId: job.id,
+        metadata: result,
+      });
     } catch (error) {
       const updated = await markZammadSyncJobFailed(job, error);
       logger.error(
@@ -249,9 +392,29 @@ export const runBackgroundWorker = async () => {
         },
         "[BackgroundWorker] Zammad job failed",
       );
+      await logWorkerEvent({
+        teamId: job.teamId,
+        level: "ERROR",
+        event: "zammad_job_failed",
+        message: `Zammad ${job.type} job ${job.id} failed.`,
+        workerId,
+        source: "ZAMMAD",
+        entityType: "ZammadSyncJob",
+        entityId: job.id,
+        metadata: {
+          attempts: updated.attempts,
+          status: updated.status,
+          error,
+        },
+      });
     }
   }
 
+  await logWorkerEvent({
+    event: "worker_stopped",
+    message: "Background worker stopped.",
+    workerId,
+  });
   await prisma.$disconnect();
   logger.info({ workerId }, "[BackgroundWorker] Stopped");
 };

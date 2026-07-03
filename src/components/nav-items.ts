@@ -146,6 +146,12 @@ const navItems: {
       module: "ADMIN",
     },
     {
+      title: "Logs",
+      url: "admin/logs",
+      icon: Scroll,
+      module: "ADMIN",
+    },
+    {
       title: "Settings",
       url: "settings",
       icon: Settings,

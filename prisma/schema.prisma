@@ -245,6 +245,7 @@ model Teams {
   organizationEngagements OrganizationEngagement[]
   fileDownloadAudits FileDownloadAudit[]
   pendingUploads PendingUpload[]
+  systemLogs SystemLog[]
 }
 
 model OrganizationType {
@@ -624,6 +625,12 @@ enum ContactAccessReviewStatus {
   REVOKED
 }
 
+enum SystemLogLevel {
+  INFO
+  WARN
+  ERROR
+}
+
 model EmailInbox {
   id           String   @id @default(uuid()) @unique
   teamId       String
@@ -724,6 +731,26 @@ model ContactAccessReview {
   @@index([groupId, status])
   @@index([contactId])
   @@index([source])
+}
+
+model SystemLog {
+  id         String         @id @default(uuid()) @unique
+  teamId     String?
+  team       Teams?         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  level      SystemLogLevel
+  source     String         @db.VarChar(64)
+  event      String         @db.VarChar(120)
+  message    String         @db.Text
+  workerId   String?        @db.VarChar(255)
+  entityType String?        @db.VarChar(64)
+  entityId   String?        @db.VarChar(255)
+  metadata   Json?
+  createdAt  DateTime       @default(now()) @db.Timestamptz(6)
+
+  @@index([teamId, createdAt])
+  @@index([level, createdAt])
+  @@index([source, createdAt])
+  @@index([entityType, entityId])
 }
 
 model PostalCodeCentroid {
