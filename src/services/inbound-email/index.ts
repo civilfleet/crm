@@ -10,7 +10,10 @@ import {
 import sanitizeHtml from "sanitize-html";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
-import { logFieldUpdate } from "@/services/contact-change-logs";
+import {
+  logContactCreation,
+  logFieldUpdate,
+} from "@/services/contact-change-logs";
 
 const DEFAULT_INBOX_SYNC_LIMIT = 25;
 const DEFAULT_INBOX_LOCK_MS = 5 * 60 * 1000;
@@ -439,18 +442,32 @@ const getMessageBody = (mail: ParsedMail) => {
   if (mail.html) {
     return sanitizeHtml(mail.html, {
       allowedTags: sanitizeHtml.defaults.allowedTags.concat([
-        "img",
         "h1",
         "h2",
         "span",
+        "table",
+        "thead",
+        "tbody",
+        "tfoot",
+        "tr",
+        "th",
+        "td",
       ]),
       allowedAttributes: {
         ...sanitizeHtml.defaults.allowedAttributes,
-        a: ["href", "name", "target"],
-        img: ["src", "alt", "title", "width", "height"],
-        span: ["style"],
+        a: ["href", "name", "target", "rel"],
+        table: ["border", "cellpadding", "cellspacing"],
+        th: ["colspan", "rowspan"],
+        td: ["colspan", "rowspan"],
       },
-      allowedSchemes: ["http", "https", "mailto", "data"],
+      allowedSchemes: ["http", "https", "mailto"],
+      allowedSchemesAppliedToAttributes: ["href"],
+      transformTags: {
+        a: sanitizeHtml.simpleTransform("a", {
+          rel: "noopener noreferrer",
+          target: "_blank",
+        }),
+      },
     }).trim();
   }
 
@@ -561,6 +578,19 @@ const resolveContactForInboundEmail = async ({
     },
     select: { id: true },
   });
+
+  await logContactCreation(
+    contact.id,
+    undefined,
+    "Inbound email sync",
+    undefined,
+    {
+      source: "inbound-email",
+      createdVia: "inbound-email-sync",
+      groupId,
+      fromEmail,
+    },
+  );
 
   return {
     contactId: contact.id,

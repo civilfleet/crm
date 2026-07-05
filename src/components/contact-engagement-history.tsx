@@ -164,6 +164,14 @@ const getZammadTicketId = (externalSource?: string) => {
   return ticketId || null;
 };
 
+const isInboundImapEmail = (engagement: ContactEngagement) =>
+  engagement.source === EngagementSource.EMAIL &&
+  engagement.direction === EngagementDirection.INBOUND &&
+  engagement.externalSource?.toUpperCase() === "IMAP";
+
+const containsHtmlTag = (value?: string) =>
+  Boolean(value && /<\/?[a-z][\s\S]*>/i.test(value));
+
 type ParsedEngagementContent = {
   body: string;
   details: Array<{ label: string; value: string }>;
@@ -207,10 +215,33 @@ const parseEngagementContent = (message?: string): ParsedEngagementContent => {
 const getPreviewText = (message?: string, maxLength = 140) => {
   if (!message) return "";
   const { body } = parseEngagementContent(message);
-  const cleaned = body.replace(/\s+/g, " ").trim();
+  const cleaned = body
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\s+/g, " ")
+    .trim();
   if (cleaned.length <= maxLength) return cleaned;
   return `${cleaned.slice(0, maxLength).trim()}…`;
 };
+
+function SafeEmailHtmlFrame({ html }: { html: string }) {
+  return (
+    <div className="rounded-lg border shadow-sm bg-white">
+      <iframe
+        title="Inbound email HTML body"
+        sandbox=""
+        referrerPolicy="no-referrer"
+        className="h-96 w-full rounded-lg bg-white"
+        srcDoc={html}
+      />
+    </div>
+  );
+}
 
 type EngagementListItem =
   | { type: "single"; engagement: ContactEngagement }
@@ -450,8 +481,9 @@ function EngagementRow({
   teamUsersByEmail: Map<string, TeamUser>;
   useHeader?: boolean;
 }) {
+  const renderAsInboundHtml = isInboundImapEmail(engagement);
   const parsed =
-    engagement.source === EngagementSource.NOTE
+    engagement.source === EngagementSource.NOTE || renderAsInboundHtml
       ? null
       : parseEngagementContent(engagement.message);
   const previewText =
@@ -630,6 +662,34 @@ function EngagementRow({
                   usersByEmail={teamUsersByEmail}
                 />
               </p>
+            </div>
+          </div>
+        ) : renderAsInboundHtml ? (
+          <div className="space-y-3">
+            <div className="rounded-lg border shadow-sm bg-white">
+              <div className="px-4 py-3 space-y-1">
+                <h4 className="text-sm font-semibold">
+                  Subject: {engagement.subject || "Email"}
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  Imported via IMAP
+                </p>
+              </div>
+              <UiSeparator />
+              <div className="bg-muted/40 px-4 py-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+                  Message
+                </p>
+                {containsHtmlTag(engagement.message) ? (
+                  <SafeEmailHtmlFrame html={engagement.message} />
+                ) : (
+                  <div className="rounded-md border bg-background px-3 py-3">
+                    <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                      {engagement.message}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         ) : (
