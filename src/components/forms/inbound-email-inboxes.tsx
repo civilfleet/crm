@@ -10,13 +10,8 @@ import {
   Play,
   Plus,
   RefreshCw,
-  ShieldAlert,
-  ShieldCheck,
   Settings2,
   Trash2,
-  Undo2,
-  UserPlus,
-  XCircle,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import useSWR from "swr";
@@ -80,34 +75,6 @@ type GroupOption = {
   id: string;
   name: string;
   canAccessAllContacts: boolean;
-};
-
-type PendingAccessReview = {
-  id: string;
-  teamId: string;
-  groupId: string;
-  groupName: string;
-  inboundEmailMessageId: string;
-  emailInboxId: string;
-  emailInboxName: string;
-  contactId?: string;
-  contactName?: string;
-  contactEmail?: string;
-  contactGroups: { id: string; name: string }[];
-  contactLastEngagedAt?: string;
-  contactLastEngagementSubject?: string;
-  fromEmail: string;
-  fromName?: string;
-  subject?: string;
-  messagePreview: string;
-  matchReason: string;
-  receivedAt: string;
-  createdAt: string;
-  reviewedAt?: string;
-  reviewedByUserName?: string;
-  revokedAt?: string;
-  revokedByUserName?: string;
-  status: string;
 };
 
 type InboxFormState = {
@@ -223,7 +190,6 @@ export default function InboundEmailInboxes({
   const [form, setForm] = useState<InboxFormState>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
   const [busyInboxId, setBusyInboxId] = useState<string | null>(null);
-  const [busyReviewId, setBusyReviewId] = useState<string | null>(null);
 
   const {
     data: inboxes = [],
@@ -239,26 +205,9 @@ export default function InboundEmailInboxes({
     (url: string) => fetchApiResponse<GroupOption[]>(url),
   );
 
-  const {
-    data: accessReviews = [],
-    error: accessReviewsError,
-    mutate: mutateAccessReviews,
-  } = useSWR(
-    `/api/teams/${teamId}/email-inboxes/access-reviews`,
-    (url: string) => fetchJson<PendingAccessReview[]>(url),
-  );
-
   const enabledCount = useMemo(
     () => inboxes.filter((inbox) => inbox.isEnabled).length,
     [inboxes],
-  );
-  const pendingReviews = useMemo(
-    () => accessReviews.filter((review) => review.status === "PENDING"),
-    [accessReviews],
-  );
-  const approvedReviews = useMemo(
-    () => accessReviews.filter((review) => review.status === "APPROVED"),
-    [accessReviews],
   );
   const groups = useMemo(
     () =>
@@ -404,7 +353,6 @@ export default function InboundEmailInboxes({
       }
 
       await mutateInboxes();
-      await mutateAccessReviews();
       toast({
         title:
           action === "test"
@@ -430,58 +378,6 @@ export default function InboundEmailInboxes({
       });
     } finally {
       setBusyInboxId(null);
-    }
-  };
-
-  const runAccessReviewAction = async (
-    review: PendingAccessReview,
-    action: "approve" | "reject" | "revoke",
-  ) => {
-    setBusyReviewId(`${action}:${review.id}`);
-    try {
-      const response = await fetch(
-        `/api/teams/${teamId}/email-inboxes/access-reviews/${review.id}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action }),
-        },
-      );
-
-      const json = await response.json();
-      if (!response.ok) {
-        throw new Error(json?.error || response.statusText);
-      }
-
-      await mutateAccessReviews();
-      await mutateInboxes();
-      toast({
-        title:
-          action === "approve"
-            ? "Access granted"
-            : action === "revoke"
-              ? "Access revoked"
-              : "Access request rejected",
-        description:
-          action === "approve"
-            ? `${review.groupName} can now access this contact.`
-            : action === "revoke"
-              ? `${review.groupName} no longer has access from this review.`
-            : "The contact remains hidden from the inbox group.",
-      });
-    } catch (error) {
-      toast({
-        title:
-          action === "approve"
-            ? "Failed to grant access"
-            : action === "revoke"
-              ? "Failed to revoke access"
-            : "Failed to reject access",
-        description: (error as Error).message,
-        variant: "destructive",
-      });
-    } finally {
-      setBusyReviewId(null);
     }
   };
 
@@ -512,196 +408,17 @@ export default function InboundEmailInboxes({
           <AlertTitle>Group-owned visibility</AlertTitle>
           <AlertDescription>
             Each inbox belongs to one group. If incoming mail matches a contact
-            hidden from that group, admins review the match before access is
-            granted.
+            hidden from that group, admins review the match from Admin,
+            Contact Access Reviews.
           </AlertDescription>
         </Alert>
 
-        {pendingReviews.length > 0 ? (
-          <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50 p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-start gap-3">
-                <ShieldAlert className="mt-0.5 h-5 w-5 text-amber-700" />
-                <div>
-                  <p className="font-medium text-amber-950">
-                    Pending contact access reviews
-                  </p>
-                  <p className="text-sm text-amber-900">
-                    These emails matched existing contacts that are hidden from
-                    the inbox group.
-                  </p>
-                </div>
-              </div>
-              <Badge
-                variant="secondary"
-                className="w-fit border-amber-300 bg-amber-100 text-amber-950"
-              >
-                {pendingReviews.length} pending
-              </Badge>
-            </div>
-
-            <div className="space-y-2">
-              {pendingReviews.map((review) => (
-                <div
-                  key={review.id}
-                  className="rounded-md border border-amber-200 bg-background p-3"
-                >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium">
-                          {review.subject || "(No subject)"}
-                        </p>
-                        <Badge variant="outline">{review.groupName}</Badge>
-                        <Badge variant="outline">
-                          {review.emailInboxName}
-                        </Badge>
-                      </div>
-                      <p className="break-words text-sm text-muted-foreground">
-                        From {review.fromName ? `${review.fromName} ` : ""}
-                        &lt;{review.fromEmail}&gt; matched{" "}
-                        {review.contactName || review.contactEmail || "a contact"}
-                        .
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {review.matchReason}
-                      </p>
-                      {review.messagePreview ? (
-                        <p className="line-clamp-3 rounded-md bg-muted/50 p-2 text-sm text-muted-foreground">
-                          {review.messagePreview}
-                        </p>
-                      ) : null}
-                      <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        {review.contactGroups.length > 0 ? (
-                          <span>
-                            Current groups:{" "}
-                            {review.contactGroups
-                              .map((group) => group.name)
-                              .join(", ")}
-                          </span>
-                        ) : (
-                          <span>Current groups: none</span>
-                        )}
-                        <span>
-                          Last activity:{" "}
-                          {formatDate(review.contactLastEngagedAt)}
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Received {formatDate(review.receivedAt)}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() =>
-                          runAccessReviewAction(review, "approve")
-                        }
-                        disabled={busyReviewId !== null}
-                      >
-                        {busyReviewId === `approve:${review.id}` ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <UserPlus className="h-4 w-4" />
-                        )}
-                        Grant access
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => runAccessReviewAction(review, "reject")}
-                        disabled={busyReviewId !== null}
-                      >
-                        {busyReviewId === `reject:${review.id}` ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <XCircle className="h-4 w-4" />
-                        )}
-                        Reject
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {approvedReviews.length > 0 ? (
-          <div className="space-y-3 rounded-md border border-emerald-200 bg-emerald-50 p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-start gap-3">
-                <ShieldCheck className="mt-0.5 h-5 w-5 text-emerald-700" />
-                <div>
-                  <p className="font-medium text-emerald-950">
-                    Approved access grants
-                  </p>
-                  <p className="text-sm text-emerald-900">
-                    Recent approvals can be revoked if the group should not
-                    keep access to the matched contact.
-                  </p>
-                </div>
-              </div>
-              <Badge
-                variant="secondary"
-                className="w-fit border-emerald-300 bg-emerald-100 text-emerald-950"
-              >
-                {approvedReviews.length} approved
-              </Badge>
-            </div>
-
-            <div className="space-y-2">
-              {approvedReviews.map((review) => (
-                <div
-                  key={review.id}
-                  className="rounded-md border border-emerald-200 bg-background p-3"
-                >
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-medium">
-                          {review.contactName || review.contactEmail}
-                        </p>
-                        <Badge variant="outline">{review.groupName}</Badge>
-                        <Badge variant="outline">
-                          {review.emailInboxName}
-                        </Badge>
-                      </div>
-                      <p className="break-words text-sm text-muted-foreground">
-                        Approved from {review.subject || "(No subject)"} by{" "}
-                        {review.reviewedByUserName || "an admin"} on{" "}
-                        {formatDate(review.reviewedAt)}.
-                      </p>
-                      <p className="line-clamp-2 rounded-md bg-muted/50 p-2 text-sm text-muted-foreground">
-                        {review.messagePreview || "No message preview"}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => runAccessReviewAction(review, "revoke")}
-                      disabled={busyReviewId !== null}
-                    >
-                      {busyReviewId === `revoke:${review.id}` ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Undo2 className="h-4 w-4" />
-                      )}
-                      Revoke
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {inboxError || groupsError || accessReviewsError ? (
+        {inboxError || groupsError ? (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Unable to load inbox settings</AlertTitle>
             <AlertDescription>
-              {(inboxError || groupsError || accessReviewsError)?.message}
+              {(inboxError || groupsError)?.message}
             </AlertDescription>
           </Alert>
         ) : null}

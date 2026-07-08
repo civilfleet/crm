@@ -9,6 +9,7 @@ import {
   Mail,
   Scroll,
   Settings,
+  ShieldCheck,
   UserCircle2,
   Users,
   UsersRound,
@@ -149,6 +150,12 @@ const navItems: {
       title: "Logs",
       url: "admin/logs",
       icon: Scroll,
+      module: "ADMIN",
+    },
+    {
+      title: "Contact Access",
+      url: "admin/contact-access-reviews",
+      icon: ShieldCheck,
       module: "ADMIN",
     },
     {
