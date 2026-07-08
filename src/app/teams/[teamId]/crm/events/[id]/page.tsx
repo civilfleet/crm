@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getPrimaryEmail } from "@/services/contact-emails";
 import { getEventById, getEventRegistrations } from "@/services/events";
 
 interface EventDetailPageProps {
@@ -45,7 +46,7 @@ export default async function EventDetailPage({
       createdAt: registration.createdAt.toISOString(),
       contactId: registration.contact.id,
       contactName: registration.contact.name ?? registration.name,
-      contactEmail: registration.contact.email ?? undefined,
+      contactEmail: getPrimaryEmail(registration.contact) ?? undefined,
       contactPhone: registration.contact.phone ?? undefined,
     }),
   );

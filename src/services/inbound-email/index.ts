@@ -14,6 +14,12 @@ import {
   logContactCreation,
   logFieldUpdate,
 } from "@/services/contact-change-logs";
+import {
+  getPrimaryEmail,
+  primaryContactEmailSelect,
+} from "@/services/contact-emails";
+import { findContactByIdentityEmail } from "@/services/contacts";
+import { ContactEmailKind } from "@/types";
 
 const DEFAULT_INBOX_SYNC_LIMIT = 25;
 const DEFAULT_INBOX_LOCK_MS = 5 * 60 * 1000;
@@ -156,7 +162,7 @@ type ContactAccessReviewWithInboundEmailDetails = Prisma.ContactAccessReviewGetP
       select: {
         id: true;
         name: true;
-        email: true;
+        emails: { select: { email: true } };
         group: { select: { id: true; name: true } };
         groups: { select: { group: { select: { id: true; name: true } } } };
         engagements: {
@@ -186,13 +192,13 @@ const mapPendingContactAccessReview = (
     emailInboxName: review.inboundEmailMessage.emailInbox.name,
     contactId: review.contactId,
     contactName: review.contact.name,
-    contactEmail: review.contact.email ?? undefined,
+    contactEmail: getPrimaryEmail(review.contact) ?? undefined,
     fromEmail: review.inboundEmailMessage.fromEmail,
     fromName: review.inboundEmailMessage.fromName ?? undefined,
     subject: review.inboundEmailMessage.subject ?? undefined,
     messagePreview: getPreviewText(review.inboundEmailMessage.body),
-    matchReason: review.contact.email
-      ? `Sender matched contact email ${review.contact.email}.`
+    matchReason: getPrimaryEmail(review.contact)
+      ? `Sender matched contact email ${getPrimaryEmail(review.contact)}.`
       : "Sender matched an existing contact record.",
     contactGroups: [
       review.contact.group,
@@ -238,7 +244,7 @@ const includeContactAccessReviewInboundEmailDetails = {
     select: {
       id: true,
       name: true,
-      email: true,
+      emails: primaryContactEmailSelect,
       group: {
         select: {
           id: true,
@@ -505,23 +511,7 @@ const resolveContactForInboundEmail = async ({
   autoApproveExistingVisible: boolean;
   requireReviewForHiddenMatches: boolean;
 }): Promise<ContactResolution> => {
-  const existing = await prisma.contact.findUnique({
-    where: {
-      teamId_email: {
-        teamId,
-        email: fromEmail,
-      },
-    },
-    select: {
-      id: true,
-      groupId: true,
-      groups: {
-        select: {
-          groupId: true,
-        },
-      },
-    },
-  });
+  const existing = await findContactByIdentityEmail(teamId, fromEmail);
 
   if (existing) {
     const inboxGroup = await prisma.group.findFirst({
@@ -570,10 +560,18 @@ const resolveContactForInboundEmail = async ({
     data: {
       teamId,
       name: fromName || fromEmail,
-      email: fromEmail,
       groupId,
       groups: {
         create: [{ groupId }],
+      },
+      emails: {
+        create: [
+          {
+            teamId,
+            email: fromEmail,
+            kind: ContactEmailKind.PRIMARY,
+          },
+        ],
       },
     },
     select: { id: true },

@@ -1,6 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { stringifyCsv } from "@/lib/csv";
 import prisma from "@/lib/prisma";
+import {
+  getPrimaryEmail,
+  primaryContactEmailSelect,
+} from "@/services/contact-emails";
 import { getTeamContacts } from "@/services/contacts";
 import { ensureDefaultGroup } from "@/services/groups";
 import {
@@ -133,8 +137,8 @@ const getTeamContactLists = async (
             select: {
               id: true,
               name: true,
-              email: true,
               phone: true,
+              emails: primaryContactEmailSelect,
             },
           },
         },
@@ -188,7 +192,7 @@ const getTeamContactLists = async (
         contacts: list.contacts.map((c) => ({
           id: c.contact.id,
           name: c.contact.name,
-          email: c.contact.email,
+          email: getPrimaryEmail(c.contact) ?? null,
           phone: c.contact.phone,
         })),
         createdAt: list.createdAt,
@@ -225,8 +229,8 @@ const getContactListById = async (
             select: {
               id: true,
               name: true,
-              email: true,
               phone: true,
+              emails: primaryContactEmailSelect,
             },
           },
         },
@@ -277,7 +281,7 @@ const getContactListById = async (
     contacts: list.contacts.map((c) => ({
       id: c.contact.id,
       name: c.contact.name,
-      email: c.contact.email,
+      email: getPrimaryEmail(c.contact) ?? null,
       phone: c.contact.phone,
     })),
     createdAt: list.createdAt,

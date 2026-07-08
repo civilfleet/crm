@@ -14,7 +14,9 @@ import {
 } from "@/lib/klaviyo";
 import prisma from "@/lib/prisma";
 import { logContactCreation } from "@/services/contact-change-logs";
+import { findContactByIdentityEmail } from "@/services/contacts";
 import {
+  ContactEmailKind,
   EngagementDirection,
   EngagementSource,
   type IntegrationConnection,
@@ -59,14 +61,7 @@ const upsertContactFromProfile = async (
     return null;
   }
 
-  const existing = await prisma.contact.findUnique({
-    where: {
-      teamId_email: {
-        teamId,
-        email,
-      },
-    },
-  });
+  const existing = await findContactByIdentityEmail(teamId, email);
 
   const name = getContactName(profile, email);
   const phone = profile.attributes.phone_number?.trim() || undefined;
@@ -94,9 +89,17 @@ const upsertContactFromProfile = async (
     data: {
       teamId,
       name,
-      email,
       phone,
       city,
+      emails: {
+        create: [
+          {
+            teamId,
+            email,
+            kind: ContactEmailKind.PRIMARY,
+          },
+        ],
+      },
     },
   });
 
@@ -659,14 +662,7 @@ export const syncKlaviyoIntegration = async (
       return cached;
     }
 
-    const existing = await prisma.contact.findUnique({
-      where: {
-        teamId_email: {
-          teamId,
-          email: normalized,
-        },
-      },
-    });
+    const existing = await findContactByIdentityEmail(teamId, normalized);
 
     if (existing) {
       emailToContactId.set(normalized, existing.id);
@@ -676,8 +672,16 @@ export const syncKlaviyoIntegration = async (
     const created = await prisma.contact.create({
       data: {
         teamId,
-        email: normalized,
         name: normalized,
+        emails: {
+          create: [
+            {
+              teamId,
+              email: normalized,
+              kind: ContactEmailKind.PRIMARY,
+            },
+          ],
+        },
       },
     });
     await logContactCreation(created.id, undefined, "Klaviyo import", prisma);

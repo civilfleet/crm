@@ -8,6 +8,7 @@ import { DataTableColumnHeader } from "@/components/table/data-table-column-head
 import { Badge } from "@/components/ui/badge";
 import {
   ContactAttributeType,
+  type ContactEmail,
   type ContactEvent,
   type ContactGender,
   type ContactProfileAttribute,
@@ -34,6 +35,7 @@ export type ContactRow = {
   latitude?: number | null;
   longitude?: number | null;
   email?: string | null;
+  additionalEmails?: ContactEmail[];
   phone?: string | null;
   signal?: string | null;
   website?: string | null;
@@ -137,6 +139,21 @@ const ContactNameCell = ({ contact }: { contact: ContactRow }) => {
   );
 };
 
+const ContactEmailCell = ({ contact }: { contact: ContactRow }) => {
+  const additionalCount = contact.additionalEmails?.length ?? 0;
+
+  return (
+    <div className="flex max-w-[260px] flex-col gap-1">
+      <span className="break-all">{contact.email || "-"}</span>
+      {additionalCount > 0 ? (
+        <span className="text-xs text-muted-foreground">
+          +{additionalCount} additional
+        </span>
+      ) : null}
+    </div>
+  );
+};
+
 export const contactColumns: ColumnDef<ContactRow>[] = [
   {
     accessorKey: "name",
@@ -150,7 +167,7 @@ export const contactColumns: ColumnDef<ContactRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Email" />
     ),
-    cell: ({ row }) => <span>{row.original.email || "-"}</span>,
+    cell: ({ row }) => <ContactEmailCell contact={row.original} />,
   },
   {
     accessorKey: "phone",
@@ -255,6 +272,8 @@ export const renderContactCard = (contact: ContactRow, teamId: string) => {
               <p className="text-xs text-muted-foreground">
                 {[
                   contact.email,
+                  ...(contact.additionalEmails?.map((entry) => entry.email) ??
+                    []),
                   contact.phone,
                   contact.signal,
                   contact.website,

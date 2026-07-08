@@ -4,6 +4,10 @@ import {
   type Prisma,
 } from "@prisma/client";
 import prisma from "@/lib/prisma";
+import {
+  getPrimaryEmail,
+  primaryContactEmailSelect,
+} from "@/services/contact-emails";
 
 const emailBatchInclude = {
   recipients: {
@@ -13,7 +17,7 @@ const emailBatchInclude = {
         select: {
           id: true,
           name: true,
-          email: true,
+          emails: primaryContactEmailSelect,
         },
       },
     },
@@ -103,7 +107,7 @@ const mapEmailBatch = (batch: EmailBatchWithRecipients): EmailHistoryBatch => ({
     id: recipient.id,
     contactId: recipient.contactId ?? undefined,
     contactName: recipient.contact?.name ?? undefined,
-    contactEmail: recipient.contact?.email ?? undefined,
+    contactEmail: getPrimaryEmail(recipient.contact) ?? undefined,
     email: recipient.email,
     name: recipient.name ?? undefined,
     status: recipient.status,

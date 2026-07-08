@@ -229,6 +229,7 @@ model Teams {
 
   Transaction Transaction[]
   contacts     Contact[]
+  contactEmails ContactEmail[]
   contactLists ContactList[]
   emailBatches EmailBatch[]
   emailInboxes EmailInbox[]
@@ -486,6 +487,12 @@ enum ContactRequestPreference {
   NO_ANSWER
 }
 
+enum ContactEmailKind {
+  PRIMARY
+  ALIAS
+  SHARED
+}
+
 model Contact {
   id                String               @id @default(uuid()) @unique
   teamId            String
@@ -507,7 +514,6 @@ model Contact {
   countryCode       String?             @db.Char(2)
   latitude          Decimal?            @db.Decimal(9, 6)
   longitude         Decimal?            @db.Decimal(9, 6)
-  email             String?              @db.VarChar(255)
   phone             String?              @db.VarChar(255)
   signal            String?              @db.VarChar(255)
   website           String?             @db.VarChar(255)
@@ -516,6 +522,7 @@ model Contact {
   group             Group?               @relation(fields: [groupId], references: [id], onDelete: SetNull)
   createdAt         DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt         DateTime             @updatedAt @db.Timestamptz(6)
+  emails            ContactEmail[]
   attributes        ContactAttribute[]
   socialLinks       ContactSocialLink[]
   events            EventContact[]
@@ -533,7 +540,24 @@ model Contact {
 
   @@index([groupId])
   @@index([teamId, groupId])
-  @@unique([teamId, email])
+}
+
+model ContactEmail {
+  id        String           @id @default(uuid()) @unique
+  teamId    String
+  team      Teams            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  contactId String
+  contact   Contact          @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  email     String           @db.VarChar(255)
+  kind      ContactEmailKind
+  label     String?          @db.VarChar(120)
+  createdAt DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime         @updatedAt @db.Timestamptz(6)
+
+  @@index([teamId, email])
+  @@index([contactId])
+  @@index([kind])
+  @@unique([contactId, email])
 }
 
 model ContactOrganization {

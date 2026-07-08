@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { ContactFilter } from "@/types";
 import {
   ContactAttributeType,
+  ContactEmailKind,
   ContactGender,
   ContactRequestPreference,
 } from "@/types";
@@ -106,6 +107,26 @@ const contactSocialLinkSchema = z.object({
   platform: z.string().trim().min(1, "Platform is required").max(50),
   handle: z.string().trim().min(1, "Handle is required").max(255),
 });
+
+const contactAdditionalEmailSchema = z.object({
+  email: requiredEmail.transform((value) => value.trim().toLowerCase()),
+  kind: z.enum([ContactEmailKind.ALIAS, ContactEmailKind.SHARED]),
+  label: optionalText(z.string().trim().max(120)),
+});
+
+const additionalEmailsSchema = z
+  .array(contactAdditionalEmailSchema)
+  .default([])
+  .transform((emails) => {
+    const seen = new Set<string>();
+    return emails.filter((entry) => {
+      if (seen.has(entry.email)) {
+        return false;
+      }
+      seen.add(entry.email);
+      return true;
+    });
+  });
 
 const contactFileSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(255),
@@ -215,6 +236,7 @@ export const createContactSchema = z.object({
   city: optionalText(z.string()),
   country: optionalText(z.string()),
   email: requiredEmail,
+  additionalEmails: additionalEmailsSchema,
   phone: optionalText(z.string()),
   signal: optionalText(z.string()),
   website: optionalWebsite,
@@ -268,6 +290,7 @@ export const updateContactSchema = z.object({
   city: optionalText(z.string()),
   country: optionalText(z.string()),
   email: optionalEmail,
+  additionalEmails: additionalEmailsSchema.optional(),
   phone: optionalText(z.string()),
   signal: optionalText(z.string()),
   website: optionalWebsite,
@@ -305,3 +328,28 @@ export const deleteContactsSchema = z.object({
 });
 
 export type DeleteContactsInput = z.infer<typeof deleteContactsSchema>;
+
+export const mergeContactsPreviewSchema = z.object({
+  teamId: z.uuid("Team id must be a valid UUID"),
+  contactIds: z
+    .array(z.uuid("Contact id must be a valid UUID"))
+    .min(2, "Select at least two contacts to merge")
+    .transform((value) => Array.from(new Set(value))),
+});
+
+export const mergeContactsSchema = z.object({
+  teamId: z.uuid("Team id must be a valid UUID"),
+  targetContactId: z.uuid("Target contact id must be a valid UUID"),
+  sourceContactIds: z
+    .array(z.uuid("Source contact id must be a valid UUID"))
+    .min(1, "Select at least one source contact")
+    .transform((value) => Array.from(new Set(value))),
+  primaryEmail: requiredEmail.transform((value) => value.trim().toLowerCase()),
+  preservedEmails: additionalEmailsSchema.default([]),
+  fieldSelections: z.record(z.string(), z.unknown()).default({}),
+});
+
+export type MergeContactsPreviewInput = z.infer<
+  typeof mergeContactsPreviewSchema
+>;
+export type MergeContactsInput = z.infer<typeof mergeContactsSchema>;

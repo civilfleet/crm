@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
+import { primaryContactEmailSelect } from "@/services/contact-emails";
 import { type FileDownloadType, Roles } from "@/types";
 
 const getFileById = async (id: string) => {
@@ -128,7 +129,7 @@ const getFiles = async (
           id: true,
           teamId: true,
           name: true,
-          email: true,
+          emails: primaryContactEmailSelect,
         },
       },
       downloadAudits: {
@@ -243,7 +244,7 @@ const getFileDetails = async (id: string) => {
           id: true,
           teamId: true,
           name: true,
-          email: true,
+          emails: primaryContactEmailSelect,
         },
       },
       createdBy: {

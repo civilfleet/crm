@@ -42,6 +42,12 @@ export enum ContactRequestPreference {
   NO_ANSWER = "NO_ANSWER",
 }
 
+export enum ContactEmailKind {
+  PRIMARY = "PRIMARY",
+  ALIAS = "ALIAS",
+  SHARED = "SHARED",
+}
+
 export interface IntegrationConnection {
   id: string;
   teamId: string;
@@ -196,6 +202,8 @@ export interface Contact {
   latitude?: number;
   longitude?: number;
   email?: string;
+  emails?: ContactEmail[];
+  additionalEmails?: ContactEmail[];
   phone?: string;
   signal?: string;
   website?: string;
@@ -215,6 +223,13 @@ export interface Contact {
   files?: { id?: string; name: string; type: string; url: string }[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface ContactEmail {
+  id?: string;
+  email: string;
+  kind: ContactEmailKind;
+  label?: string;
 }
 
 export interface ContactSocialLink {

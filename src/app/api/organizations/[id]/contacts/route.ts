@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
+import {
+  getPrimaryEmail,
+  primaryContactEmailSelect,
+} from "@/services/contact-emails";
 
 const organizationContactSchema = z.object({
   contactId: z.uuid("Contact id must be a valid UUID"),
@@ -22,8 +26,8 @@ const getOrganizationAndContact = async (
         id: true,
         teamId: true,
         name: true,
-        email: true,
         phone: true,
+        emails: primaryContactEmailSelect,
       },
     }),
   ]);
@@ -40,7 +44,13 @@ const getOrganizationAndContact = async (
     throw new Error("Contact and organization must belong to the same team.");
   }
 
-  return contact;
+  return {
+    id: contact.id,
+    teamId: contact.teamId,
+    name: contact.name,
+    email: getPrimaryEmail(contact) ?? null,
+    phone: contact.phone,
+  };
 };
 
 export async function POST(

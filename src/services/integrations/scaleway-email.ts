@@ -12,6 +12,10 @@ import {
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import {
+  getPrimaryEmail,
+  primaryContactEmailSelect,
+} from "@/services/contact-emails";
+import {
   EngagementDirection,
   EngagementSource,
   type IntegrationConnection,
@@ -589,7 +593,7 @@ export const sendMassEmailToContacts = async ({
     select: {
       id: true,
       name: true,
-      email: true,
+      emails: primaryContactEmailSelect,
     },
   });
 
@@ -621,7 +625,7 @@ export const sendMassEmailToContacts = async ({
   let skipped = 0;
 
   for (const contact of contacts) {
-    const email = contact.email?.trim().toLowerCase();
+    const email = getPrimaryEmail(contact)?.trim().toLowerCase();
     if (!email) {
       skipped += 1;
       await prisma.emailRecipient.create({
@@ -774,7 +778,7 @@ export const processEmailBatch = async (batch: EmailBatch) => {
       contact: {
         select: {
           name: true,
-          email: true,
+          emails: primaryContactEmailSelect,
           city: true,
           country: true,
           phone: true,
@@ -788,7 +792,7 @@ export const processEmailBatch = async (batch: EmailBatch) => {
     try {
       const placeholderContact = {
         name: recipient.name ?? recipient.contact?.name,
-        email: recipient.email ?? recipient.contact?.email,
+        email: recipient.email ?? getPrimaryEmail(recipient.contact),
         city: recipient.contact?.city,
         country: recipient.contact?.country,
         phone: recipient.contact?.phone,
@@ -909,7 +913,7 @@ export const processEmailBatch = async (batch: EmailBatch) => {
         contact: {
           select: {
             name: true,
-            email: true,
+            emails: primaryContactEmailSelect,
           },
         },
       },
@@ -923,7 +927,15 @@ export const processEmailBatch = async (batch: EmailBatch) => {
       },
       from,
       region,
-      recipients,
+      recipients: recipients.map((recipient) => ({
+        ...recipient,
+        contact: recipient.contact
+          ? {
+              name: recipient.contact.name,
+              email: getPrimaryEmail(recipient.contact) ?? null,
+            }
+          : null,
+      })),
       stats: {
         status,
         sentCount,

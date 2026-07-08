@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Download,
   Filter,
+  GitMerge,
   Loader2,
   Mail,
   Plus,
@@ -31,6 +32,7 @@ import {
 } from "@/components/table/contact-columns";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -61,7 +63,7 @@ import {
 } from "@/constants/email";
 import { useToast } from "@/hooks/use-toast";
 import { parseCsv } from "@/lib/csv";
-import type { ContactFilter, ContactFilterType } from "@/types";
+import { ContactEmailKind, type ContactFilter, ContactFilterType } from "@/types";
 
 const ContactMap = dynamic(() => import("@/components/contacts/contact-map"), {
   ssr: false,
@@ -77,6 +79,45 @@ interface ContactTableProps {
 }
 
 type SenderLabelMode = "default" | "user";
+
+type MergeEmail = {
+  email: string;
+  kind: ContactEmailKind.ALIAS | ContactEmailKind.SHARED;
+  label?: string;
+};
+
+type MergeConflict = {
+  field: string;
+  values: Array<{
+    contactId: string;
+    value: unknown;
+  }>;
+};
+
+type MergePreview = {
+  contacts: ContactRow[];
+  conflicts: MergeConflict[];
+};
+
+const encodeMergeValue = (value: unknown) => JSON.stringify(value ?? null);
+
+const decodeMergeValue = (value: string) => {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return value;
+  }
+};
+
+const formatMergeValue = (value: unknown) => {
+  if (value === null || value === undefined || value === "") {
+    return "Empty";
+  }
+  if (typeof value === "boolean") {
+    return value ? "Yes" : "No";
+  }
+  return String(value);
+};
 
 const parseEmailList = (value: string) =>
   value
@@ -398,6 +439,17 @@ export default function ContactTable({ teamId }: ContactTableProps) {
   );
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [isMergeDialogOpen, setIsMergeDialogOpen] = useState(false);
+  const [isMergePreviewLoading, setIsMergePreviewLoading] = useState(false);
+  const [isMerging, setIsMerging] = useState(false);
+  const [mergePreview, setMergePreview] = useState<MergePreview | null>(null);
+  const [mergeRows, setMergeRows] = useState<ContactRow[]>([]);
+  const [mergeTargetId, setMergeTargetId] = useState("");
+  const [mergePrimaryEmail, setMergePrimaryEmail] = useState("");
+  const [mergeEmails, setMergeEmails] = useState<MergeEmail[]>([]);
+  const [mergeFieldSelections, setMergeFieldSelections] = useState<
+    Record<string, string>
+  >({});
   const [emailRecipients, setEmailRecipients] = useState<ContactRow[]>([]);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -1071,6 +1123,172 @@ export default function ContactTable({ teamId }: ContactTableProps) {
     setIsEmailDialogOpen(true);
   };
 
+  const openMergeDialog = async (selectedRows: ContactRow[]) => {
+    if (selectedRows.length < 2) {
+      return;
+    }
+
+    setMergeRows(selectedRows);
+    setMergePreview(null);
+    setMergeTargetId(selectedRows[0].id);
+    setMergePrimaryEmail(selectedRows[0].email ?? "");
+    setMergeEmails([]);
+    setMergeFieldSelections({});
+    setIsMergeDialogOpen(true);
+    setIsMergePreviewLoading(true);
+
+    try {
+      const response = await fetch("/api/contacts/merge", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          teamId,
+          contactIds: selectedRows.map((row) => row.id),
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(json.error || "Failed to load merge preview");
+      }
+
+      const preview = json.data as MergePreview;
+      const target = preview.contacts.find(
+        (contact) => contact.id === selectedRows[0].id,
+      );
+      const allEmails = preview.contacts.flatMap((contact) => [
+        ...(contact.email
+          ? [
+              {
+                email: contact.email,
+                kind: ContactEmailKind.ALIAS,
+                label: undefined,
+              } satisfies MergeEmail,
+            ]
+          : []),
+        ...(contact.additionalEmails ?? []).map((entry) => ({
+          email: entry.email,
+          kind:
+            entry.kind === ContactEmailKind.SHARED
+              ? ContactEmailKind.SHARED
+              : ContactEmailKind.ALIAS,
+          label: entry.label,
+        })),
+      ]);
+      const primaryEmail = target?.email ?? allEmails[0]?.email ?? "";
+      const uniqueEmails = new Map<string, MergeEmail>();
+
+      allEmails.forEach((entry) => {
+        const key = entry.email.trim().toLowerCase();
+        if (!key || key === primaryEmail.trim().toLowerCase()) {
+          return;
+        }
+        if (!uniqueEmails.has(key)) {
+          uniqueEmails.set(key, {
+            ...entry,
+            email: key,
+            kind:
+              entry.kind === ContactEmailKind.SHARED
+                ? ContactEmailKind.SHARED
+                : ContactEmailKind.ALIAS,
+          });
+        }
+      });
+
+      setMergePreview(preview);
+      setMergePrimaryEmail(primaryEmail);
+      setMergeEmails(Array.from(uniqueEmails.values()));
+      setMergeFieldSelections(
+        Object.fromEntries(
+          preview.conflicts.map((conflict) => [
+            conflict.field,
+            encodeMergeValue(
+              conflict.values.find((entry) => entry.contactId === selectedRows[0].id)
+                ?.value ??
+                conflict.values.find((entry) => entry.value !== null)?.value ??
+                null,
+            ),
+          ]),
+        ),
+      );
+    } catch (error) {
+      toast({
+        title: "Unable to prepare merge",
+        description:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+      setIsMergeDialogOpen(false);
+    } finally {
+      setIsMergePreviewLoading(false);
+    }
+  };
+
+  const handleMergeContacts = async (clearSelection: () => void) => {
+    if (!mergeTargetId || !mergePrimaryEmail) {
+      return;
+    }
+
+    setIsMerging(true);
+    try {
+      const response = await fetch("/api/contacts/merge", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          teamId,
+          targetContactId: mergeTargetId,
+          sourceContactIds: mergeRows
+            .map((row) => row.id)
+            .filter((id) => id !== mergeTargetId),
+          primaryEmail: mergePrimaryEmail,
+          preservedEmails: mergeEmails.filter(
+            (entry) =>
+              entry.email.trim().toLowerCase() !==
+              mergePrimaryEmail.trim().toLowerCase(),
+          ),
+          fieldSelections: Object.fromEntries(
+            Object.entries(mergeFieldSelections).map(([field, value]) => [
+              field,
+              decodeMergeValue(value),
+            ]),
+          ),
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(json.error || "Failed to merge contacts");
+      }
+
+      toast({
+        title: "Contacts merged",
+        description: "The selected contacts were merged into the survivor.",
+      });
+      setIsMergeDialogOpen(false);
+      setMergePreview(null);
+      setMergeRows([]);
+      clearSelection();
+      await mutate();
+    } catch (error) {
+      toast({
+        title: "Unable to merge contacts",
+        description:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsMerging(false);
+    }
+  };
+
   const handleSendEmail = async (clearSelection: () => void) => {
     const contactIds = emailRecipients.map((contact) => contact.id);
     if (contactIds.length === 0) {
@@ -1415,6 +1633,21 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                   </Button>
                   <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={
+                      isDeleting ||
+                      isMerging ||
+                      isMergePreviewLoading ||
+                      selectedRows.length < 2
+                    }
+                    onClick={() => openMergeDialog(selectedRows)}
+                  >
+                    <GitMerge className="mr-2 h-4 w-4" />
+                    Merge selected
+                  </Button>
+                  <Button
+                    type="button"
                     variant="destructive"
                     size="sm"
                     disabled={isDeleting}
@@ -1474,6 +1707,36 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                   onSenderLabelModeChange={setEmailSenderLabelMode}
                   onSend={() => handleSendEmail(clearSelection)}
                 />
+                <ContactMergeDialog
+                  open={isMergeDialogOpen}
+                  contacts={mergePreview?.contacts ?? mergeRows}
+                  conflicts={mergePreview?.conflicts ?? []}
+                  targetId={mergeTargetId}
+                  primaryEmail={mergePrimaryEmail}
+                  preservedEmails={mergeEmails}
+                  fieldSelections={mergeFieldSelections}
+                  isLoading={isMergePreviewLoading}
+                  isMerging={isMerging}
+                  onOpenChange={setIsMergeDialogOpen}
+                  onTargetChange={(contactId) => {
+                    const target = mergePreview?.contacts.find(
+                      (contact) => contact.id === contactId,
+                    );
+                    setMergeTargetId(contactId);
+                    if (target?.email) {
+                      setMergePrimaryEmail(target.email);
+                    }
+                  }}
+                  onPrimaryEmailChange={setMergePrimaryEmail}
+                  onPreservedEmailsChange={setMergeEmails}
+                  onFieldSelectionChange={(field, value) =>
+                    setMergeFieldSelections((current) => ({
+                      ...current,
+                      [field]: value,
+                    }))
+                  }
+                  onMerge={() => handleMergeContacts(clearSelection)}
+                />
               </div>
             )}
           />
@@ -1516,6 +1779,293 @@ type ContactImportResult = {
     rowNumber: number;
     reason: string;
   }>;
+};
+
+type ContactMergeDialogProps = {
+  open: boolean;
+  contacts: ContactRow[];
+  conflicts: MergeConflict[];
+  targetId: string;
+  primaryEmail: string;
+  preservedEmails: MergeEmail[];
+  fieldSelections: Record<string, string>;
+  isLoading: boolean;
+  isMerging: boolean;
+  onOpenChange: (open: boolean) => void;
+  onTargetChange: (contactId: string) => void;
+  onPrimaryEmailChange: (email: string) => void;
+  onPreservedEmailsChange: (emails: MergeEmail[]) => void;
+  onFieldSelectionChange: (field: string, value: string) => void;
+  onMerge: () => void;
+};
+
+const ContactMergeDialog = ({
+  open,
+  contacts,
+  conflicts,
+  targetId,
+  primaryEmail,
+  preservedEmails,
+  fieldSelections,
+  isLoading,
+  isMerging,
+  onOpenChange,
+  onTargetChange,
+  onPrimaryEmailChange,
+  onPreservedEmailsChange,
+  onFieldSelectionChange,
+  onMerge,
+}: ContactMergeDialogProps) => {
+  const allEmails = useMemo(() => {
+    const map = new Map<string, MergeEmail>();
+
+    contacts.forEach((contact) => {
+      if (contact.email) {
+        map.set(contact.email.toLowerCase(), {
+          email: contact.email.toLowerCase(),
+          kind: ContactEmailKind.ALIAS,
+        });
+      }
+      contact.additionalEmails?.forEach((entry) => {
+        const email = entry.email.toLowerCase();
+        if (!map.has(email)) {
+          map.set(email, {
+            email,
+            kind:
+              entry.kind === ContactEmailKind.SHARED
+                ? ContactEmailKind.SHARED
+                : ContactEmailKind.ALIAS,
+            label: entry.label,
+          });
+        }
+      });
+    });
+
+    return Array.from(map.values());
+  }, [contacts]);
+
+  const preservedEmailSet = useMemo(
+    () => new Set(preservedEmails.map((entry) => entry.email)),
+    [preservedEmails],
+  );
+
+  const setPreservedEmailEnabled = (email: MergeEmail, enabled: boolean) => {
+    if (enabled) {
+      onPreservedEmailsChange(
+        preservedEmailSet.has(email.email)
+          ? preservedEmails
+          : [...preservedEmails, email],
+      );
+      return;
+    }
+
+    onPreservedEmailsChange(
+      preservedEmails.filter((entry) => entry.email !== email.email),
+    );
+  };
+
+  const setPreservedEmailKind = (
+    email: string,
+    kind: ContactEmailKind.ALIAS | ContactEmailKind.SHARED,
+  ) => {
+    onPreservedEmailsChange(
+      preservedEmails.map((entry) =>
+        entry.email === email ? { ...entry, kind } : entry,
+      ),
+    );
+  };
+
+  const canMerge =
+    contacts.length >= 2 && Boolean(targetId) && Boolean(primaryEmail);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+        <DialogHeader>
+          <DialogTitle>Merge contacts</DialogTitle>
+          <DialogDescription>
+            Choose the survivor, preserve identity aliases, and resolve field
+            conflicts before deleting duplicate contacts.
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="flex items-center gap-2 rounded-md border p-4 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading merge preview...
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <section className="space-y-3">
+              <Label>Surviving contact</Label>
+              <Select value={targetId} onValueChange={onTargetChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose survivor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {contacts.map((contact) => (
+                    <SelectItem key={contact.id} value={contact.id}>
+                      {contact.name} {contact.email ? `<${contact.email}>` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </section>
+
+            <section className="space-y-3">
+              <Label>Primary email</Label>
+              <Select
+                value={primaryEmail}
+                onValueChange={onPrimaryEmailChange}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose primary email" />
+                </SelectTrigger>
+                <SelectContent>
+                  {allEmails.map((entry) => (
+                    <SelectItem key={entry.email} value={entry.email}>
+                      {entry.email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </section>
+
+            <section className="space-y-3">
+              <div>
+                <Label>Preserved additional emails</Label>
+                <p className="text-sm text-muted-foreground">
+                  Alias emails are unique identity matches. Shared emails are
+                  display-only and can belong to multiple contacts.
+                </p>
+              </div>
+              <div className="space-y-2">
+                {allEmails
+                  .filter((entry) => entry.email !== primaryEmail)
+                  .map((entry) => {
+                    const preserved = preservedEmailSet.has(entry.email);
+                    const selected =
+                      preservedEmails.find(
+                        (candidate) => candidate.email === entry.email,
+                      ) ?? entry;
+
+                    return (
+                      <div
+                        key={entry.email}
+                        className="grid gap-3 rounded-md border p-3 sm:grid-cols-[auto_minmax(0,1fr)_150px]"
+                      >
+                        <Checkbox
+                          checked={preserved}
+                          onCheckedChange={(checked) =>
+                            setPreservedEmailEnabled(entry, checked === true)
+                          }
+                          aria-label={`Preserve ${entry.email}`}
+                        />
+                        <span className="break-all text-sm">{entry.email}</span>
+                        <Select
+                          value={selected.kind}
+                          onValueChange={(value) =>
+                            setPreservedEmailKind(
+                              entry.email,
+                              value as ContactEmailKind.ALIAS | ContactEmailKind.SHARED,
+                            )
+                          }
+                          disabled={!preserved}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={ContactEmailKind.ALIAS}>
+                              Alias
+                            </SelectItem>
+                            <SelectItem value={ContactEmailKind.SHARED}>
+                              Shared
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })}
+              </div>
+            </section>
+
+            {conflicts.length > 0 && (
+              <section className="space-y-3">
+                <div>
+                  <Label>Field conflicts</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Pick the value that should remain on the survivor.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {conflicts.map((conflict) => (
+                    <div key={conflict.field} className="space-y-2">
+                      <Label className="capitalize">
+                        {conflict.field.replace(/([A-Z])/g, " $1")}
+                      </Label>
+                      <Select
+                        value={fieldSelections[conflict.field] ?? ""}
+                        onValueChange={(value) =>
+                          onFieldSelectionChange(conflict.field, value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose value" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {conflict.values.map((entry) => {
+                            const contact = contacts.find(
+                              (candidate) => candidate.id === entry.contactId,
+                            );
+                            const encoded = encodeMergeValue(entry.value);
+                            return (
+                              <SelectItem
+                                key={`${conflict.field}-${entry.contactId}-${encoded}`}
+                                value={encoded}
+                              >
+                                {contact?.name ?? "Contact"}:{" "}
+                                {formatMergeValue(entry.value)}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isMerging}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={onMerge}
+            disabled={!canMerge || isLoading || isMerging}
+          >
+            {isMerging ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Merging...
+              </>
+            ) : (
+              "Merge contacts"
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 };
 
 type ContactImportDialogProps = {

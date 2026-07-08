@@ -9,6 +9,7 @@ import { parseCsv, stringifyCsv } from "@/lib/csv";
 import { normalizePostalCode } from "@/lib/geo";
 import prisma from "@/lib/prisma";
 import {
+  createChangeLog,
   logContactCreation,
   logFieldUpdate,
 } from "@/services/contact-change-logs";
@@ -19,8 +20,11 @@ import {
 import { ensureDefaultGroup, mapGroup } from "@/services/groups";
 import {
   ContactAttributeType,
+  ContactEmailKind,
+  ChangeAction,
   type ContactFilter,
   type ContactGender,
+  type ContactEmail as ContactEmailType,
   type ContactLocationValue,
   type ContactProfileAttribute,
   type ContactRequestPreference,
@@ -81,6 +85,7 @@ type CreateContactInput = {
   city?: string;
   country?: string;
   email?: string;
+  additionalEmails?: ContactEmailType[];
   phone?: string;
   signal?: string;
   website?: string;
@@ -116,6 +121,7 @@ type UpdateContactInput = {
   city?: string;
   country?: string;
   email?: string;
+  additionalEmails?: ContactEmailType[];
   phone?: string;
   signal?: string;
   website?: string;
@@ -131,6 +137,20 @@ type UpdateContactInput = {
     url: string;
     pendingUploadId?: string;
   }[];
+};
+
+type MergeContactsPreviewInput = {
+  teamId: string;
+  contactIds: string[];
+};
+
+type MergeContactsInput = {
+  teamId: string;
+  targetContactId: string;
+  sourceContactIds: string[];
+  primaryEmail: string;
+  preservedEmails: ContactEmailType[];
+  fieldSelections?: Record<string, unknown>;
 };
 
 type ImportContactsFromCsvInput = {
@@ -167,6 +187,7 @@ type NormalizedAttribute = {
 type ContactWithAttributes = Prisma.ContactGetPayload<{
   include: {
     attributes: true;
+    emails: true;
     socialLinks: true;
     group: {
       include: {
@@ -214,6 +235,7 @@ type ContactWithAttributes = Prisma.ContactGetPayload<{
 
 const contactInclude = {
   attributes: true,
+  emails: true,
   socialLinks: true,
   group: {
     include: {
@@ -568,6 +590,198 @@ const normalizeSocialLinks = (links: ContactSocialLink[] = []) => {
   return normalized;
 };
 
+const normalizeContactEmail = (email?: string | null) =>
+  email?.trim().toLowerCase() || undefined;
+
+const normalizeAdditionalEmails = (
+  emails: ContactEmailType[] = [],
+  primaryEmail?: string,
+) => {
+  const normalizedPrimary = normalizeContactEmail(primaryEmail);
+  const seen = new Set<string>();
+  const normalized: ContactEmailType[] = [];
+
+  emails.forEach((entry) => {
+    const email = normalizeContactEmail(entry.email);
+    if (!email || email === normalizedPrimary || seen.has(email)) {
+      return;
+    }
+
+    seen.add(email);
+    normalized.push({
+      id: entry.id,
+      email,
+      kind:
+        entry.kind === ContactEmailKind.SHARED
+          ? ContactEmailKind.SHARED
+          : ContactEmailKind.ALIAS,
+      label: entry.label?.trim() || undefined,
+    });
+  });
+
+  return normalized;
+};
+
+const assertIdentityEmailsAvailable = async (
+  tx: Prisma.TransactionClient,
+  teamId: string,
+  emails: string[],
+  allowedContactIds: string[] = [],
+) => {
+  const identityEmails = Array.from(
+    new Set(emails.map(normalizeContactEmail).filter((email): email is string => Boolean(email))),
+  );
+
+  if (!identityEmails.length) {
+    return;
+  }
+
+  const conflicts = await tx.contactEmail.findMany({
+    where: {
+      teamId,
+      email: { in: identityEmails },
+      kind: { in: [ContactEmailKind.PRIMARY, ContactEmailKind.ALIAS] },
+      ...(allowedContactIds.length
+        ? { contactId: { notIn: allowedContactIds } }
+        : {}),
+    },
+    select: { email: true },
+  });
+
+  if (conflicts.length > 0) {
+    throw new Error(
+      `Email already belongs to another contact: ${conflicts[0].email}`,
+    );
+  }
+};
+
+const setContactEmails = async (
+  tx: Prisma.TransactionClient,
+  {
+    teamId,
+    contactId,
+    primaryEmail,
+    additionalEmails,
+    allowedContactIds = [],
+  }: {
+    teamId: string;
+    contactId: string;
+    primaryEmail: string;
+    additionalEmails: ContactEmailType[];
+    allowedContactIds?: string[];
+  },
+) => {
+  const normalizedPrimary = normalizeContactEmail(primaryEmail);
+  if (!normalizedPrimary) {
+    throw new Error("Primary email is required.");
+  }
+
+  const normalizedAdditional = normalizeAdditionalEmails(
+    additionalEmails,
+    normalizedPrimary,
+  );
+  const identityEmails = [
+    normalizedPrimary,
+    ...normalizedAdditional
+      .filter((entry) => entry.kind === ContactEmailKind.ALIAS)
+      .map((entry) => entry.email),
+  ];
+
+  await assertIdentityEmailsAvailable(tx, teamId, identityEmails, [
+    contactId,
+    ...allowedContactIds,
+  ]);
+
+  await tx.contactEmail.deleteMany({
+    where: {
+      contactId,
+      OR: [
+        { kind: ContactEmailKind.PRIMARY },
+        {
+          email: {
+            notIn: normalizedAdditional.map((entry) => entry.email),
+          },
+        },
+      ],
+    },
+  });
+
+  await tx.contactEmail.upsert({
+    where: {
+      contactId_email: {
+        contactId,
+        email: normalizedPrimary,
+      },
+    },
+    create: {
+      teamId,
+      contactId,
+      email: normalizedPrimary,
+      kind: ContactEmailKind.PRIMARY,
+    },
+    update: {
+      kind: ContactEmailKind.PRIMARY,
+      label: null,
+    },
+  });
+
+  for (const entry of normalizedAdditional) {
+    await tx.contactEmail.upsert({
+      where: {
+        contactId_email: {
+          contactId,
+          email: entry.email,
+        },
+      },
+      create: {
+        teamId,
+        contactId,
+        email: entry.email,
+        kind: entry.kind,
+        label: entry.label,
+      },
+      update: {
+        kind: entry.kind,
+        label: entry.label ?? null,
+      },
+    });
+  }
+};
+
+const findContactByIdentityEmail = async (
+  teamId: string,
+  email: string,
+  client: Prisma.TransactionClient | typeof prisma = prisma,
+) => {
+  const normalizedEmail = normalizeContactEmail(email);
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  const contactEmail = await client.contactEmail.findFirst({
+    where: {
+      teamId,
+      email: normalizedEmail,
+      kind: { in: [ContactEmailKind.PRIMARY, ContactEmailKind.ALIAS] },
+    },
+    select: {
+      contact: {
+        select: {
+          id: true,
+          groupId: true,
+          groups: {
+            select: {
+              groupId: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return contactEmail?.contact ?? null;
+};
+
 const normalizeCsvHeader = (header: string) =>
   header.toLowerCase().replace(/[^a-z0-9]/g, "");
 
@@ -761,7 +975,23 @@ const mapContact = (contact: ContactWithAttributes): ContactType => ({
   countryCode: contact.countryCode ?? undefined,
   latitude: contact.latitude ? contact.latitude.toNumber() : undefined,
   longitude: contact.longitude ? contact.longitude.toNumber() : undefined,
-  email: contact.email ?? undefined,
+  email:
+    contact.emails.find((entry) => entry.kind === ContactEmailKind.PRIMARY)
+      ?.email ?? undefined,
+  emails: contact.emails.map((entry) => ({
+    id: entry.id,
+    email: entry.email,
+    kind: entry.kind as ContactEmailKind,
+    label: entry.label ?? undefined,
+  })),
+  additionalEmails: contact.emails
+    .filter((entry) => entry.kind !== ContactEmailKind.PRIMARY)
+    .map((entry) => ({
+      id: entry.id,
+      email: entry.email,
+      kind: entry.kind as ContactEmailKind,
+      label: entry.label ?? undefined,
+    })),
   phone: contact.phone ?? undefined,
   signal: contact.signal ?? undefined,
   website: contact.website ?? undefined,
@@ -1051,11 +1281,17 @@ async function getTeamContacts(
       { state: { contains: query, mode: "insensitive" } },
       { city: { contains: query, mode: "insensitive" } },
       { country: { contains: query, mode: "insensitive" } },
-      { email: { contains: query, mode: "insensitive" } },
       { phone: { contains: query, mode: "insensitive" } },
       { signal: { contains: query, mode: "insensitive" } },
       { website: { contains: query, mode: "insensitive" } },
       { notes: { contains: query, mode: "insensitive" } },
+      {
+        emails: {
+          some: {
+            email: { contains: query, mode: "insensitive" },
+          },
+        },
+      },
       {
         attributes: {
           some: {
@@ -1089,9 +1325,13 @@ async function getTeamContacts(
       switch (fieldName) {
         case "email":
           return {
-            email: {
-              contains: trimmedValue,
-              mode: Prisma.QueryMode.insensitive,
+            emails: {
+              some: {
+                email: {
+                  contains: trimmedValue,
+                  mode: Prisma.QueryMode.insensitive,
+                },
+              },
             },
           };
         case "phone":
@@ -1177,7 +1417,7 @@ async function getTeamContacts(
     const notNullCondition: Prisma.ContactWhereInput | null = (() => {
       switch (fieldName) {
         case "email":
-          return { email: { not: null } };
+          return { emails: { some: {} } };
         case "phone":
           return { phone: { not: null } };
         case "signal":
@@ -1206,7 +1446,7 @@ async function getTeamContacts(
     const notEmptyCondition = (() => {
       switch (fieldName) {
         case "email":
-          return { NOT: { email: { equals: "" } } };
+          return { emails: { some: {} } };
         case "phone":
           return { NOT: { phone: { equals: "" } } };
         case "signal":
@@ -1235,9 +1475,7 @@ async function getTeamContacts(
     const missingCondition: Prisma.ContactWhereInput = (() => {
       switch (fieldName) {
         case "email":
-          return {
-            OR: [{ email: { equals: null } }, { email: { equals: "" } }],
-          };
+          return { emails: { none: {} } };
         case "phone":
           return {
             OR: [{ phone: { equals: null } }, { phone: { equals: "" } }],
@@ -1653,6 +1891,7 @@ const createContact = async (
     city,
     country,
     email,
+    additionalEmails,
     phone,
     signal,
     website,
@@ -1699,24 +1938,23 @@ const createContact = async (
   if (!normalizedEmail) {
     throw new Error("Email is required");
   }
+  const normalizedAdditionalEmails = normalizeAdditionalEmails(
+    additionalEmails,
+    normalizedEmail,
+  );
   const normalizedPhone = phone ? phone.trim() : undefined;
   const normalizedSignal = signal ? signal.trim() : undefined;
   const normalizedWebsite = website?.trim() || undefined;
   const normalizedNotes = notes?.trim() || undefined;
 
-  const existingContact = await prisma.contact.findFirst({
-    where: {
-      teamId,
-      email: normalizedEmail,
-    },
-  });
-
-  if (existingContact) {
-    throw new Error("A contact with this email already exists for this team.");
-  }
-
   return prisma.$transaction(async (tx) => {
     await validateContactGroupIds(tx, teamId, normalizedGroupIds);
+    await assertIdentityEmailsAvailable(tx, teamId, [
+      normalizedEmail,
+      ...normalizedAdditionalEmails
+        .filter((entry) => entry.kind === ContactEmailKind.ALIAS)
+        .map((entry) => entry.email),
+    ]);
 
     const centroid = await resolvePostalCentroid(
       tx,
@@ -1744,7 +1982,6 @@ const createContact = async (
         countryCode: normalizedCountryCode ?? null,
         latitude: centroid?.latitude ?? null,
         longitude: centroid?.longitude ?? null,
-        email: normalizedEmail,
         phone: normalizedPhone,
         signal: normalizedSignal,
         website: normalizedWebsite,
@@ -1754,6 +1991,12 @@ const createContact = async (
     });
 
     await syncContactGroups(tx, contact.id, teamId, normalizedGroupIds);
+    await setContactEmails(tx, {
+      teamId,
+      contactId: contact.id,
+      primaryEmail: normalizedEmail,
+      additionalEmails: normalizedAdditionalEmails,
+    });
 
     if (normalizedAttributes.length > 0) {
       for (const attribute of normalizedAttributes) {
@@ -1884,10 +2127,11 @@ const importContactsFromCsv = async ({
     .map((row) => getCsvValue(row, headerMap, "email")?.toLowerCase())
     .filter((email): email is string => Boolean(email));
   const existingContacts = candidateEmails.length
-    ? await prisma.contact.findMany({
+    ? await prisma.contactEmail.findMany({
         where: {
           teamId,
           email: { in: candidateEmails },
+          kind: { in: [ContactEmailKind.PRIMARY, ContactEmailKind.ALIAS] },
         },
         select: { email: true },
       })
@@ -2043,6 +2287,7 @@ const updateContact = async (
     city,
     country,
     email,
+    additionalEmails,
     phone,
     signal,
     website,
@@ -2202,6 +2447,7 @@ const updateContact = async (
   })();
   const normalizedEmail =
     email === undefined ? undefined : email.trim().toLowerCase();
+  const additionalEmailsProvided = Object.hasOwn(input, "additionalEmails");
   const normalizedPhone = phone === undefined ? undefined : phone.trim();
   const normalizedSignal = signal === undefined ? undefined : signal.trim();
   const websiteProvided = Object.hasOwn(input, "website");
@@ -2244,6 +2490,7 @@ const updateContact = async (
       },
       include: {
         attributes: true,
+        emails: true,
         socialLinks: true,
         groups: true,
         organizations: {
@@ -2502,33 +2749,69 @@ const updateContact = async (
       updates.longitude = centroid?.longitude ?? null;
     }
 
-    if (normalizedEmail !== undefined && normalizedEmail !== existing.email) {
-      if (normalizedEmail) {
-        const conflictingContact = await tx.contact.findFirst({
-          where: {
-            teamId,
-            email: normalizedEmail,
-            id: { not: contactId },
-          },
-        });
+    const existingPrimaryEmail =
+      existing.emails.find((entry) => entry.kind === ContactEmailKind.PRIMARY)
+        ?.email ?? null;
 
-        if (conflictingContact) {
-          throw new Error(
-            "A contact with this email already exists for this team.",
-          );
-        }
+    if (normalizedEmail !== undefined && normalizedEmail !== existingPrimaryEmail) {
+      if (!normalizedEmail) {
+        throw new Error("Primary email is required.");
       }
 
       await logFieldUpdate(
         contactId,
         "email",
-        existing.email,
+        existingPrimaryEmail,
         normalizedEmail,
         userId,
         userName,
         tx,
       );
-      updates.email = normalizedEmail;
+    }
+
+    if (normalizedEmail !== undefined || additionalEmailsProvided) {
+      const nextPrimaryEmail = normalizedEmail ?? existingPrimaryEmail;
+      if (!nextPrimaryEmail) {
+        throw new Error("Primary email is required.");
+      }
+      const oldEmailValue = existing.emails.map((entry) => ({
+        email: entry.email,
+        kind: entry.kind,
+        label: entry.label,
+      }));
+      const nextAdditionalEmails = additionalEmailsProvided
+        ? normalizeAdditionalEmails(additionalEmails, nextPrimaryEmail)
+        : existing.emails
+            .filter((entry) => entry.kind !== ContactEmailKind.PRIMARY)
+            .map((entry) => ({
+              id: entry.id,
+              email: entry.email,
+              kind: entry.kind as ContactEmailKind,
+              label: entry.label ?? undefined,
+            }));
+      const nextEmailValue = [
+        { email: nextPrimaryEmail, kind: ContactEmailKind.PRIMARY },
+        ...nextAdditionalEmails,
+      ];
+
+      if (JSON.stringify(oldEmailValue) !== JSON.stringify(nextEmailValue)) {
+        await logFieldUpdate(
+          contactId,
+          "emails",
+          oldEmailValue,
+          nextEmailValue,
+          userId,
+          userName,
+          tx,
+        );
+      }
+
+      await setContactEmails(tx, {
+        teamId,
+        contactId,
+        primaryEmail: nextPrimaryEmail,
+        additionalEmails: nextAdditionalEmails,
+      });
     }
 
     if (normalizedPhone !== undefined && normalizedPhone !== existing.phone) {
@@ -2979,6 +3262,420 @@ const deleteContactFile = async (
   });
 };
 
+const MERGE_SCALAR_FIELDS = [
+  "name",
+  "pronouns",
+  "gender",
+  "genderRequestPreference",
+  "isBipoc",
+  "racismRequestPreference",
+  "otherMargins",
+  "onboardingDate",
+  "breakUntil",
+  "address",
+  "postalCode",
+  "state",
+  "city",
+  "country",
+  "phone",
+  "signal",
+  "website",
+  "notes",
+] as const;
+
+type MergeScalarField = (typeof MERGE_SCALAR_FIELDS)[number];
+
+const normalizeMergeScalarValue = (
+  field: MergeScalarField,
+  value: unknown,
+) => {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === "") {
+    return null;
+  }
+
+  if (field === "onboardingDate" || field === "breakUntil") {
+    const date = value instanceof Date ? value : new Date(String(value));
+    if (Number.isNaN(date.getTime())) {
+      return undefined;
+    }
+    return date;
+  }
+
+  if (field === "isBipoc") {
+    return typeof value === "boolean" ? value : null;
+  }
+
+  return typeof value === "string" ? value.trim() || null : value;
+};
+
+const getMergeFieldValue = (
+  contact: ContactWithAttributes,
+  field: MergeScalarField,
+) => {
+  const value = contact[field];
+  return value instanceof Prisma.Decimal ? value.toString() : value;
+};
+
+const getMergeConflicts = (contacts: ContactWithAttributes[]) =>
+  MERGE_SCALAR_FIELDS.flatMap((field) => {
+    const values = contacts.map((contact) => ({
+      contactId: contact.id,
+      value: getMergeFieldValue(contact, field),
+    }));
+    const distinct = new Set(
+      values.map((entry) =>
+        entry.value instanceof Date
+          ? entry.value.toISOString()
+          : JSON.stringify(entry.value ?? null),
+      ),
+    );
+
+    if (distinct.size <= 1) {
+      return [];
+    }
+
+    return [{ field, values }];
+  });
+
+const previewContactMerge = async (input: MergeContactsPreviewInput) => {
+  const contacts = await prisma.contact.findMany({
+    where: {
+      teamId: input.teamId,
+      id: { in: input.contactIds },
+    },
+    include: contactInclude,
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (contacts.length !== input.contactIds.length) {
+    throw new Error("One or more selected contacts could not be found.");
+  }
+
+  return {
+    contacts: contacts.map(mapContact),
+    conflicts: getMergeConflicts(contacts),
+  };
+};
+
+const mergeContacts = async (
+  input: MergeContactsInput,
+  userId?: string,
+  userName?: string,
+) => {
+  const sourceContactIds = input.sourceContactIds.filter(
+    (id) => id !== input.targetContactId,
+  );
+
+  if (!sourceContactIds.length) {
+    throw new Error("Select at least one source contact to merge.");
+  }
+
+  const allContactIds = [input.targetContactId, ...sourceContactIds];
+
+  return prisma.$transaction(async (tx) => {
+    const contacts = await tx.contact.findMany({
+      where: {
+        teamId: input.teamId,
+        id: { in: allContactIds },
+      },
+      include: {
+        ...contactInclude,
+        events: {
+          include: {
+            roles: true,
+            event: true,
+          },
+        },
+      },
+    });
+
+    if (contacts.length !== allContactIds.length) {
+      throw new Error("One or more selected contacts could not be found.");
+    }
+
+    const target = contacts.find(
+      (contact) => contact.id === input.targetContactId,
+    );
+    if (!target) {
+      throw new Error("Target contact not found.");
+    }
+
+    const sources = contacts.filter((contact) =>
+      sourceContactIds.includes(contact.id),
+    );
+    const preservedEmails = normalizeAdditionalEmails(
+      input.preservedEmails,
+      input.primaryEmail,
+    );
+    const selectedIdentityEmails = [
+      input.primaryEmail,
+      ...preservedEmails
+        .filter((entry) => entry.kind === ContactEmailKind.ALIAS)
+        .map((entry) => entry.email),
+    ];
+
+    await assertIdentityEmailsAvailable(
+      tx,
+      input.teamId,
+      selectedIdentityEmails,
+      allContactIds,
+    );
+
+    await tx.contactEmail.deleteMany({
+      where: { contactId: { in: sourceContactIds } },
+    });
+
+    await setContactEmails(tx, {
+      teamId: input.teamId,
+      contactId: input.targetContactId,
+      primaryEmail: input.primaryEmail,
+      additionalEmails: preservedEmails,
+      allowedContactIds: sourceContactIds,
+    });
+
+    const updates: Prisma.ContactUncheckedUpdateInput = {};
+
+    for (const field of MERGE_SCALAR_FIELDS) {
+      if (!Object.hasOwn(input.fieldSelections ?? {}, field)) {
+        continue;
+      }
+      const normalized = normalizeMergeScalarValue(
+        field,
+        input.fieldSelections?.[field],
+      );
+      if (normalized !== undefined) {
+        (updates as Record<string, unknown>)[field] = normalized;
+      }
+    }
+
+    if (Object.hasOwn(updates, "postalCode") || Object.hasOwn(updates, "country")) {
+      const nextPostal =
+        typeof updates.postalCode === "string"
+          ? updates.postalCode
+          : target.postalCode;
+      const nextCountry =
+        typeof updates.country === "string" ? updates.country : target.country;
+      const nextCountryCode = normalizeCountryCode(nextCountry ?? undefined);
+      const centroid = await resolvePostalCentroid(
+        tx,
+        nextCountryCode,
+        normalizePostalCode(nextPostal ?? undefined),
+      );
+      updates.countryCode = nextCountryCode ?? null;
+      updates.latitude = centroid?.latitude ?? null;
+      updates.longitude = centroid?.longitude ?? null;
+    }
+
+    await tx.contact.update({
+      where: { id: input.targetContactId },
+      data: updates,
+    });
+
+    const sourceGroups = sources.flatMap((contact) =>
+      contact.groups.map((group) => ({
+        contactId: input.targetContactId,
+        groupId: group.groupId,
+      })),
+    );
+    if (sourceGroups.length) {
+      await tx.contactGroup.createMany({
+        data: sourceGroups,
+        skipDuplicates: true,
+      });
+    }
+
+    const targetGroupIds = new Set([
+      ...target.groups.map((group) => group.groupId),
+      ...sourceGroups.map((group) => group.groupId),
+    ]);
+    await tx.contact.update({
+      where: { id: input.targetContactId },
+      data: { groupId: Array.from(targetGroupIds)[0] ?? null },
+    });
+
+    const sourceOrganizations = sources.flatMap((contact) =>
+      contact.organizations.map((entry) => ({
+        contactId: input.targetContactId,
+        organizationId: entry.organizationId,
+      })),
+    );
+    if (sourceOrganizations.length) {
+      await tx.contactOrganization.createMany({
+        data: sourceOrganizations,
+        skipDuplicates: true,
+      });
+    }
+
+    const sourceListMembers = await tx.contactListMember.findMany({
+      where: { contactId: { in: sourceContactIds } },
+      select: { listId: true },
+    });
+    if (sourceListMembers.length) {
+      await tx.contactListMember.createMany({
+        data: sourceListMembers.map((entry) => ({
+          listId: entry.listId,
+          contactId: input.targetContactId,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
+    await tx.file.updateMany({
+      where: { contactId: { in: sourceContactIds } },
+      data: { contactId: input.targetContactId },
+    });
+    await tx.contactEngagement.updateMany({
+      where: { contactId: { in: sourceContactIds } },
+      data: { contactId: input.targetContactId },
+    });
+    await tx.inboundEmailMessage.updateMany({
+      where: { contactId: { in: sourceContactIds } },
+      data: { contactId: input.targetContactId },
+    });
+    await tx.emailRecipient.updateMany({
+      where: { contactId: { in: sourceContactIds } },
+      data: { contactId: input.targetContactId },
+    });
+    await tx.eventRegistration.updateMany({
+      where: { contactId: { in: sourceContactIds } },
+      data: { contactId: input.targetContactId },
+    });
+    await tx.organization.updateMany({
+      where: { contactPersonId: { in: sourceContactIds } },
+      data: { contactPersonId: input.targetContactId },
+    });
+
+    const eventContacts = await tx.eventContact.findMany({
+      where: { contactId: { in: sourceContactIds } },
+      include: { roles: true },
+    });
+    for (const eventContact of eventContacts) {
+      await tx.eventContact.createMany({
+        data: [
+          {
+            eventId: eventContact.eventId,
+            contactId: input.targetContactId,
+          },
+        ],
+        skipDuplicates: true,
+      });
+      if (eventContact.roles.length) {
+        await tx.eventContactRole.createMany({
+          data: eventContact.roles.map((role) => ({
+            eventId: role.eventId,
+            contactId: input.targetContactId,
+            eventRoleId: role.eventRoleId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+
+    const targetAttributeKeys = new Set(target.attributes.map((attr) => attr.key));
+    for (const source of sources) {
+      for (const attribute of source.attributes) {
+        if (targetAttributeKeys.has(attribute.key)) {
+          continue;
+        }
+        targetAttributeKeys.add(attribute.key);
+        await tx.contactAttribute.create({
+          data: {
+            contactId: input.targetContactId,
+            key: attribute.key,
+            type: attribute.type,
+            stringValue: attribute.stringValue,
+            numberValue: attribute.numberValue,
+            dateValue: attribute.dateValue,
+            locationLabel: attribute.locationLabel,
+            latitude: attribute.latitude,
+            longitude: attribute.longitude,
+          },
+        });
+      }
+    }
+
+    const targetSocialPlatforms = new Set(
+      target.socialLinks.map((link) => link.platform),
+    );
+    for (const source of sources) {
+      for (const link of source.socialLinks) {
+        if (targetSocialPlatforms.has(link.platform)) {
+          continue;
+        }
+        targetSocialPlatforms.add(link.platform);
+        await tx.contactSocialLink.create({
+          data: {
+            contactId: input.targetContactId,
+            platform: link.platform,
+            handle: link.handle,
+          },
+        });
+      }
+    }
+
+    const accessReviews = await tx.contactAccessReview.findMany({
+      where: { contactId: { in: sourceContactIds } },
+      select: { id: true },
+    });
+    for (const review of accessReviews) {
+      try {
+        await tx.contactAccessReview.update({
+          where: { id: review.id },
+          data: { contactId: input.targetContactId },
+        });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002"
+        ) {
+          await tx.contactAccessReview.delete({ where: { id: review.id } });
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    await tx.contactChangeLog.updateMany({
+      where: { contactId: { in: sourceContactIds } },
+      data: { contactId: input.targetContactId },
+    });
+
+    await createChangeLog(
+      {
+        contactId: input.targetContactId,
+        action: ChangeAction.UPDATED,
+        fieldName: "merge",
+        userId,
+        userName,
+        metadata: JSON.parse(
+          JSON.stringify({
+            sourceContactIds,
+            primaryEmail: normalizeContactEmail(input.primaryEmail) ?? null,
+            preservedEmails,
+            fieldSelections: input.fieldSelections ?? {},
+          }),
+        ) as Prisma.JsonObject,
+      },
+      tx,
+    );
+
+    await tx.contact.deleteMany({
+      where: { id: { in: sourceContactIds } },
+    });
+
+    const merged = await tx.contact.findUniqueOrThrow({
+      where: { id: input.targetContactId },
+      include: contactInclude,
+    });
+
+    return mapContact(merged);
+  });
+};
+
 const deleteContacts = async (teamId: string, ids: string[]) => {
   if (!ids.length) {
     return;
@@ -3091,6 +3788,9 @@ export {
   getTeamContactAttributeKeys,
   getTeamContacts,
   importContactsFromCsv,
+  mergeContacts,
+  previewContactMerge,
   updateContact,
   exportContacts,
+  findContactByIdentityEmail,
 };

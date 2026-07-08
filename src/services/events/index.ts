@@ -3,10 +3,13 @@ import { normalizeCountryCode } from "@/lib/countries";
 import { normalizePostalCode } from "@/lib/geo";
 import prisma from "@/lib/prisma";
 import { generateSlug } from "@/lib/slug";
+import { primaryContactEmailSelect } from "@/services/contact-emails";
 import {
   logContactCreation,
   logFieldUpdate,
 } from "@/services/contact-change-logs";
+import { findContactByIdentityEmail } from "@/services/contacts";
+import { ContactEmailKind } from "@/types";
 
 type EventContactInput = {
   contactId: string;
@@ -65,7 +68,11 @@ type EventWithContacts = Prisma.EventGetPayload<{
     eventType: true;
     contacts: {
       include: {
-        contact: true;
+        contact: {
+          include: {
+            emails: true;
+          };
+        };
         roles: {
           include: {
             eventRole: true;
@@ -178,7 +185,9 @@ const mapEvent = (event: EventWithContacts): EventType => ({
   contacts: event.contacts.map((ec) => ({
     id: ec.contact.id,
     name: ec.contact.name,
-    email: ec.contact.email ?? undefined,
+    email:
+      ec.contact.emails.find((entry) => entry.kind === ContactEmailKind.PRIMARY)
+        ?.email ?? undefined,
     phone: ec.contact.phone ?? undefined,
     roles: ec.roles.map((r) => ({
       id: r.eventRole.id,
@@ -298,7 +307,11 @@ export const getTeamEvents = async (
       eventType: true,
       contacts: {
         include: {
-          contact: true,
+          contact: {
+            include: {
+              emails: true,
+            },
+          },
           roles: {
             include: {
               eventRole: true,
@@ -333,7 +346,11 @@ export const getEventById = async (eventId: string, teamId: string) => {
       eventType: true,
       contacts: {
         include: {
-          contact: true,
+          contact: {
+            include: {
+              emails: true,
+            },
+          },
           roles: {
             include: {
               eventRole: true,
@@ -481,7 +498,11 @@ export const createEvent = async (input: CreateEventInput) => {
         eventType: true,
         contacts: {
           include: {
-            contact: true,
+            contact: {
+              include: {
+                emails: true,
+              },
+            },
             roles: {
               include: {
                 eventRole: true,
@@ -652,7 +673,11 @@ export const updateEvent = async (input: UpdateEventInput) => {
         eventType: true,
         contacts: {
           include: {
-            contact: true,
+            contact: {
+              include: {
+                emails: true,
+              },
+            },
             roles: {
               include: {
                 eventRole: true,
@@ -957,19 +982,17 @@ export const createEventRegistration = async (
     }
     const trimmedPhone = phone?.trim() || undefined;
 
-    let contact = await tx.contact.findFirst({
-      where: {
-        teamId: event.teamId,
-        ...(trimmedEmail
-          ? {
-              email: {
-                equals: trimmedEmail,
-                mode: "insensitive",
-              },
-            }
-          : {}),
-      },
-    });
+    const identityContact = await findContactByIdentityEmail(
+      event.teamId,
+      trimmedEmail,
+      tx,
+    );
+    let contact = identityContact
+      ? await tx.contact.findUnique({
+          where: { id: identityContact.id },
+          include: { emails: true },
+        })
+      : null;
 
     if (!contact && trimmedPhone) {
       contact = await tx.contact.findFirst({
@@ -977,6 +1000,7 @@ export const createEventRegistration = async (
           teamId: event.teamId,
           phone: trimmedPhone,
         },
+        include: { emails: true },
       });
     }
 
@@ -997,11 +1021,13 @@ export const createEventRegistration = async (
         });
       }
 
-      if (!contact.email && trimmedEmail) {
-        contactUpdates.email = trimmedEmail;
+      const existingPrimaryEmail =
+        contact.emails.find((entry) => entry.kind === ContactEmailKind.PRIMARY)
+          ?.email ?? null;
+      if (!existingPrimaryEmail && trimmedEmail) {
         updatedFields.push({
           field: "email",
-          oldValue: contact.email,
+          oldValue: existingPrimaryEmail,
           newValue: trimmedEmail,
         });
       }
@@ -1019,7 +1045,28 @@ export const createEventRegistration = async (
         contact = await tx.contact.update({
           where: { id: contact.id },
           data: contactUpdates,
+          include: { emails: true },
         });
+
+        if (updatedFields.some((field) => field.field === "email")) {
+          await tx.contactEmail.upsert({
+            where: {
+              contactId_email: {
+                contactId: contact.id,
+                email: trimmedEmail,
+              },
+            },
+            create: {
+              teamId: event.teamId,
+              contactId: contact.id,
+              email: trimmedEmail,
+              kind: ContactEmailKind.PRIMARY,
+            },
+            update: {
+              kind: ContactEmailKind.PRIMARY,
+            },
+          });
+        }
 
         for (const updatedField of updatedFields) {
           await logFieldUpdate(
@@ -1038,9 +1085,18 @@ export const createEventRegistration = async (
         data: {
           teamId: event.teamId,
           name: trimmedName,
-          email: trimmedEmail,
           phone: trimmedPhone,
+          emails: {
+            create: [
+              {
+                teamId: event.teamId,
+                email: trimmedEmail,
+                kind: ContactEmailKind.PRIMARY,
+              },
+            ],
+          },
         },
+        include: { emails: true },
       });
 
       await logContactCreation(contact.id, undefined, undefined, tx, {
@@ -1048,6 +1104,10 @@ export const createEventRegistration = async (
         eventId,
         eventTitle: event.title ?? null,
       });
+    }
+
+    if (!contact) {
+      throw new Error("Contact could not be resolved for registration.");
     }
 
     const registration = await tx.eventRegistration.create({
@@ -1061,7 +1121,11 @@ export const createEventRegistration = async (
         customData: customData ? JSON.parse(JSON.stringify(customData)) : null,
       },
       include: {
-        contact: true,
+        contact: {
+          include: {
+            emails: primaryContactEmailSelect,
+          },
+        },
       },
     });
 
@@ -1084,7 +1148,11 @@ export const getEventRegistrations = async (
     where: { eventId },
     orderBy: { createdAt: "desc" },
     include: {
-      contact: true,
+      contact: {
+        include: {
+          emails: primaryContactEmailSelect,
+        },
+      },
     },
   });
   return registrations;

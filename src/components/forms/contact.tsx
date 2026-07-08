@@ -51,6 +51,7 @@ import { EUROPEAN_COUNTRY_OPTIONS } from "@/lib/countries";
 import {
   type Contact,
   ContactAttributeType,
+  ContactEmailKind,
   ContactGender,
   ContactRequestPreference,
 } from "@/types";
@@ -209,6 +210,15 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
           city: contact?.city ?? "",
           country: contact?.country ?? "",
           email: contact?.email ?? "",
+          additionalEmails:
+            contact?.additionalEmails?.map((entry) => ({
+              email: entry.email,
+              kind:
+                entry.kind === ContactEmailKind.SHARED
+                  ? ContactEmailKind.SHARED
+                  : ContactEmailKind.ALIAS,
+              label: entry.label ?? "",
+            })) ?? [],
           phone: contact?.phone ?? "",
           signal: contact?.signal ?? "",
           website: contact?.website ?? "",
@@ -250,6 +260,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
           city: "",
           country: "",
           email: "",
+          additionalEmails: [],
           phone: "",
           signal: "",
           website: "",
@@ -281,6 +292,14 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
   } = useFieldArray({
     control,
     name: "socialLinks",
+  });
+  const {
+    fields: emailFields,
+    append: appendEmail,
+    remove: removeEmail,
+  } = useFieldArray({
+    control,
+    name: "additionalEmails",
   });
   const {
     fields: fileFields,
@@ -368,6 +387,14 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
       platform: "",
       handle: "",
     } as CreateContactFormValues["socialLinks"][number]);
+  };
+
+  const addEmail = () => {
+    appendEmail({
+      email: "",
+      kind: ContactEmailKind.ALIAS,
+      label: "",
+    } as CreateContactFormValues["additionalEmails"][number]);
   };
 
   const createOrganizationFromContact = async (name: string) => {
@@ -741,6 +768,115 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                       </FormItem>
                     )}
                   />
+                  <div className="space-y-3 sm:col-span-2 lg:col-span-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <FormLabel>Additional emails</FormLabel>
+                        <FormDescription>
+                          Aliases identify this contact. Shared emails are
+                          display-only and can be used by multiple contacts.
+                        </FormDescription>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addEmail}
+                      >
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Add email
+                      </Button>
+                    </div>
+                    {emailFields.length === 0 ? (
+                      <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                        No additional emails.
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {emailFields.map((emailField, index) => (
+                          <div
+                            key={emailField.id}
+                            className="grid gap-3 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_150px_minmax(0,180px)_auto]"
+                          >
+                            <FormField
+                              control={typedControl}
+                              name={`additionalEmails.${index}.email`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Email</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      type="email"
+                                      placeholder="alias@example.org"
+                                      {...field}
+                                      value={field.value ?? ""}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={typedControl}
+                              name={`additionalEmails.${index}.kind`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Type</FormLabel>
+                                  <Select
+                                    value={field.value}
+                                    onValueChange={field.onChange}
+                                  >
+                                    <FormControl>
+                                      <SelectTrigger>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      <SelectItem value={ContactEmailKind.ALIAS}>
+                                        Alias
+                                      </SelectItem>
+                                      <SelectItem value={ContactEmailKind.SHARED}>
+                                        Shared
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={typedControl}
+                              name={`additionalEmails.${index}.label`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Label</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      placeholder="Work, old, team"
+                                      {...field}
+                                      value={field.value ?? ""}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <div className="flex items-end">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeEmail(index)}
+                                aria-label="Remove email"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <FormField
                     control={typedControl}
                     name="phone"

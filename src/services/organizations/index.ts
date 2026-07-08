@@ -2,6 +2,10 @@ import { type Prisma, Roles } from "@prisma/client";
 import { auth } from "@/auth";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
+import {
+  getPrimaryEmail,
+  primaryContactEmailSelect,
+} from "@/services/contact-emails";
 import type { OrganizationFieldFilter } from "@/validations/organization-filters";
 
 type Organization = {
@@ -397,8 +401,8 @@ const getOrganizationById = async (id: string) => {
               id: true,
               teamId: true,
               name: true,
-              email: true,
               phone: true,
+              emails: primaryContactEmailSelect,
             },
           },
         },
@@ -412,7 +416,14 @@ const getOrganizationById = async (id: string) => {
   });
   return {
     ...organization,
-    contacts: organization?.contacts.map(({ contact }) => contact) ?? [],
+    contacts:
+      organization?.contacts.map(({ contact }) => ({
+        id: contact.id,
+        teamId: contact.teamId,
+        name: contact.name,
+        email: getPrimaryEmail(contact) ?? null,
+        phone: contact.phone,
+      })) ?? [],
     user: organization?.users[0],
   };
 };
@@ -479,8 +490,8 @@ const organizationListInclude = {
           id: true,
           teamId: true,
           name: true,
-          email: true,
           phone: true,
+          emails: primaryContactEmailSelect,
         },
       },
     },
@@ -501,8 +512,8 @@ const mapOrganizationListItem = <
         id: string;
         teamId: string;
         name: string;
-        email: string | null;
         phone: string | null;
+        emails: Array<{ email: string }>;
       };
     }>;
   },
@@ -510,7 +521,14 @@ const mapOrganizationListItem = <
   organization: T,
 ) => ({
   ...organization,
-  contacts: organization.contacts?.map(({ contact }) => contact) ?? [],
+  contacts:
+    organization.contacts?.map(({ contact }) => ({
+      id: contact.id,
+      teamId: contact.teamId,
+      name: contact.name,
+      email: getPrimaryEmail(contact) ?? null,
+      phone: contact.phone,
+    })) ?? [],
 });
 
 const getOrganizations = async (

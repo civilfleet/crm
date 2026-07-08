@@ -36,6 +36,7 @@ import {
 } from "@/services/contacts";
 import {
   ContactAttributeType,
+  ContactEmailKind,
   ContactGender,
   ContactRequestPreference,
 } from "@/types";
@@ -375,6 +376,33 @@ export default async function ContactDetailPage({
                 </div>
               ),
             )}
+          </div>
+        )}
+
+        {contact.additionalEmails && contact.additionalEmails.length > 0 && (
+          <div className="rounded-md border bg-muted/30 p-3">
+            <div className="mb-2 flex items-center gap-2">
+              <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <p className="text-sm font-medium text-muted-foreground">
+                Additional emails
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {contact.additionalEmails.map((entry) => (
+                <Badge
+                  key={`${entry.kind}-${entry.email}`}
+                  variant="secondary"
+                  className="max-w-full gap-2"
+                >
+                  <span className="break-all">{entry.email}</span>
+                  <span className="text-[10px] uppercase text-muted-foreground">
+                    {entry.kind === ContactEmailKind.SHARED
+                      ? "shared"
+                      : "alias"}
+                  </span>
+                </Badge>
+              ))}
+            </div>
           </div>
         )}
 

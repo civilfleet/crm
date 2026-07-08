@@ -2,6 +2,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import {
   AppModule,
+  ContactEmailKind,
   ContactListType,
   FundingStatus,
   PrismaClient,
@@ -155,94 +156,110 @@ async function main() {
 
     // 5. Seed Contacts
     logger.info("Upserting contacts...");
-    const contact1Email = "jane.doe@savetheearth.example.org";
-    await prisma.contact.upsert({
-      where: { teamId_email: { teamId: team.id, email: contact1Email } },
-      update: {},
-      create: {
-        name: "Jane Doe",
-        email: contact1Email,
-        phone: "+491701234567",
-        teamId: team.id,
-        organizations: {
-          create: {
-            organizationId: org1.id,
-          },
-        },
+    const upsertContact = async (
+      email: string,
+      data: {
+        name: string;
+        phone?: string;
+        city?: string;
+        country?: string;
+        organizationId?: string;
       },
+    ) => {
+      const existing = await prisma.contactEmail.findFirst({
+        where: {
+          teamId: team.id,
+          email,
+          kind: { in: [ContactEmailKind.PRIMARY, ContactEmailKind.ALIAS] },
+        },
+        select: { contactId: true },
+      });
+
+      if (existing) {
+        return prisma.contact.update({
+          where: { id: existing.contactId },
+          data: {
+            name: data.name,
+            phone: data.phone,
+            city: data.city,
+            country: data.country,
+          },
+        });
+      }
+
+      return prisma.contact.create({
+        data: {
+          name: data.name,
+          phone: data.phone,
+          city: data.city,
+          country: data.country,
+          teamId: team.id,
+          emails: {
+            create: [
+              {
+                teamId: team.id,
+                email,
+                kind: ContactEmailKind.PRIMARY,
+              },
+            ],
+          },
+          ...(data.organizationId
+            ? {
+                organizations: {
+                  create: {
+                    organizationId: data.organizationId,
+                  },
+                },
+              }
+            : {}),
+        },
+      });
+    };
+
+    const contact1Email = "jane.doe@savetheearth.example.org";
+    await upsertContact(contact1Email, {
+      name: "Jane Doe",
+      phone: "+491701234567",
+      organizationId: org1.id,
     });
 
     const contact2Email = "john.smith@globaledu.example.org";
-    await prisma.contact.upsert({
-      where: { teamId_email: { teamId: team.id, email: contact2Email } },
-      update: {},
-      create: {
-        name: "John Smith",
-        email: contact2Email,
-        phone: "+491707654321",
-        teamId: team.id,
-        organizations: {
-          create: {
-            organizationId: org2.id,
-          },
-        },
-      },
+    await upsertContact(contact2Email, {
+      name: "John Smith",
+      phone: "+491707654321",
+      organizationId: org2.id,
     });
 
     const contact3Email = "alice.jones@example.com";
-    const c3 = await prisma.contact.upsert({
-      where: { teamId_email: { teamId: team.id, email: contact3Email } },
-      update: {},
-      create: {
-        name: "Alice Jones",
-        email: contact3Email,
-        phone: "+447911123456",
-        city: "London",
-        country: "United Kingdom",
-        teamId: team.id,
-      },
+    const c3 = await upsertContact(contact3Email, {
+      name: "Alice Jones",
+      phone: "+447911123456",
+      city: "London",
+      country: "United Kingdom",
     });
 
     const contact4Email = "bob.martin@example.com";
-    const c4 = await prisma.contact.upsert({
-      where: { teamId_email: { teamId: team.id, email: contact4Email } },
-      update: {},
-      create: {
-        name: "Bob Martin",
-        email: contact4Email,
-        phone: "+15551234567",
-        city: "New York",
-        country: "United States",
-        teamId: team.id,
-      },
+    const c4 = await upsertContact(contact4Email, {
+      name: "Bob Martin",
+      phone: "+15551234567",
+      city: "New York",
+      country: "United States",
     });
 
     const contact5Email = "charlie.brown@example.com";
-    await prisma.contact.upsert({
-      where: { teamId_email: { teamId: team.id, email: contact5Email } },
-      update: {},
-      create: {
-        name: "Charlie Brown",
-        email: contact5Email,
-        phone: "+15559876543",
-        city: "Chicago",
-        country: "United States",
-        teamId: team.id,
-      },
+    await upsertContact(contact5Email, {
+      name: "Charlie Brown",
+      phone: "+15559876543",
+      city: "Chicago",
+      country: "United States",
     });
 
     const contact6Email = "sarah.connor@example.com";
-    await prisma.contact.upsert({
-      where: { teamId_email: { teamId: team.id, email: contact6Email } },
-      update: {},
-      create: {
-        name: "Sarah Connor",
-        email: contact6Email,
-        phone: "+15559998888",
-        city: "Los Angeles",
-        country: "United States",
-        teamId: team.id,
-      },
+    await upsertContact(contact6Email, {
+      name: "Sarah Connor",
+      phone: "+15559998888",
+      city: "Los Angeles",
+      country: "United States",
     });
 
     // 5.b. Seed Contact Lists

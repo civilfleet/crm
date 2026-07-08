@@ -2,8 +2,13 @@ import crypto from "node:crypto";
 import { IntegrationProvider as PrismaIntegrationProvider } from "@prisma/client";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
+import {
+  getPrimaryEmail,
+  primaryContactEmailSelect,
+} from "@/services/contact-emails";
+import { findContactByIdentityEmail } from "@/services/contacts";
 import { enqueueZammadTicketSyncJob } from "@/services/integrations/zammad-queue";
-import { EngagementDirection, EngagementSource } from "@/types";
+import { ContactEmailKind, EngagementDirection, EngagementSource } from "@/types";
 
 const ZAMMAD_SOURCE_PREFIX = "ZAMMAD";
 
@@ -188,15 +193,14 @@ const findContactIdForEmails = async (teamId: string, emails: string[]) => {
     return null;
   }
 
-  const contact = await prisma.contact.findFirst({
-    where: {
-      teamId,
-      email: { in: emails },
-    },
-    select: { id: true },
-  });
+  for (const email of emails) {
+    const contact = await findContactByIdentityEmail(teamId, email);
+    if (contact) {
+      return contact.id;
+    }
+  }
 
-  return contact?.id ?? null;
+  return null;
 };
 
 const ensureContactForEmail = async (
@@ -209,19 +213,25 @@ const ensureContactForEmail = async (
   const contactName =
     name?.trim() || normalizedEmail.split("@")[0] || "Unknown Contact";
 
-  const contact = await prisma.contact.upsert({
-    where: {
-      teamId_email: {
-        teamId,
-        email: normalizedEmail,
-      },
-    },
-    create: {
+  const existing = await findContactByIdentityEmail(teamId, normalizedEmail);
+  if (existing) {
+    return existing.id;
+  }
+
+  const contact = await prisma.contact.create({
+    data: {
       teamId,
       name: contactName,
-      email: normalizedEmail,
+      emails: {
+        create: [
+          {
+            teamId,
+            email: normalizedEmail,
+            kind: ContactEmailKind.PRIMARY,
+          },
+        ],
+      },
     },
-    update: {},
     select: { id: true },
   });
 
@@ -874,10 +884,14 @@ export const replyToZammadTicket = async ({
 
   const contact = await prisma.contact.findFirst({
     where: { id: contactId, teamId },
-    select: { email: true, name: true },
+    select: {
+      name: true,
+      emails: primaryContactEmailSelect,
+    },
   });
+  const contactEmail = getPrimaryEmail(contact);
 
-  if (!contact?.email) {
+  if (!contactEmail) {
     throw new Error("Contact email is required to send a reply.");
   }
 
@@ -892,7 +906,7 @@ export const replyToZammadTicket = async ({
         subject,
         type: "email",
         sender: "Agent",
-        to: contact.email,
+        to: contactEmail,
         content_type: "text/plain",
       }),
     },
@@ -959,10 +973,14 @@ export const createZammadTicket = async ({
 
   const contact = await prisma.contact.findFirst({
     where: { id: contactId, teamId },
-    select: { email: true, name: true },
+    select: {
+      name: true,
+      emails: primaryContactEmailSelect,
+    },
   });
+  const contactEmail = getPrimaryEmail(contact);
 
-  if (!contact?.email) {
+  if (!contactEmail) {
     throw new Error("Contact email is required to create a Zammad ticket.");
   }
 
@@ -974,13 +992,13 @@ export const createZammadTicket = async ({
       body: JSON.stringify({
         title: subject,
         group_id: groupId,
-        customer_id: `guess:${contact.email}`,
+        customer_id: `guess:${contactEmail}`,
         article: {
           subject,
           body: message,
           type: "email",
           sender: "Agent",
-          to: contact.email,
+          to: contactEmail,
           content_type: "text/plain",
         },
       }),
