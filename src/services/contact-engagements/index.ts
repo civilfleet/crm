@@ -39,9 +39,27 @@ type UpdateEngagementInput = {
   restrictedToSubmodule?: ContactSubmodule | null;
 };
 
-type ContactEngagementWithDefaults = Prisma.ContactEngagementGetPayload<
-  Record<string, never>
->;
+type ContactEngagementWithDefaults = Prisma.ContactEngagementGetPayload<{
+  include: {
+    inboundEmailMessages: {
+      take: 1;
+      select: {
+        id: true;
+        emailInboxId: true;
+        mailbox: true;
+        fromEmail: true;
+        fromName: true;
+        messageId: true;
+        uid: true;
+        emailInbox: {
+          select: {
+            name: true;
+          };
+        };
+      };
+    };
+  };
+}>;
 
 const mapEngagement = (
   engagement: ContactEngagementWithDefaults,
@@ -57,6 +75,18 @@ const mapEngagement = (
   userName: engagement.userName ?? undefined,
   externalId: engagement.externalId ?? undefined,
   externalSource: engagement.externalSource ?? undefined,
+  inboundEmail: engagement.inboundEmailMessages[0]
+    ? {
+        id: engagement.inboundEmailMessages[0].id,
+        emailInboxId: engagement.inboundEmailMessages[0].emailInboxId,
+        emailInboxName: engagement.inboundEmailMessages[0].emailInbox.name,
+        mailbox: engagement.inboundEmailMessages[0].mailbox,
+        fromEmail: engagement.inboundEmailMessages[0].fromEmail,
+        fromName: engagement.inboundEmailMessages[0].fromName ?? undefined,
+        messageId: engagement.inboundEmailMessages[0].messageId ?? undefined,
+        uid: engagement.inboundEmailMessages[0].uid.toString(),
+      }
+    : undefined,
   restrictedToSubmodule: engagement.restrictedToSubmodule ?? undefined,
   assignedToUserId: engagement.assignedToUserId ?? undefined,
   assignedToUserName: engagement.assignedToUserName ?? undefined,
@@ -93,6 +123,25 @@ const getContactEngagements = async (
     orderBy: {
       engagedAt: "desc",
     },
+    include: {
+      inboundEmailMessages: {
+        take: 1,
+        select: {
+          id: true,
+          emailInboxId: true,
+          mailbox: true,
+          fromEmail: true,
+          fromName: true,
+          messageId: true,
+          uid: true,
+          emailInbox: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+    },
   });
 
   return engagements.map(mapEngagement);
@@ -118,6 +167,25 @@ const createEngagement = async (input: CreateEngagementInput) => {
       dueDate: input.dueDate,
       engagedAt: input.engagedAt,
     },
+    include: {
+      inboundEmailMessages: {
+        take: 1,
+        select: {
+          id: true,
+          emailInboxId: true,
+          mailbox: true,
+          fromEmail: true,
+          fromName: true,
+          messageId: true,
+          uid: true,
+          emailInbox: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+    },
   });
 
   return mapEngagement(engagement);
@@ -132,6 +200,25 @@ const updateEngagement = async (input: UpdateEngagementInput) => {
       teamId,
     },
     data: updateData,
+    include: {
+      inboundEmailMessages: {
+        take: 1,
+        select: {
+          id: true,
+          emailInboxId: true,
+          mailbox: true,
+          fromEmail: true,
+          fromName: true,
+          messageId: true,
+          uid: true,
+          emailInbox: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+    },
   });
 
   return mapEngagement(engagement);

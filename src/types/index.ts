@@ -337,6 +337,16 @@ export interface ContactEngagement {
   source: EngagementSource;
   externalId?: string;
   externalSource?: string;
+  inboundEmail?: {
+    id: string;
+    emailInboxId: string;
+    emailInboxName: string;
+    mailbox: string;
+    fromEmail: string;
+    fromName?: string;
+    messageId?: string;
+    uid?: string;
+  };
   restrictedToSubmodule?: ContactSubmodule;
   subject?: string;
   message: string;

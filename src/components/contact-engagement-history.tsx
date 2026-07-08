@@ -598,6 +598,13 @@ function EngagementRow({
                           : "Inbound"}
                       </Badge>
                     )}
+                  {isInboundImapEmail(engagement) &&
+                    engagement.inboundEmail && (
+                      <Badge variant="outline" className="text-xs">
+                        {engagement.inboundEmail.emailInboxName} /{" "}
+                        {engagement.inboundEmail.mailbox}
+                      </Badge>
+                    )}
                 </div>
                 <p className="text-base font-semibold">
                   {engagement.subject || "Engagement"}
@@ -614,6 +621,15 @@ function EngagementRow({
                     )}
                   </span>
                   {engagement.userName && <span>• {engagement.userName}</span>}
+                  {isInboundImapEmail(engagement) &&
+                    engagement.inboundEmail && (
+                      <span>
+                        • From {engagement.inboundEmail.fromName
+                          ? `${engagement.inboundEmail.fromName} `
+                          : ""}
+                        &lt;{engagement.inboundEmail.fromEmail}&gt;
+                      </span>
+                    )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -672,7 +688,10 @@ function EngagementRow({
                   Subject: {engagement.subject || "Email"}
                 </h4>
                 <p className="text-xs text-muted-foreground">
-                  Imported via IMAP
+                  Imported via{" "}
+                  {engagement.inboundEmail
+                    ? `${engagement.inboundEmail.emailInboxName} / ${engagement.inboundEmail.mailbox}`
+                    : "IMAP"}
                 </p>
               </div>
               <UiSeparator />
