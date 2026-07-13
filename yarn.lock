@@ -2161,6 +2161,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@pipobscure/vcard@npm:^1.0.1":
+  version: 1.0.1
+  resolution: "@pipobscure/vcard@npm:1.0.1"
+  checksum: 10c0/e4d3074bbc591c55be108ccbbd85caac147937cc630ec4fd2f0bed6047d71de6699758fc65cd9fd3a4686d57e6431e2b1b2d208bb206e67f5cd05e194766371f
+  languageName: node
+  linkType: hard
+
 "@preact/signals-core@npm:^1.14.1":
   version: 1.14.2
   resolution: "@preact/signals-core@npm:1.14.2"
@@ -7583,6 +7590,7 @@ __metadata:
     "@lexical/rich-text": "npm:^0.44.0"
     "@lexical/selection": "npm:^0.44.0"
     "@lexical/utils": "npm:^0.44.0"
+    "@pipobscure/vcard": "npm:^1.0.1"
     "@prisma/adapter-pg": "npm:^7.8.0"
     "@prisma/client": "npm:^7.8.0"
     "@prisma/extension-accelerate": "npm:^3.0.1"

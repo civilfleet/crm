@@ -8,6 +8,7 @@ import { normalizeCountryCode } from "@/lib/countries";
 import { parseCsv, stringifyCsv } from "@/lib/csv";
 import { normalizePostalCode } from "@/lib/geo";
 import prisma from "@/lib/prisma";
+import { parseVCardContacts } from "@/lib/vcard";
 import {
   createChangeLog,
   logContactCreation,
@@ -157,6 +158,13 @@ type ImportContactsFromCsvInput = {
   teamId: string;
   csv: string;
   columnMapping?: Partial<Record<ContactImportField, string>>;
+  userId?: string;
+  userName?: string;
+};
+
+type ImportContactsFromVCardInput = {
+  teamId: string;
+  vcard: string;
   userId?: string;
   userName?: string;
 };
@@ -2262,6 +2270,134 @@ const importContactsFromCsv = async ({
   };
 };
 
+const importContactsFromVCard = async ({
+  teamId,
+  vcard,
+  userId,
+  userName,
+}: ImportContactsFromVCardInput): Promise<ContactImportResult> => {
+  const contacts = parseVCardContacts(vcard);
+
+  if (contacts.length === 0) {
+    throw new Error("VCF file does not contain any contacts.");
+  }
+
+  if (contacts.length > 1000) {
+    throw new Error("VCF import is limited to 1000 contacts at a time.");
+  }
+
+  const candidateEmails = contacts.flatMap((contact) =>
+    [
+      contact.email,
+      ...contact.additionalEmails.map(({ email }) => email),
+    ].filter((email): email is string => Boolean(email)),
+  );
+  const existingContacts = candidateEmails.length
+    ? await prisma.contactEmail.findMany({
+        where: {
+          teamId,
+          email: { in: candidateEmails },
+          kind: { in: [ContactEmailKind.PRIMARY, ContactEmailKind.ALIAS] },
+        },
+        select: { email: true },
+      })
+    : [];
+  const existingEmails = new Set(
+    existingContacts.map(({ email }) => email.toLowerCase()),
+  );
+  const seenEmails = new Set<string>();
+  const skippedRows: ContactImportSkippedRow[] = [];
+  let created = 0;
+
+  for (const [index, contact] of contacts.entries()) {
+    const rowNumber = index + 1;
+    const emails = [
+      contact.email,
+      ...contact.additionalEmails.map(({ email }) => email),
+    ].filter((email): email is string => Boolean(email));
+
+    if (!contact.name) {
+      skippedRows.push({ rowNumber, reason: "Name is required." });
+      continue;
+    }
+
+    if (emails.length === 0 && !contact.phone) {
+      skippedRows.push({
+        rowNumber,
+        reason: "At least one email address or phone number is required.",
+      });
+      continue;
+    }
+
+    if (emails.some((email) => seenEmails.has(email))) {
+      skippedRows.push({
+        rowNumber,
+        reason: "Duplicate email within this VCF file.",
+      });
+      continue;
+    }
+
+    for (const email of emails) {
+      seenEmails.add(email);
+    }
+
+    if (emails.some((email) => existingEmails.has(email))) {
+      skippedRows.push({
+        rowNumber,
+        reason: "A contact with one of these email addresses already exists.",
+      });
+      continue;
+    }
+
+    try {
+      await createContact(
+        {
+          teamId,
+          name: contact.name,
+          email: contact.email,
+          additionalEmails: contact.additionalEmails.map((entry) => ({
+            email: entry.email,
+            kind: ContactEmailKind.ALIAS,
+            label: entry.label,
+          })),
+          phone: contact.phone,
+          address: contact.address,
+          postalCode: contact.postalCode,
+          city: contact.city,
+          state: contact.state,
+          country: contact.country,
+          website: contact.website,
+          notes: contact.notes,
+          socialLinks: [],
+          profileAttributes: [],
+          groupIds: [],
+        },
+        userId,
+        userName,
+      );
+      created += 1;
+      for (const email of emails) {
+        existingEmails.add(email);
+      }
+    } catch (error) {
+      skippedRows.push({
+        rowNumber,
+        reason:
+          error instanceof Error
+            ? error.message
+            : "Could not import this contact.",
+      });
+    }
+  }
+
+  return {
+    created,
+    skipped: skippedRows.length,
+    totalRows: contacts.length,
+    skippedRows: skippedRows.slice(0, 50),
+  };
+};
+
 const updateContact = async (
   input: UpdateContactInput,
   userId?: string,
@@ -3788,6 +3924,7 @@ export {
   getTeamContactAttributeKeys,
   getTeamContacts,
   importContactsFromCsv,
+  importContactsFromVCard,
   mergeContacts,
   previewContactMerge,
   updateContact,

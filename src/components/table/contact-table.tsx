@@ -63,7 +63,12 @@ import {
 } from "@/constants/email";
 import { useToast } from "@/hooks/use-toast";
 import { parseCsv } from "@/lib/csv";
-import { ContactEmailKind, type ContactFilter, ContactFilterType } from "@/types";
+import type { VCardContact } from "@/lib/vcard";
+import {
+  ContactEmailKind,
+  type ContactFilter,
+  type ContactFilterType,
+} from "@/types";
 
 const ContactMap = dynamic(() => import("@/components/contacts/contact-map"), {
   ssr: false,
@@ -432,6 +437,10 @@ export default function ContactTable({ teamId }: ContactTableProps) {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importHeaders, setImportHeaders] = useState<string[]>([]);
   const [importPreviewRows, setImportPreviewRows] = useState<string[][]>([]);
+  const [importFormat, setImportFormat] = useState<"csv" | "vcf">("csv");
+  const [importVCardContacts, setImportVCardContacts] = useState<
+    VCardContact[]
+  >([]);
   const [importSourceMapping, setImportSourceMapping] =
     useState<ContactImportSourceMapping>({});
   const [importResult, setImportResult] = useState<ContactImportResult | null>(
@@ -1370,10 +1379,12 @@ export default function ContactTable({ teamId }: ContactTableProps) {
       const formData = new FormData();
       formData.append("teamId", teamId);
       formData.append("file", importFile);
-      formData.append(
-        "columnMapping",
-        JSON.stringify(toContactImportColumnMapping(importSourceMapping)),
-      );
+      if (importFormat === "csv") {
+        formData.append(
+          "columnMapping",
+          JSON.stringify(toContactImportColumnMapping(importSourceMapping)),
+        );
+      }
 
       const response = await fetch("/api/contacts/import", {
         method: "POST",
@@ -1416,20 +1427,37 @@ export default function ContactTable({ teamId }: ContactTableProps) {
     setImportHeaders([]);
     setImportPreviewRows([]);
     setImportSourceMapping({});
+    setImportVCardContacts([]);
 
     if (!file) {
       return;
     }
 
     try {
-      const parsed = parseCsv(await file.text());
+      const contents = await file.text();
+      if (file.name.toLowerCase().endsWith(".vcf")) {
+        setImportFormat("vcf");
+        const { parseVCardContacts } = await import("@/lib/vcard");
+        const contacts = parseVCardContacts(contents);
+        if (contacts.length === 0) {
+          throw new Error("The VCF file does not contain any contacts.");
+        }
+        setImportVCardContacts(contacts);
+        return;
+      }
+
+      setImportFormat("csv");
+      const parsed = parseCsv(contents);
       setImportHeaders(parsed.headers);
       setImportPreviewRows(parsed.rows.slice(0, 3));
       setImportSourceMapping(buildDefaultImportSourceMapping(parsed.headers));
-    } catch (_error) {
+    } catch (error) {
       toast({
-        title: "Unable to read CSV",
-        description: "Check that the selected file is a valid CSV file.",
+        title: "Unable to read import file",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Check that the selected file is a valid CSV or VCF file.",
         variant: "destructive",
       });
     }
@@ -1570,7 +1598,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                   onClick={() => setIsImportDialogOpen(true)}
                 >
                   <Upload className="h-4 w-4" />
-                  <span>Import CSV</span>
+                  <span>Import contacts</span>
                 </Button>
                 <Link
                   href={`/teams/${teamId}/crm/contacts/create`}
@@ -1590,6 +1618,8 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                   file={importFile}
                   headers={importHeaders}
                   previewRows={importPreviewRows}
+                  format={importFormat}
+                  vcardContacts={importVCardContacts}
                   sourceMapping={importSourceMapping}
                   result={importResult}
                   isImporting={isImporting}
@@ -1600,6 +1630,8 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                       setImportHeaders([]);
                       setImportPreviewRows([]);
                       setImportSourceMapping({});
+                      setImportFormat("csv");
+                      setImportVCardContacts([]);
                       setImportResult(null);
                     }
                   }}
@@ -1761,7 +1793,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
         type="button"
         variant="outline"
         size="icon"
-        aria-label="Import CSV"
+        aria-label="Import contacts"
         className="fixed bottom-20 right-5 z-40 h-12 w-12 rounded-full bg-background shadow-lg sm:hidden"
         onClick={() => setIsImportDialogOpen(true)}
       >
@@ -2073,6 +2105,8 @@ type ContactImportDialogProps = {
   file: File | null;
   headers: string[];
   previewRows: string[][];
+  format: "csv" | "vcf";
+  vcardContacts: VCardContact[];
   sourceMapping: ContactImportSourceMapping;
   result: ContactImportResult | null;
   isImporting: boolean;
@@ -2087,6 +2121,8 @@ const ContactImportDialog = ({
   file,
   headers,
   previewRows,
+  format,
+  vcardContacts,
   sourceMapping,
   result,
   isImporting,
@@ -2098,39 +2134,41 @@ const ContactImportDialog = ({
   const selectedFields = Object.values(sourceMapping);
   const canImport =
     Boolean(file) &&
-    selectedFields.includes("name") &&
-    selectedFields.includes("email") &&
+    (format === "vcf"
+      ? vcardContacts.length > 0
+      : selectedFields.includes("name") && selectedFields.includes("email")) &&
     !isImporting;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-hidden sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Import contacts from CSV</DialogTitle>
+          <DialogTitle>Import contacts</DialogTitle>
           <DialogDescription>
-            Upload a comma-separated file, then map its columns to CRM contact
-            fields. Duplicate emails are skipped.
+            Upload a CSV file and map its columns, or import standard fields
+            automatically from a VCF file. Duplicate emails are skipped.
           </DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
           <div className="space-y-2">
-            <Label htmlFor="contact-import-file">CSV file</Label>
+            <Label htmlFor="contact-import-file">CSV or VCF file</Label>
             <Input
               id="contact-import-file"
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,.vcf,text/csv,text/vcard,text/x-vcard"
               disabled={isImporting}
               onChange={(event) => {
                 onFileChange(event.currentTarget.files?.[0] ?? null);
               }}
             />
             <p className="text-xs text-muted-foreground">
-              Name and email are required. Other mapped columns are optional.
+              CSV rows require a name and email. VCards require a name and at
+              least one email or phone number.
             </p>
           </div>
 
-          {headers.length > 0 && (
+          {format === "csv" && headers.length > 0 && (
             <div className="space-y-3">
               <div className="rounded-md border">
                 <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(12rem,0.8fr)] gap-3 border-b bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">
@@ -2206,17 +2244,50 @@ const ContactImportDialog = ({
             </div>
           )}
 
+          {format === "vcf" && vcardContacts.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-sm font-medium">
+                {vcardContacts.length} contact
+                {vcardContacts.length === 1 ? "" : "s"} found
+              </div>
+              <div className="rounded-md border">
+                <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-3 border-b bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">
+                  <span>Name</span>
+                  <span>Email or phone</span>
+                </div>
+                <div className="divide-y">
+                  {vcardContacts.slice(0, 5).map((contact) => (
+                    <div
+                      key={`${contact.name}-${contact.email ?? ""}-${contact.phone ?? ""}`}
+                      className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-3 px-3 py-2 text-sm"
+                    >
+                      <span className="truncate">{contact.name || "-"}</span>
+                      <span className="truncate text-muted-foreground">
+                        {contact.email ?? contact.phone ?? "-"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Names, emails, phone numbers, preferred addresses, websites, and
+                notes are imported. Photos and custom fields are ignored.
+              </p>
+            </div>
+          )}
+
           {result && (
             <div className="rounded-md border bg-muted/30 p-3 text-sm">
               <div className="font-medium">
                 {result.created} created, {result.skipped} skipped from{" "}
-                {result.totalRows} rows.
+                {result.totalRows} {format === "vcf" ? "contacts" : "rows"}.
               </div>
               {result.skippedRows.length > 0 && (
                 <div className="mt-3 max-h-44 overflow-auto text-muted-foreground">
                   {result.skippedRows.map((row) => (
                     <div key={`${row.rowNumber}-${row.reason}`}>
-                      Row {row.rowNumber}: {row.reason}
+                      {format === "vcf" ? "Contact" : "Row"} {row.rowNumber}:{" "}
+                      {row.reason}
                     </div>
                   ))}
                 </div>

@@ -1,7 +1,21 @@
 import { NextResponse } from "next/server";
 import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
-import { importContactsFromCsv } from "@/services/contacts";
+import {
+  importContactsFromCsv,
+  importContactsFromVCard,
+} from "@/services/contacts";
+
+const getImportFormat = (file: File) => {
+  const fileName = file.name.toLowerCase();
+  if (fileName.endsWith(".vcf")) {
+    return "vcf" as const;
+  }
+  if (fileName.endsWith(".csv")) {
+    return "csv" as const;
+  }
+  return null;
+};
 
 export async function POST(req: Request) {
   try {
@@ -19,32 +33,48 @@ export async function POST(req: Request) {
 
     if (!(file instanceof File)) {
       return NextResponse.json(
-        { error: "CSV file is required" },
+        { error: "CSV or VCF file is required" },
         { status: 400 },
       );
     }
 
     if (file.size > 1024 * 1024) {
       return NextResponse.json(
-        { error: "CSV file must be 1 MB or smaller" },
+        { error: "Import file must be 1 MB or smaller" },
+        { status: 400 },
+      );
+    }
+
+    const format = getImportFormat(file);
+    if (!format) {
+      return NextResponse.json(
+        { error: "Only CSV and VCF files are supported" },
         { status: 400 },
       );
     }
 
     const session = await verifyTeamAccess(teamId, { requireModule: "CRM" });
-    const csv = await file.text();
+    const contents = await file.text();
     const columnMapping =
       typeof rawColumnMapping === "string" && rawColumnMapping.trim()
         ? JSON.parse(rawColumnMapping)
         : undefined;
 
-    const result = await importContactsFromCsv({
-      teamId,
-      csv,
-      columnMapping,
-      userId: session.user.userId,
-      userName: session.user.name ?? undefined,
-    });
+    const result =
+      format === "vcf"
+        ? await importContactsFromVCard({
+            teamId,
+            vcard: contents,
+            userId: session.user.userId,
+            userName: session.user.name ?? undefined,
+          })
+        : await importContactsFromCsv({
+            teamId,
+            csv: contents,
+            columnMapping,
+            userId: session.user.userId,
+            userName: session.user.name ?? undefined,
+          });
 
     return NextResponse.json({ data: result }, { status: 200 });
   } catch (error) {
