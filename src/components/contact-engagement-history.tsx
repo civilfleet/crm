@@ -605,6 +605,15 @@ function EngagementRow({
                         {engagement.inboundEmail.mailbox}
                       </Badge>
                     )}
+                  {engagement.direction === EngagementDirection.OUTBOUND &&
+                    engagement.emailInbox && (
+                      <Badge variant="outline" className="text-xs">
+                        Sent via {engagement.emailInbox.name} /{" "}
+                        {engagement.emailInbox.outboundMode === "SMTP"
+                          ? "SMTP"
+                          : "Scaleway"}
+                      </Badge>
+                    )}
                 </div>
                 <p className="text-base font-semibold">
                   {engagement.subject || "Engagement"}
@@ -624,17 +633,26 @@ function EngagementRow({
                   {isInboundImapEmail(engagement) &&
                     engagement.inboundEmail && (
                       <span>
-                        • From {engagement.inboundEmail.fromName
+                        • From{" "}
+                        {engagement.inboundEmail.fromName
                           ? `${engagement.inboundEmail.fromName} `
                           : ""}
                         &lt;{engagement.inboundEmail.fromEmail}&gt;
+                      </span>
+                    )}
+                  {engagement.direction === EngagementDirection.OUTBOUND &&
+                    engagement.emailInbox?.replyFromEmail && (
+                      <span>
+                        • From &lt;{engagement.emailInbox.replyFromEmail}&gt;
                       </span>
                     )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 {engagement.source === EngagementSource.EMAIL &&
-                  getZammadTicketId(engagement.externalSource) && (
+                  (getZammadTicketId(engagement.externalSource) ||
+                    (isInboundImapEmail(engagement) &&
+                      engagement.inboundEmail?.canReply)) && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -843,7 +861,12 @@ export default function ContactEngagementHistory({
   const { toast } = useToast();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState<{
-    ticketId: string;
+    kind: "zammad" | "inbox";
+    ticketId?: string;
+    inboxId?: string;
+    inboundEmailMessageId?: string;
+    from?: string;
+    to?: string;
     subject: string;
   } | null>(null);
   const [replyMessage, setReplyMessage] = useState("");
@@ -879,20 +902,40 @@ export default function ContactEngagementHistory({
 
   const handleReplyOpen = (engagement: ContactEngagement) => {
     const ticketId = getZammadTicketId(engagement.externalSource);
-    if (!ticketId) {
-      toast({
-        title: "Unable to reply",
-        description: "This engagement is missing a Zammad ticket reference.",
-        variant: "destructive",
+    if (ticketId) {
+      setReplyTarget({
+        kind: "zammad",
+        ticketId,
+        subject: engagement.subject || "Zammad ticket update",
       });
+      setReplySubject(engagement.subject || "Zammad ticket update");
+      setReplyMessage("");
       return;
     }
-    setReplyTarget({
-      ticketId,
-      subject: engagement.subject || "Zammad ticket update",
+
+    if (isInboundImapEmail(engagement) && engagement.inboundEmail?.canReply) {
+      const baseSubject = engagement.subject || "Email reply";
+      const replySubject = /^re:/i.test(baseSubject)
+        ? baseSubject
+        : `Re: ${baseSubject}`;
+      setReplyTarget({
+        kind: "inbox",
+        inboxId: engagement.inboundEmail.emailInboxId,
+        inboundEmailMessageId: engagement.inboundEmail.id,
+        from: engagement.inboundEmail.replyFromEmail,
+        to: engagement.inboundEmail.fromEmail,
+        subject: replySubject,
+      });
+      setReplySubject(replySubject);
+      setReplyMessage("");
+      return;
+    }
+
+    toast({
+      title: "Unable to reply",
+      description: "This email does not have an available reply identity.",
+      variant: "destructive",
     });
-    setReplySubject(engagement.subject || "Zammad ticket update");
-    setReplyMessage("");
   };
 
   const handleReplyClose = () => {
@@ -914,13 +957,18 @@ export default function ContactEngagementHistory({
 
     setIsReplying(true);
     try {
+      const isInboxReply = replyTarget.kind === "inbox";
       const response = await fetch(
-        `/api/teams/${teamId}/integrations/zammad/reply`,
+        isInboxReply
+          ? `/api/teams/${teamId}/email-inboxes/${replyTarget.inboxId}/reply`
+          : `/api/teams/${teamId}/integrations/zammad/reply`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            ticketId: replyTarget.ticketId,
+            ...(isInboxReply
+              ? { inboundEmailMessageId: replyTarget.inboundEmailMessageId }
+              : { ticketId: replyTarget.ticketId }),
             message: replyMessage,
             subject: replySubject || undefined,
             contactId,
@@ -935,7 +983,9 @@ export default function ContactEngagementHistory({
 
       toast({
         title: "Reply sent",
-        description: "Your response was sent to Zammad and logged here.",
+        description: isInboxReply
+          ? "Your email was sent and logged here."
+          : "Your response was sent to Zammad and logged here.",
       });
       handleReplyClose();
       mutate();
@@ -1161,25 +1211,41 @@ export default function ContactEngagementHistory({
       >
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>Reply to Zammad ticket</DialogTitle>
+            <DialogTitle>
+              {replyTarget?.kind === "inbox"
+                ? "Reply by email"
+                : "Reply to Zammad ticket"}
+            </DialogTitle>
             <DialogDescription>
               Send a response that will also be logged in engagement history.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {replyTarget?.kind === "inbox" ? (
+              <div className="grid gap-3 rounded-md border bg-muted/30 p-3 text-sm sm:grid-cols-2">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">From</p>
+                  <p className="truncate font-medium">{replyTarget.from}</p>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">To</p>
+                  <p className="truncate font-medium">{replyTarget.to}</p>
+                </div>
+              </div>
+            ) : null}
             <div className="space-y-2">
-              <Label htmlFor="zammad-reply-subject">Subject</Label>
+              <Label htmlFor="email-reply-subject">Subject</Label>
               <Input
-                id="zammad-reply-subject"
+                id="email-reply-subject"
                 value={replySubject}
                 onChange={(event) => setReplySubject(event.target.value)}
                 placeholder="Subject"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="zammad-reply-message">Message</Label>
+              <Label htmlFor="email-reply-message">Message</Label>
               <Textarea
-                id="zammad-reply-message"
+                id="email-reply-message"
                 value={replyMessage}
                 onChange={(event) => setReplyMessage(event.target.value)}
                 placeholder="Write your reply..."

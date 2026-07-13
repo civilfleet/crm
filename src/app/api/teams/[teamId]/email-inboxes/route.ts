@@ -1,11 +1,9 @@
+import { EmailInboxOutboundMode } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
-import {
-  createEmailInbox,
-  listEmailInboxes,
-} from "@/services/inbound-email";
+import { createEmailInbox, listEmailInboxes } from "@/services/inbound-email";
 
 const inboxSchema = z.object({
   groupId: z.uuid(),
@@ -16,6 +14,16 @@ const inboxSchema = z.object({
   username: z.string().trim().min(1).max(255),
   password: z.string().min(1),
   mailbox: z.string().trim().min(1).max(255).default("INBOX"),
+  outboundMode: z
+    .enum(EmailInboxOutboundMode)
+    .default(EmailInboxOutboundMode.DISABLED),
+  replyFromEmail: z.string().trim().email().max(255).optional(),
+  replyFromName: z.string().trim().max(255).optional(),
+  smtpHost: z.string().trim().max(255).optional(),
+  smtpPort: z.number().int().positive().max(65535).optional(),
+  smtpSecure: z.boolean().default(false),
+  smtpUsername: z.string().trim().max(255).optional(),
+  smtpPassword: z.string().min(1).optional(),
   autoApproveExistingVisible: z.boolean().default(true),
   requireReviewForHiddenMatches: z.boolean().default(true),
   allowCreateContacts: z.boolean().default(false),

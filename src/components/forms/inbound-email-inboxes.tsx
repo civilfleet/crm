@@ -56,6 +56,14 @@ type EmailInboxConfig = {
   secure: boolean;
   username: string;
   mailbox: string;
+  outboundMode: "DISABLED" | "SMTP" | "SCALEWAY";
+  replyFromEmail?: string;
+  replyFromName?: string;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpSecure: boolean;
+  smtpUsername?: string;
+  hasSmtpPassword: boolean;
   autoApproveExistingVisible: boolean;
   requireReviewForHiddenMatches: boolean;
   allowCreateContacts: boolean;
@@ -87,6 +95,14 @@ type InboxFormState = {
   username: string;
   password: string;
   mailbox: string;
+  outboundMode: "DISABLED" | "SMTP" | "SCALEWAY";
+  replyFromEmail: string;
+  replyFromName: string;
+  smtpHost: string;
+  smtpPort: string;
+  smtpSecure: boolean;
+  smtpUsername: string;
+  smtpPassword: string;
   autoApproveExistingVisible: boolean;
   requireReviewForHiddenMatches: boolean;
   allowCreateContacts: boolean;
@@ -107,6 +123,14 @@ const emptyForm = (): InboxFormState => ({
   username: "",
   password: "",
   mailbox: "INBOX",
+  outboundMode: "DISABLED",
+  replyFromEmail: "",
+  replyFromName: "",
+  smtpHost: "",
+  smtpPort: "587",
+  smtpSecure: false,
+  smtpUsername: "",
+  smtpPassword: "",
   autoApproveExistingVisible: true,
   requireReviewForHiddenMatches: true,
   allowCreateContacts: false,
@@ -210,10 +234,7 @@ export default function InboundEmailInboxes({
     [inboxes],
   );
   const groups = useMemo(
-    () =>
-      Array.isArray(groupsResponse?.data)
-        ? groupsResponse.data
-        : [],
+    () => (Array.isArray(groupsResponse?.data) ? groupsResponse.data : []),
     [groupsResponse],
   );
 
@@ -239,6 +260,14 @@ export default function InboundEmailInboxes({
       username: inbox.username,
       password: "",
       mailbox: inbox.mailbox,
+      outboundMode: inbox.outboundMode,
+      replyFromEmail: inbox.replyFromEmail ?? "",
+      replyFromName: inbox.replyFromName ?? "",
+      smtpHost: inbox.smtpHost ?? "",
+      smtpPort: String(inbox.smtpPort ?? 587),
+      smtpSecure: inbox.smtpSecure,
+      smtpUsername: inbox.smtpUsername ?? "",
+      smtpPassword: "",
       autoApproveExistingVisible: inbox.autoApproveExistingVisible,
       requireReviewForHiddenMatches: inbox.requireReviewForHiddenMatches,
       allowCreateContacts: inbox.allowCreateContacts,
@@ -257,6 +286,7 @@ export default function InboundEmailInboxes({
 
   const saveInbox = async () => {
     const port = Number(form.port);
+    const smtpPort = Number(form.smtpPort);
     if (!Number.isFinite(port) || port <= 0 || port > 65535) {
       toast({
         title: "Invalid port",
@@ -270,6 +300,32 @@ export default function InboundEmailInboxes({
       toast({
         title: "Password required",
         description: "Add the IMAP password or app password for this inbox.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (form.outboundMode !== "DISABLED" && !form.replyFromEmail.trim()) {
+      toast({
+        title: "Reply address required",
+        description:
+          "Add the address recipients should see when this inbox replies.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (
+      form.outboundMode === "SMTP" &&
+      (!form.smtpHost.trim() ||
+        !form.smtpUsername.trim() ||
+        !Number.isFinite(smtpPort) ||
+        smtpPort <= 0 ||
+        smtpPort > 65535 ||
+        (!form.smtpPassword && !isEditing))
+    ) {
+      toast({
+        title: "SMTP settings incomplete",
+        description: "Add a valid host, port, username, and password.",
         variant: "destructive",
       });
       return;
@@ -293,6 +349,14 @@ export default function InboundEmailInboxes({
             username: form.username,
             password: form.password || undefined,
             mailbox: form.mailbox || "INBOX",
+            outboundMode: form.outboundMode,
+            replyFromEmail: form.replyFromEmail || undefined,
+            replyFromName: form.replyFromName || undefined,
+            smtpHost: form.smtpHost || undefined,
+            smtpPort: form.outboundMode === "SMTP" ? smtpPort : undefined,
+            smtpSecure: form.smtpSecure,
+            smtpUsername: form.smtpUsername || undefined,
+            smtpPassword: form.smtpPassword || undefined,
             autoApproveExistingVisible: form.autoApproveExistingVisible,
             requireReviewForHiddenMatches: form.requireReviewForHiddenMatches,
             allowCreateContacts: form.allowCreateContacts,
@@ -326,7 +390,7 @@ export default function InboundEmailInboxes({
 
   const runInboxAction = async (
     inbox: EmailInboxConfig,
-    action: "test" | "sync" | "resync" | "delete",
+    action: "test" | "test-outbound" | "sync" | "resync" | "delete",
   ) => {
     setBusyInboxId(`${action}:${inbox.id}`);
     try {
@@ -339,7 +403,9 @@ export default function InboundEmailInboxes({
         {
           method: action === "delete" ? "DELETE" : "POST",
           headers:
-            action === "resync" ? { "Content-Type": "application/json" } : undefined,
+            action === "resync"
+              ? { "Content-Type": "application/json" }
+              : undefined,
           body:
             action === "resync"
               ? JSON.stringify({ resetCheckpoint: true })
@@ -357,9 +423,11 @@ export default function InboundEmailInboxes({
         title:
           action === "test"
             ? "Connection works"
-            : action === "sync" || action === "resync"
-              ? "Sync finished"
-              : "Inbox deleted",
+            : action === "test-outbound"
+              ? "Sending configuration works"
+              : action === "sync" || action === "resync"
+                ? "Sync finished"
+                : "Inbox deleted",
         description:
           (action === "sync" || action === "resync") && json?.data
             ? `Imported ${json.data.imported ?? 0} messages.`
@@ -370,9 +438,11 @@ export default function InboundEmailInboxes({
         title:
           action === "test"
             ? "Connection failed"
-            : action === "sync" || action === "resync"
-              ? "Sync failed"
-              : "Delete failed",
+            : action === "test-outbound"
+              ? "Sending configuration failed"
+              : action === "sync" || action === "resync"
+                ? "Sync failed"
+                : "Delete failed",
         description: (error as Error).message,
         variant: "destructive",
       });
@@ -408,8 +478,8 @@ export default function InboundEmailInboxes({
           <AlertTitle>Group-owned visibility</AlertTitle>
           <AlertDescription>
             Each inbox belongs to one group. If incoming mail matches a contact
-            hidden from that group, admins review the match from Admin,
-            Contact Access Reviews.
+            hidden from that group, admins review the match from Admin, Contact
+            Access Reviews.
           </AlertDescription>
         </Alert>
 
@@ -457,14 +527,16 @@ export default function InboundEmailInboxes({
                     <div className="min-w-0 space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-medium">{inbox.name}</p>
-                        <Badge
-                          variant="secondary"
-                          className={status.className}
-                        >
+                        <Badge variant="secondary" className={status.className}>
                           <StatusIcon className="mr-1 h-3.5 w-3.5" />
                           {status.label}
                         </Badge>
                         <Badge variant="outline">{inbox.groupName}</Badge>
+                        <Badge variant="outline">
+                          {inbox.outboundMode === "DISABLED"
+                            ? "Replies disabled"
+                            : `Replies via ${inbox.outboundMode === "SMTP" ? "SMTP" : "Scaleway"}`}
+                        </Badge>
                       </div>
                       <div className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2 lg:grid-cols-4">
                         <span className="truncate">
@@ -493,6 +565,9 @@ export default function InboundEmailInboxes({
                             ? inbox.allowedDomains.join(", ")
                             : "any"}
                         </span>
+                        <span>
+                          Reply from: {inbox.replyFromEmail ?? "not configured"}
+                        </span>
                       </div>
                       {inbox.lastSyncError ? (
                         <p className="break-words text-sm text-destructive">
@@ -514,6 +589,21 @@ export default function InboundEmailInboxes({
                         )}
                         Test
                       </Button>
+                      {inbox.outboundMode !== "DISABLED" ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => runInboxAction(inbox, "test-outbound")}
+                          disabled={busyInboxId !== null}
+                        >
+                          {busyInboxId === `test-outbound:${inbox.id}` ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <MailCheck className="h-4 w-4" />
+                          )}
+                          Test sending
+                        </Button>
+                      ) : null}
                       <Button
                         variant="outline"
                         size="sm"
@@ -572,7 +662,7 @@ export default function InboundEmailInboxes({
       </CardContent>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{isEditing ? "Edit inbox" : "Add inbox"}</DialogTitle>
             <DialogDescription>
@@ -636,9 +726,7 @@ export default function InboundEmailInboxes({
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={form.secure}
-                    onCheckedChange={(checked) =>
-                      updateForm("secure", checked)
-                    }
+                    onCheckedChange={(checked) => updateForm("secure", checked)}
                   />
                   <Label>TLS</Label>
                 </div>
@@ -650,9 +738,7 @@ export default function InboundEmailInboxes({
               <Input
                 id="inbound-username"
                 value={form.username}
-                onChange={(event) =>
-                  updateForm("username", event.target.value)
-                }
+                onChange={(event) => updateForm("username", event.target.value)}
                 placeholder="support@example.org"
               />
             </div>
@@ -665,9 +751,7 @@ export default function InboundEmailInboxes({
                 id="inbound-password"
                 type="password"
                 value={form.password}
-                onChange={(event) =>
-                  updateForm("password", event.target.value)
-                }
+                onChange={(event) => updateForm("password", event.target.value)}
                 placeholder={isEditing ? "Leave empty to keep current" : ""}
               />
             </div>
@@ -695,6 +779,135 @@ export default function InboundEmailInboxes({
             </div>
           </div>
 
+          <div className="space-y-4 border-t pt-4">
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Outbound replies</p>
+              <p className="text-sm text-muted-foreground">
+                Choose how replies from this inbox are delivered.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Delivery method</Label>
+                <Select
+                  value={form.outboundMode}
+                  onValueChange={(value: "DISABLED" | "SMTP" | "SCALEWAY") =>
+                    updateForm("outboundMode", value)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DISABLED">Disabled</SelectItem>
+                    <SelectItem value="SMTP">Dedicated SMTP</SelectItem>
+                    <SelectItem value="SCALEWAY">Team Scaleway</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reply-from-email">Reply-from address</Label>
+                <Input
+                  id="reply-from-email"
+                  type="email"
+                  value={form.replyFromEmail}
+                  onChange={(event) =>
+                    updateForm("replyFromEmail", event.target.value)
+                  }
+                  placeholder="support@example.org"
+                  disabled={form.outboundMode === "DISABLED"}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="reply-from-name">Sender name</Label>
+                <Input
+                  id="reply-from-name"
+                  value={form.replyFromName}
+                  onChange={(event) =>
+                    updateForm("replyFromName", event.target.value)
+                  }
+                  placeholder="Support team"
+                  disabled={form.outboundMode === "DISABLED"}
+                />
+              </div>
+            </div>
+
+            {form.outboundMode === "SMTP" ? (
+              <div className="grid gap-4 rounded-md border bg-muted/20 p-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="smtp-host">SMTP host</Label>
+                  <Input
+                    id="smtp-host"
+                    value={form.smtpHost}
+                    onChange={(event) =>
+                      updateForm("smtpHost", event.target.value)
+                    }
+                    placeholder="smtp.example.org"
+                  />
+                </div>
+                <div className="grid grid-cols-[1fr_auto] gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="smtp-port">Port</Label>
+                    <Input
+                      id="smtp-port"
+                      inputMode="numeric"
+                      value={form.smtpPort}
+                      onChange={(event) =>
+                        updateForm("smtpPort", event.target.value)
+                      }
+                    />
+                  </div>
+                  <div className="flex items-end pb-2">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={form.smtpSecure}
+                        onCheckedChange={(checked) =>
+                          updateForm("smtpSecure", checked)
+                        }
+                      />
+                      <Label>TLS</Label>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="smtp-username">SMTP username</Label>
+                  <Input
+                    id="smtp-username"
+                    value={form.smtpUsername}
+                    onChange={(event) =>
+                      updateForm("smtpUsername", event.target.value)
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="smtp-password">
+                    {isEditing ? "New SMTP password" : "SMTP password"}
+                  </Label>
+                  <Input
+                    id="smtp-password"
+                    type="password"
+                    value={form.smtpPassword}
+                    onChange={(event) =>
+                      updateForm("smtpPassword", event.target.value)
+                    }
+                    placeholder={isEditing ? "Leave empty to keep current" : ""}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {form.outboundMode === "SCALEWAY" ? (
+              <Alert>
+                <MailCheck className="h-4 w-4" />
+                <AlertTitle>Team Scaleway integration</AlertTitle>
+                <AlertDescription>
+                  The reply address domain must be authorized in the team&apos;s
+                  Scaleway Transactional Email project.
+                </AlertDescription>
+              </Alert>
+            ) : null}
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex items-center justify-between rounded-md border p-4">
               <div className="space-y-1 pr-4">
@@ -715,7 +928,8 @@ export default function InboundEmailInboxes({
               <div className="space-y-1 pr-4">
                 <p className="font-medium">Review hidden matches</p>
                 <p className="text-sm text-muted-foreground">
-                  Queue admin review before adding this group to hidden contacts.
+                  Queue admin review before adding this group to hidden
+                  contacts.
                 </p>
               </div>
               <Switch

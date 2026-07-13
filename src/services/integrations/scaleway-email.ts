@@ -189,7 +189,9 @@ const sendScalewayEmail = async ({
   from,
   to,
   subject,
+  text,
   html,
+  additionalHeaders,
 }: {
   apiKey: string;
   region: string;
@@ -197,7 +199,9 @@ const sendScalewayEmail = async ({
   from: { email: string; name?: string };
   to: { email: string; name?: string };
   subject: string;
+  text?: string;
   html: string;
+  additionalHeaders?: Array<{ key: string; value: string }>;
 }) => {
   const response = await fetch(
     `https://api.scaleway.com/transactional-email/v1alpha1/regions/${region}/emails`,
@@ -211,16 +215,78 @@ const sendScalewayEmail = async ({
         from,
         to: [to],
         subject,
-        text: stripHtml(html),
+        text: text ?? stripHtml(html),
         html,
         project_id: projectId,
+        additional_headers: additionalHeaders,
       }),
     },
   );
 
   await assertOkResponse(response, "Scaleway Transactional Email send failed.");
   const body = await parseScalewayResponse(response);
-  return (body.email ?? body) as ScalewayEmailRecord;
+  const record =
+    body.email ??
+    (Array.isArray(body.emails) ? body.emails[0] : undefined) ??
+    body;
+  return record as ScalewayEmailRecord;
+};
+
+export const sendScalewayTransactionalEmail = async ({
+  teamId,
+  from,
+  to,
+  subject,
+  text,
+  html,
+  additionalHeaders,
+}: {
+  teamId: string;
+  from: { email: string; name?: string };
+  to: { email: string; name?: string };
+  subject: string;
+  text: string;
+  html: string;
+  additionalHeaders?: Array<{ key: string; value: string }>;
+}) => {
+  const integration = await prisma.integrationConnection.findUnique({
+    where: {
+      teamId_provider: {
+        teamId,
+        provider: PrismaIntegrationProvider.SCALEWAY_TEM,
+      },
+    },
+  });
+
+  if (
+    !integration?.isEnabled ||
+    !integration.apiKey ||
+    !integration.defaultListId
+  ) {
+    throw new Error(
+      "The Scaleway Transactional Email integration is not configured or enabled.",
+    );
+  }
+
+  const result = await sendScalewayEmail({
+    apiKey: integration.apiKey,
+    region: integration.baseUrl ?? DEFAULT_REGION,
+    projectId: integration.defaultListId,
+    from,
+    to,
+    subject,
+    text,
+    html,
+    additionalHeaders,
+  });
+
+  return {
+    id: result.id,
+    messageId:
+      "message_id" in result && typeof result.message_id === "string"
+        ? result.message_id
+        : undefined,
+  };
 };
 
 type InternalCopyRecipient = {

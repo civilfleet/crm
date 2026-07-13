@@ -144,11 +144,30 @@ Admin API routes:
 - `DELETE /api/teams/:teamId/email-inboxes/:inboxId`
 - `POST /api/teams/:teamId/email-inboxes/:inboxId/test`
 - `POST /api/teams/:teamId/email-inboxes/:inboxId/sync`
+- `POST /api/teams/:teamId/email-inboxes/:inboxId/test-outbound`
+- `POST /api/teams/:teamId/email-inboxes/:inboxId/reply`
 
 Incoming messages create `ContactEngagement` timeline entries with
 `direction: INBOUND`, `source: EMAIL`, and `externalSource: IMAP` only when the
 matched or created contact is visible to the inbox group, or after an admin
 approves access for a hidden match.
+
+## Replies
+
+An inbox can optionally send replies through dedicated SMTP credentials or the
+team's Scaleway Transactional Email integration. Each inbox has one configured
+reply-from address; replies are sent only to the original message sender.
+
+Only users who can access the contact and belong to the inbox's owning group can
+reply. Team and global admins bypass the inbox-group membership check. The API
+derives sender and recipient addresses from stored records and does not accept
+them from the browser.
+
+Successful replies are stored as outbound `ContactEngagement` records linked to
+both the sending `EmailInbox` and the inbound engagement. Provider message IDs
+and the sending user remain on the engagement. Failed sends do not create an
+engagement and are recorded in system logs. `In-Reply-To` and `References`
+headers preserve the email thread when the inbound message has a Message-ID.
 
 ## Group Visibility
 

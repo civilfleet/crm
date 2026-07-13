@@ -337,10 +337,20 @@ export interface ContactEngagement {
   source: EngagementSource;
   externalId?: string;
   externalSource?: string;
+  emailInbox?: {
+    id: string;
+    name: string;
+    replyFromEmail?: string;
+    outboundMode: "DISABLED" | "SMTP" | "SCALEWAY";
+  };
+  replyToEngagementId?: string;
   inboundEmail?: {
     id: string;
     emailInboxId: string;
     emailInboxName: string;
+    replyFromEmail?: string;
+    outboundMode: "DISABLED" | "SMTP" | "SCALEWAY";
+    canReply: boolean;
     mailbox: string;
     fromEmail: string;
     fromName?: string;

@@ -1,12 +1,16 @@
 import crypto from "node:crypto";
-import { ImapFlow } from "imapflow";
-import { simpleParser, type ParsedMail } from "mailparser";
 import {
   ContactAccessReviewStatus,
+  EmailInboxOutboundMode,
   EngagementDirection,
   EngagementSource,
   type Prisma,
+  IntegrationProvider as PrismaIntegrationProvider,
+  SystemLogLevel,
 } from "@prisma/client";
+import { ImapFlow } from "imapflow";
+import { type ParsedMail, simpleParser } from "mailparser";
+import nodemailer from "nodemailer";
 import sanitizeHtml from "sanitize-html";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
@@ -18,8 +22,18 @@ import {
   getPrimaryEmail,
   primaryContactEmailSelect,
 } from "@/services/contact-emails";
-import { findContactByIdentityEmail } from "@/services/contacts";
+import {
+  findContactByIdentityEmail,
+  getContactById,
+} from "@/services/contacts";
+import { sendScalewayTransactionalEmail } from "@/services/integrations/scaleway-email";
+import { recordSystemLog } from "@/services/system-logs";
 import { ContactEmailKind } from "@/types";
+import {
+  escapeEmailHtml,
+  getStoredReferences,
+  normalizeReplySubject,
+} from "./reply-helpers";
 
 const DEFAULT_INBOX_SYNC_LIMIT = 25;
 const DEFAULT_INBOX_LOCK_MS = 5 * 60 * 1000;
@@ -27,7 +41,8 @@ const IMAP_EXTERNAL_SOURCE = "IMAP";
 const INBOUND_EMAIL_ACCESS_REVIEW_SOURCE = "INBOUND_EMAIL";
 
 const getEncryptionKey = () => {
-  const secret = process.env.INBOUND_EMAIL_ENCRYPTION_KEY ?? process.env.AUTH_SECRET;
+  const secret =
+    process.env.INBOUND_EMAIL_ENCRYPTION_KEY ?? process.env.AUTH_SECRET;
   if (!secret) {
     throw new Error("INBOUND_EMAIL_ENCRYPTION_KEY or AUTH_SECRET is required.");
   }
@@ -116,11 +131,8 @@ const getPreviewText = (value: string, maxLength = 320) => {
   return `${text.slice(0, maxLength - 1).trim()}...`;
 };
 
-const buildExternalId = (
-  inboxId: string,
-  uidValidity: bigint,
-  uid: bigint,
-) => `imap:${inboxId}:${uidValidity.toString()}:${uid.toString()}`;
+const buildExternalId = (inboxId: string, uidValidity: bigint, uid: bigint) =>
+  `imap:${inboxId}:${uidValidity.toString()}:${uid.toString()}`;
 
 const mapInbox = (
   inbox: Prisma.EmailInboxGetPayload<{ include: { group: true } }>,
@@ -135,6 +147,14 @@ const mapInbox = (
   secure: inbox.secure,
   username: inbox.username,
   mailbox: inbox.mailbox,
+  outboundMode: inbox.outboundMode,
+  replyFromEmail: inbox.replyFromEmail ?? undefined,
+  replyFromName: inbox.replyFromName ?? undefined,
+  smtpHost: inbox.smtpHost ?? undefined,
+  smtpPort: inbox.smtpPort ?? undefined,
+  smtpSecure: inbox.smtpSecure,
+  smtpUsername: inbox.smtpUsername ?? undefined,
+  hasSmtpPassword: Boolean(inbox.smtpPasswordEncrypted),
   autoApproveExistingVisible: inbox.autoApproveExistingVisible,
   requireReviewForHiddenMatches: inbox.requireReviewForHiddenMatches,
   allowCreateContacts: inbox.allowCreateContacts,
@@ -152,34 +172,37 @@ const mapInbox = (
 
 const toIso = (value?: Date | null) => value?.toISOString();
 
-type ContactAccessReviewWithInboundEmailDetails = Prisma.ContactAccessReviewGetPayload<{
-  include: {
-    inboundEmailMessage: {
-      include: { emailInbox: { select: { id: true; name: true } } };
-    };
-    group: { select: { id: true; name: true } };
-    contact: {
-      select: {
-        id: true;
-        name: true;
-        emails: { select: { email: true } };
-        group: { select: { id: true; name: true } };
-        groups: { select: { group: { select: { id: true; name: true } } } };
-        engagements: {
-          orderBy: { engagedAt: "desc" };
-          take: 1;
-          select: { engagedAt: true; subject: true; source: true };
+type ContactAccessReviewWithInboundEmailDetails =
+  Prisma.ContactAccessReviewGetPayload<{
+    include: {
+      inboundEmailMessage: {
+        include: { emailInbox: { select: { id: true; name: true } } };
+      };
+      group: { select: { id: true; name: true } };
+      contact: {
+        select: {
+          id: true;
+          name: true;
+          emails: { select: { email: true } };
+          group: { select: { id: true; name: true } };
+          groups: { select: { group: { select: { id: true; name: true } } } };
+          engagements: {
+            orderBy: { engagedAt: "desc" };
+            take: 1;
+            select: { engagedAt: true; subject: true; source: true };
+          };
         };
       };
     };
-  };
-}>;
+  }>;
 
 const mapPendingContactAccessReview = (
   review: ContactAccessReviewWithInboundEmailDetails,
 ) => {
   if (!review.inboundEmailMessage) {
-    throw new Error("Contact access review is missing its inbound email source message.");
+    throw new Error(
+      "Contact access review is missing its inbound email source message.",
+    );
   }
 
   return {
@@ -286,6 +309,14 @@ export type EmailInboxInput = {
   username: string;
   password: string;
   mailbox?: string;
+  outboundMode?: EmailInboxOutboundMode;
+  replyFromEmail?: string;
+  replyFromName?: string;
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpSecure?: boolean;
+  smtpUsername?: string;
+  smtpPassword?: string;
   autoApproveExistingVisible?: boolean;
   requireReviewForHiddenMatches?: boolean;
   allowCreateContacts?: boolean;
@@ -295,11 +326,38 @@ export type EmailInboxInput = {
 
 export type EmailInboxUpdateInput = Omit<
   Partial<EmailInboxInput>,
-  "teamId" | "password"
+  "teamId" | "password" | "smtpPassword"
 > & {
   teamId: string;
   id: string;
   password?: string;
+  smtpPassword?: string;
+};
+
+const normalizeOptional = (value?: string) => value?.trim() || null;
+
+const validateOutboundConfiguration = (input: {
+  outboundMode?: EmailInboxOutboundMode;
+  replyFromEmail?: string | null;
+  smtpHost?: string | null;
+  smtpPort?: number | null;
+  smtpUsername?: string | null;
+  hasSmtpPassword?: boolean;
+}) => {
+  const mode = input.outboundMode ?? EmailInboxOutboundMode.DISABLED;
+  if (mode === EmailInboxOutboundMode.DISABLED) return;
+  if (!normalizeEmail(input.replyFromEmail)) {
+    throw new Error("A valid reply-from email address is required.");
+  }
+  if (
+    mode === EmailInboxOutboundMode.SMTP &&
+    (!input.smtpHost ||
+      !input.smtpPort ||
+      !input.smtpUsername ||
+      !input.hasSmtpPassword)
+  ) {
+    throw new Error("SMTP host, port, username, and password are required.");
+  }
 };
 
 export const listEmailInboxes = async (teamId: string) => {
@@ -322,6 +380,11 @@ export const createEmailInbox = async (input: EmailInboxInput) => {
     throw new Error("Group not found for this team.");
   }
 
+  validateOutboundConfiguration({
+    ...input,
+    hasSmtpPassword: Boolean(input.smtpPassword),
+  });
+
   const inbox = await prisma.emailInbox.create({
     data: {
       teamId: input.teamId,
@@ -333,8 +396,19 @@ export const createEmailInbox = async (input: EmailInboxInput) => {
       username: input.username,
       passwordEncrypted: encryptSecret(input.password),
       mailbox: input.mailbox || "INBOX",
+      outboundMode: input.outboundMode ?? EmailInboxOutboundMode.DISABLED,
+      replyFromEmail: normalizeEmail(input.replyFromEmail),
+      replyFromName: normalizeOptional(input.replyFromName),
+      smtpHost: normalizeOptional(input.smtpHost),
+      smtpPort: input.smtpPort,
+      smtpSecure: input.smtpSecure ?? false,
+      smtpUsername: normalizeOptional(input.smtpUsername),
+      smtpPasswordEncrypted: input.smtpPassword
+        ? encryptSecret(input.smtpPassword)
+        : undefined,
       autoApproveExistingVisible: input.autoApproveExistingVisible ?? true,
-      requireReviewForHiddenMatches: input.requireReviewForHiddenMatches ?? true,
+      requireReviewForHiddenMatches:
+        input.requireReviewForHiddenMatches ?? true,
       allowCreateContacts: input.allowCreateContacts ?? false,
       allowedDomains: normalizeDomains(input.allowedDomains),
       isEnabled: input.isEnabled ?? true,
@@ -348,7 +422,15 @@ export const createEmailInbox = async (input: EmailInboxInput) => {
 export const updateEmailInbox = async (input: EmailInboxUpdateInput) => {
   const existing = await prisma.emailInbox.findFirst({
     where: { id: input.id, teamId: input.teamId },
-    select: { id: true },
+    select: {
+      id: true,
+      outboundMode: true,
+      replyFromEmail: true,
+      smtpHost: true,
+      smtpPort: true,
+      smtpUsername: true,
+      smtpPasswordEncrypted: true,
+    },
   });
 
   if (!existing) {
@@ -366,6 +448,17 @@ export const updateEmailInbox = async (input: EmailInboxUpdateInput) => {
     }
   }
 
+  validateOutboundConfiguration({
+    outboundMode: input.outboundMode ?? existing.outboundMode,
+    replyFromEmail: input.replyFromEmail ?? existing.replyFromEmail,
+    smtpHost: input.smtpHost ?? existing.smtpHost,
+    smtpPort: input.smtpPort ?? existing.smtpPort,
+    smtpUsername: input.smtpUsername ?? existing.smtpUsername,
+    hasSmtpPassword: Boolean(
+      input.smtpPassword || existing.smtpPasswordEncrypted,
+    ),
+  });
+
   const inbox = await prisma.emailInbox.update({
     where: { id: input.id },
     data: {
@@ -379,6 +472,28 @@ export const updateEmailInbox = async (input: EmailInboxUpdateInput) => {
         ? encryptSecret(input.password)
         : undefined,
       mailbox: input.mailbox,
+      outboundMode: input.outboundMode,
+      replyFromEmail:
+        input.replyFromEmail === undefined
+          ? undefined
+          : normalizeEmail(input.replyFromEmail),
+      replyFromName:
+        input.replyFromName === undefined
+          ? undefined
+          : normalizeOptional(input.replyFromName),
+      smtpHost:
+        input.smtpHost === undefined
+          ? undefined
+          : normalizeOptional(input.smtpHost),
+      smtpPort: input.smtpPort,
+      smtpSecure: input.smtpSecure,
+      smtpUsername:
+        input.smtpUsername === undefined
+          ? undefined
+          : normalizeOptional(input.smtpUsername),
+      smtpPasswordEncrypted: input.smtpPassword
+        ? encryptSecret(input.smtpPassword)
+        : undefined,
       autoApproveExistingVisible: input.autoApproveExistingVisible,
       requireReviewForHiddenMatches: input.requireReviewForHiddenMatches,
       allowCreateContacts: input.allowCreateContacts,
@@ -433,6 +548,248 @@ export const testEmailInboxConnection = async (teamId: string, id: string) => {
     lock.release();
   } finally {
     await client.logout();
+  }
+};
+
+const getSmtpTransport = (inbox: {
+  smtpHost: string | null;
+  smtpPort: number | null;
+  smtpSecure: boolean;
+  smtpUsername: string | null;
+  smtpPasswordEncrypted: string | null;
+}) => {
+  if (
+    !inbox.smtpHost ||
+    !inbox.smtpPort ||
+    !inbox.smtpUsername ||
+    !inbox.smtpPasswordEncrypted
+  ) {
+    throw new Error("SMTP sending is not fully configured for this inbox.");
+  }
+
+  return nodemailer.createTransport({
+    host: inbox.smtpHost,
+    port: inbox.smtpPort,
+    secure: inbox.smtpSecure,
+    auth: {
+      user: inbox.smtpUsername,
+      pass: decryptSecret(inbox.smtpPasswordEncrypted),
+    },
+  });
+};
+
+export const testEmailInboxOutboundConnection = async (
+  teamId: string,
+  id: string,
+) => {
+  const inbox = await prisma.emailInbox.findFirst({ where: { id, teamId } });
+  if (!inbox) throw new Error("Email inbox not found.");
+
+  validateOutboundConfiguration({
+    outboundMode: inbox.outboundMode,
+    replyFromEmail: inbox.replyFromEmail,
+    smtpHost: inbox.smtpHost,
+    smtpPort: inbox.smtpPort,
+    smtpUsername: inbox.smtpUsername,
+    hasSmtpPassword: Boolean(inbox.smtpPasswordEncrypted),
+  });
+
+  if (inbox.outboundMode === EmailInboxOutboundMode.DISABLED) {
+    throw new Error("Outbound replies are disabled for this inbox.");
+  }
+
+  if (inbox.outboundMode === EmailInboxOutboundMode.SMTP) {
+    await getSmtpTransport(inbox).verify();
+    return;
+  }
+
+  const integration = await prisma.integrationConnection.findUnique({
+    where: {
+      teamId_provider: {
+        teamId,
+        provider: PrismaIntegrationProvider.SCALEWAY_TEM,
+      },
+    },
+    select: { apiKey: true, defaultListId: true, isEnabled: true },
+  });
+  if (
+    !integration?.isEnabled ||
+    !integration.apiKey ||
+    !integration.defaultListId
+  ) {
+    throw new Error(
+      "The Scaleway Transactional Email integration is not configured or enabled.",
+    );
+  }
+};
+
+export const replyToInboundEmail = async ({
+  teamId,
+  inboxId,
+  inboundEmailMessageId,
+  subject,
+  message,
+  userId,
+  userName,
+  roles,
+  isTeamAdmin,
+}: {
+  teamId: string;
+  inboxId: string;
+  inboundEmailMessageId: string;
+  subject?: string;
+  message: string;
+  userId: string;
+  userName?: string;
+  roles: import("@/types").Roles[];
+  isTeamAdmin: boolean;
+}) => {
+  const inbound = await prisma.inboundEmailMessage.findFirst({
+    where: { id: inboundEmailMessageId, teamId, emailInboxId: inboxId },
+    include: { emailInbox: true },
+  });
+  if (!inbound?.contactId || !inbound.engagementId) {
+    throw new Error(
+      "The inbound email is not linked to an accessible contact engagement.",
+    );
+  }
+
+  const contact = await getContactById(
+    inbound.contactId,
+    teamId,
+    userId,
+    roles,
+  );
+  if (!contact) throw new Error("You do not have access to this contact.");
+
+  if (!isTeamAdmin) {
+    const membership = await prisma.userGroup.findUnique({
+      where: {
+        userId_groupId: { userId, groupId: inbound.emailInbox.groupId },
+      },
+      select: { userId: true },
+    });
+    if (!membership) {
+      throw new Error("You do not have access to send from this group inbox.");
+    }
+  }
+
+  const inbox = inbound.emailInbox;
+  validateOutboundConfiguration({
+    outboundMode: inbox.outboundMode,
+    replyFromEmail: inbox.replyFromEmail,
+    smtpHost: inbox.smtpHost,
+    smtpPort: inbox.smtpPort,
+    smtpUsername: inbox.smtpUsername,
+    hasSmtpPassword: Boolean(inbox.smtpPasswordEncrypted),
+  });
+  if (
+    inbox.outboundMode === EmailInboxOutboundMode.DISABLED ||
+    !inbox.replyFromEmail
+  ) {
+    throw new Error("Outbound replies are disabled for this inbox.");
+  }
+
+  const normalizedSubject = normalizeReplySubject(subject ?? inbound.subject);
+  const normalizedMessage = message.trim();
+  const references = getStoredReferences(inbound.rawHeaders, inbound.messageId);
+  const threadHeaders = [
+    ...(inbound.messageId
+      ? [{ key: "In-Reply-To", value: inbound.messageId }]
+      : []),
+    ...(references.length
+      ? [{ key: "References", value: references.join(" ") }]
+      : []),
+  ];
+
+  try {
+    let providerMessageId: string | undefined;
+    let externalSource: string;
+    if (inbox.outboundMode === EmailInboxOutboundMode.SMTP) {
+      const info = await getSmtpTransport(inbox).sendMail({
+        from: {
+          address: inbox.replyFromEmail,
+          name: inbox.replyFromName ?? "",
+        },
+        to: { address: inbound.fromEmail, name: inbound.fromName ?? "" },
+        subject: normalizedSubject,
+        text: normalizedMessage,
+        html: `<p>${escapeEmailHtml(normalizedMessage)}</p>`,
+        inReplyTo: inbound.messageId ?? undefined,
+        references: references.length ? references : undefined,
+      });
+      providerMessageId = info.messageId;
+      externalSource = "INBOX_SMTP";
+    } else {
+      const result = await sendScalewayTransactionalEmail({
+        teamId,
+        from: {
+          email: inbox.replyFromEmail,
+          name: inbox.replyFromName ?? undefined,
+        },
+        to: { email: inbound.fromEmail, name: inbound.fromName ?? undefined },
+        subject: normalizedSubject,
+        text: normalizedMessage,
+        html: `<p>${escapeEmailHtml(normalizedMessage)}</p>`,
+        additionalHeaders: threadHeaders,
+      });
+      providerMessageId = result.messageId ?? result.id;
+      externalSource = "INBOX_SCALEWAY";
+    }
+
+    const sentAt = new Date();
+    const engagement = await prisma.contactEngagement.create({
+      data: {
+        contactId: inbound.contactId,
+        teamId,
+        direction: EngagementDirection.OUTBOUND,
+        source: EngagementSource.EMAIL,
+        subject: normalizedSubject,
+        message: normalizedMessage,
+        userId,
+        userName,
+        externalId: providerMessageId,
+        externalSource,
+        emailInboxId: inbox.id,
+        replyToEngagementId: inbound.engagementId,
+        engagedAt: sentAt,
+      },
+    });
+
+    await recordSystemLog({
+      teamId,
+      source: "INBOUND_EMAIL",
+      event: "inbound_email_reply_sent",
+      message: `Reply sent from inbox ${inbox.id}.`,
+      entityType: "EmailInbox",
+      entityId: inbox.id,
+      metadata: {
+        engagementId: engagement.id,
+        inboundEmailMessageId: inbound.id,
+        contactId: inbound.contactId,
+        transport: inbox.outboundMode,
+        providerMessageId,
+        userId,
+      },
+    });
+    return engagement;
+  } catch (error) {
+    await recordSystemLog({
+      teamId,
+      level: SystemLogLevel.ERROR,
+      source: "INBOUND_EMAIL",
+      event: "inbound_email_reply_failed",
+      message: `Reply from inbox ${inbox.id} failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      entityType: "EmailInbox",
+      entityId: inbox.id,
+      metadata: {
+        inboundEmailMessageId: inbound.id,
+        contactId: inbound.contactId,
+        transport: inbox.outboundMode,
+        userId,
+      },
+    });
+    throw error;
   }
 };
 
@@ -535,7 +892,8 @@ const resolveContactForInboundEmail = async ({
       needsAccessReview:
         (isVisibleToInboxGroup && !autoApproveExistingVisible) ||
         (!isVisibleToInboxGroup && requireReviewForHiddenMatches),
-      canAutoGrantAccess: !isVisibleToInboxGroup && !requireReviewForHiddenMatches,
+      canAutoGrantAccess:
+        !isVisibleToInboxGroup && !requireReviewForHiddenMatches,
       reason: isVisibleToInboxGroup
         ? autoApproveExistingVisible
           ? "existing-visible"
@@ -697,7 +1055,9 @@ const importMessage = async ({
       const nextGroupIds = Array.from(new Set([...oldGroupIds, inbox.groupId]));
 
       await tx.contactGroup.createMany({
-        data: [{ contactId: contactResolution.contactId, groupId: inbox.groupId }],
+        data: [
+          { contactId: contactResolution.contactId, groupId: inbox.groupId },
+        ],
         skipDuplicates: true,
       });
 
@@ -790,7 +1150,11 @@ const importMessage = async ({
       },
     });
 
-    return { inboundId: inbound.id, engagementId: engagement.id, alreadyImported };
+    return {
+      inboundId: inbound.id,
+      engagementId: engagement.id,
+      alreadyImported,
+    };
   });
 
   if (result.alreadyImported) {
@@ -814,7 +1178,9 @@ const importMessage = async ({
   };
 };
 
-export const listContactAccessReviewsForInboundEmail = async (teamId: string) => {
+export const listContactAccessReviewsForInboundEmail = async (
+  teamId: string,
+) => {
   const reviews = await prisma.contactAccessReview.findMany({
     where: {
       teamId,
@@ -869,7 +1235,9 @@ export const approveContactAccessReviewForInboundEmail = async ({
 
     const message = review.inboundEmailMessage;
     if (!message) {
-      throw new Error("Contact access review is missing its inbound email source message.");
+      throw new Error(
+        "Contact access review is missing its inbound email source message.",
+      );
     }
 
     const oldGroupIds = review.contact.groups.map((group) => group.groupId);
@@ -1034,7 +1402,9 @@ export const revokeContactAccessReviewForInboundEmail = async ({
 
     const message = review.inboundEmailMessage;
     if (!message) {
-      throw new Error("Contact access review is missing its inbound email source message.");
+      throw new Error(
+        "Contact access review is missing its inbound email source message.",
+      );
     }
 
     const otherApprovedReviews = await tx.contactAccessReview.count({
@@ -1068,7 +1438,9 @@ export const revokeContactAccessReviewForInboundEmail = async ({
         },
       });
 
-      nextGroupIds = oldGroupIds.filter((groupId) => groupId !== review.groupId);
+      nextGroupIds = oldGroupIds.filter(
+        (groupId) => groupId !== review.groupId,
+      );
 
       if (review.contact.groupId === review.groupId) {
         await tx.contact.update({
@@ -1207,7 +1579,9 @@ export const syncEmailInbox = async (
 
       const uidValidity = mailbox.uidValidity;
       const startUid =
-        !options.resetCheckpoint && inbox.uidValidity === uidValidity && inbox.lastUid
+        !options.resetCheckpoint &&
+        inbox.uidValidity === uidValidity &&
+        inbox.lastUid
           ? inbox.lastUid + BigInt(1)
           : BigInt(1);
       const uidNext = mailbox.uidNext ? BigInt(mailbox.uidNext) : null;

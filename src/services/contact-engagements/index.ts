@@ -41,6 +41,14 @@ type UpdateEngagementInput = {
 
 type ContactEngagementWithDefaults = Prisma.ContactEngagementGetPayload<{
   include: {
+    emailInbox: {
+      select: {
+        id: true;
+        name: true;
+        replyFromEmail: true;
+        outboundMode: true;
+      };
+    };
     inboundEmailMessages: {
       take: 1;
       select: {
@@ -54,6 +62,9 @@ type ContactEngagementWithDefaults = Prisma.ContactEngagementGetPayload<{
         emailInbox: {
           select: {
             name: true;
+            groupId: true;
+            replyFromEmail: true;
+            outboundMode: true;
           };
         };
       };
@@ -63,6 +74,7 @@ type ContactEngagementWithDefaults = Prisma.ContactEngagementGetPayload<{
 
 const mapEngagement = (
   engagement: ContactEngagementWithDefaults,
+  replyInboxIds: Set<string> = new Set(),
 ): ContactEngagement => ({
   id: engagement.id,
   contactId: engagement.contactId,
@@ -75,11 +87,32 @@ const mapEngagement = (
   userName: engagement.userName ?? undefined,
   externalId: engagement.externalId ?? undefined,
   externalSource: engagement.externalSource ?? undefined,
+  emailInbox: engagement.emailInbox
+    ? {
+        id: engagement.emailInbox.id,
+        name: engagement.emailInbox.name,
+        replyFromEmail: engagement.emailInbox.replyFromEmail ?? undefined,
+        outboundMode: engagement.emailInbox.outboundMode,
+      }
+    : undefined,
+  replyToEngagementId: engagement.replyToEngagementId ?? undefined,
   inboundEmail: engagement.inboundEmailMessages[0]
     ? {
         id: engagement.inboundEmailMessages[0].id,
         emailInboxId: engagement.inboundEmailMessages[0].emailInboxId,
         emailInboxName: engagement.inboundEmailMessages[0].emailInbox.name,
+        replyFromEmail:
+          engagement.inboundEmailMessages[0].emailInbox.replyFromEmail ??
+          undefined,
+        outboundMode:
+          engagement.inboundEmailMessages[0].emailInbox.outboundMode,
+        canReply:
+          engagement.inboundEmailMessages[0].emailInbox.outboundMode !==
+            "DISABLED" &&
+          Boolean(
+            engagement.inboundEmailMessages[0].emailInbox.replyFromEmail,
+          ) &&
+          replyInboxIds.has(engagement.inboundEmailMessages[0].emailInboxId),
         mailbox: engagement.inboundEmailMessages[0].mailbox,
         fromEmail: engagement.inboundEmailMessages[0].fromEmail,
         fromName: engagement.inboundEmailMessages[0].fromName ?? undefined,
@@ -103,6 +136,7 @@ const getContactEngagements = async (
   contactId: string,
   teamId: string,
   allowedSubmodules?: ContactSubmodule[],
+  replyAccess?: { userId: string; isAdmin: boolean },
 ) => {
   const submoduleFilters: Prisma.ContactEngagementWhereInput[] = [
     { restrictedToSubmodule: null },
@@ -114,7 +148,7 @@ const getContactEngagements = async (
     });
   }
 
-  const engagements = await prisma.contactEngagement.findMany({
+  const engagementsPromise = prisma.contactEngagement.findMany({
     where: {
       contactId,
       teamId,
@@ -124,6 +158,14 @@ const getContactEngagements = async (
       engagedAt: "desc",
     },
     include: {
+      emailInbox: {
+        select: {
+          id: true,
+          name: true,
+          replyFromEmail: true,
+          outboundMode: true,
+        },
+      },
       inboundEmailMessages: {
         take: 1,
         select: {
@@ -137,6 +179,9 @@ const getContactEngagements = async (
           emailInbox: {
             select: {
               name: true,
+              groupId: true,
+              replyFromEmail: true,
+              outboundMode: true,
             },
           },
         },
@@ -144,7 +189,28 @@ const getContactEngagements = async (
     },
   });
 
-  return engagements.map(mapEngagement);
+  const replyInboxesPromise = replyAccess
+    ? prisma.emailInbox.findMany({
+        where: {
+          teamId,
+          outboundMode: { not: "DISABLED" },
+          ...(replyAccess.isAdmin
+            ? {}
+            : { group: { users: { some: { userId: replyAccess.userId } } } }),
+        },
+        select: { id: true },
+      })
+    : Promise.resolve([]);
+
+  const [engagements, replyInboxes] = await Promise.all([
+    engagementsPromise,
+    replyInboxesPromise,
+  ]);
+  const replyInboxIds = new Set(replyInboxes.map((inbox) => inbox.id));
+
+  return engagements.map((engagement) =>
+    mapEngagement(engagement, replyInboxIds),
+  );
 };
 
 const createEngagement = async (input: CreateEngagementInput) => {
@@ -168,6 +234,14 @@ const createEngagement = async (input: CreateEngagementInput) => {
       engagedAt: input.engagedAt,
     },
     include: {
+      emailInbox: {
+        select: {
+          id: true,
+          name: true,
+          replyFromEmail: true,
+          outboundMode: true,
+        },
+      },
       inboundEmailMessages: {
         take: 1,
         select: {
@@ -181,6 +255,9 @@ const createEngagement = async (input: CreateEngagementInput) => {
           emailInbox: {
             select: {
               name: true,
+              groupId: true,
+              replyFromEmail: true,
+              outboundMode: true,
             },
           },
         },
@@ -201,6 +278,14 @@ const updateEngagement = async (input: UpdateEngagementInput) => {
     },
     data: updateData,
     include: {
+      emailInbox: {
+        select: {
+          id: true,
+          name: true,
+          replyFromEmail: true,
+          outboundMode: true,
+        },
+      },
       inboundEmailMessages: {
         take: 1,
         select: {
@@ -214,6 +299,9 @@ const updateEngagement = async (input: UpdateEngagementInput) => {
           emailInbox: {
             select: {
               name: true,
+              groupId: true,
+              replyFromEmail: true,
+              outboundMode: true,
             },
           },
         },

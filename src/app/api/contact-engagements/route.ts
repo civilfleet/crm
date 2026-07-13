@@ -16,6 +16,7 @@ import {
   updateEngagement,
 } from "@/services/contact-engagements";
 import { sendTagMentionNotifications } from "@/services/mentions";
+import { getTeamAdminAccess } from "@/services/teams/access";
 import {
   EngagementDirection,
   EngagementSource,
@@ -190,11 +191,15 @@ export async function GET(request: NextRequest) {
     const userId = await resolveUserId(session);
     const roles = (session?.user?.roles ?? []) as Roles[];
     const allowedSubmodules = await getAllowedSubmodules(teamId, userId, roles);
+    const adminAccess = userId
+      ? await getTeamAdminAccess(userId, teamId, roles)
+      : { allowed: false };
 
     const engagements = await getContactEngagements(
       contactId,
       teamId,
       allowedSubmodules,
+      userId ? { userId, isAdmin: adminAccess.allowed } : undefined,
     );
 
     return NextResponse.json({ data: engagements }, { status: 200 });

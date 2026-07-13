@@ -669,6 +669,14 @@ model EmailInbox {
   username     String   @db.VarChar(255)
   passwordEncrypted String @db.Text
   mailbox      String   @default("INBOX") @db.VarChar(255)
+  outboundMode EmailInboxOutboundMode @default(DISABLED)
+  replyFromEmail String? @db.VarChar(255)
+  replyFromName String? @db.VarChar(255)
+  smtpHost String? @db.VarChar(255)
+  smtpPort Int?
+  smtpSecure Boolean @default(false)
+  smtpUsername String? @db.VarChar(255)
+  smtpPasswordEncrypted String? @db.Text
   autoApproveExistingVisible Boolean @default(true)
   requireReviewForHiddenMatches Boolean @default(true)
   allowCreateContacts Boolean @default(false)
@@ -683,6 +691,7 @@ model EmailInbox {
   lastSyncError String? @db.Text
 
   messages     InboundEmailMessage[]
+  sentEngagements ContactEngagement[]
   createdAt    DateTime @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime @updatedAt @db.Timestamptz(6)
 
@@ -690,6 +699,12 @@ model EmailInbox {
   @@index([groupId])
   @@index([isEnabled])
   @@index([syncLockedAt])
+}
+
+enum EmailInboxOutboundMode {
+  DISABLED
+  SMTP
+  SCALEWAY
 }
 
 model InboundEmailMessage {
@@ -1162,6 +1177,11 @@ model ContactEngagement {
   userName    String?              @db.VarChar(255) // Store name for display even if user deleted
   externalId  String?              @db.VarChar(255)
   externalSource String?           @db.VarChar(255)
+  emailInboxId String?
+  emailInbox EmailInbox? @relation(fields: [emailInboxId], references: [id], onDelete: SetNull)
+  replyToEngagementId String?
+  replyToEngagement ContactEngagement? @relation("EngagementReplies", fields: [replyToEngagementId], references: [id], onDelete: SetNull)
+  replies ContactEngagement[] @relation("EngagementReplies")
   restrictedToSubmodule ContactSubmodule?
 
   // Todo-specific fields
@@ -1177,6 +1197,8 @@ model ContactEngagement {
 
   @@index([contactId])
   @@index([teamId])
+  @@index([emailInboxId])
+  @@index([replyToEngagementId])
   @@index([engagedAt])
   @@index([assignedToUserId])
   @@index([todoStatus])

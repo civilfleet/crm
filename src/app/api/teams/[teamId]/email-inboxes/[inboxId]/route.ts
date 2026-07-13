@@ -1,11 +1,9 @@
+import { EmailInboxOutboundMode } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
-import {
-  deleteEmailInbox,
-  updateEmailInbox,
-} from "@/services/inbound-email";
+import { deleteEmailInbox, updateEmailInbox } from "@/services/inbound-email";
 
 const updateInboxSchema = z.object({
   groupId: z.uuid().optional(),
@@ -16,6 +14,14 @@ const updateInboxSchema = z.object({
   username: z.string().trim().min(1).max(255).optional(),
   password: z.string().min(1).optional(),
   mailbox: z.string().trim().min(1).max(255).optional(),
+  outboundMode: z.enum(EmailInboxOutboundMode).optional(),
+  replyFromEmail: z.string().trim().email().max(255).optional(),
+  replyFromName: z.string().trim().max(255).optional(),
+  smtpHost: z.string().trim().max(255).optional(),
+  smtpPort: z.number().int().positive().max(65535).optional(),
+  smtpSecure: z.boolean().optional(),
+  smtpUsername: z.string().trim().max(255).optional(),
+  smtpPassword: z.string().min(1).optional(),
   autoApproveExistingVisible: z.boolean().optional(),
   requireReviewForHiddenMatches: z.boolean().optional(),
   allowCreateContacts: z.boolean().optional(),
