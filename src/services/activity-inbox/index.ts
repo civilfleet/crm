@@ -166,7 +166,10 @@ export const getActivityInbox = async (
     ],
   };
   const skip = (filters.page - 1) * filters.pageSize;
-  const orderBy = [{ createdAt: "desc" }, { id: "desc" }] as const;
+  const orderBy: Prisma.ContactEngagementOrderByWithRelationInput[] = [
+    { createdAt: "desc" },
+    { id: "desc" },
+  ];
   const [total, unreadCount, filteredUnreadCount, replyInboxIds] =
     await Promise.all([
       prisma.contactEngagement.count({ where: filteredWhere }),
