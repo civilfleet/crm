@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { ContactSubmodule } from "@/constants/contact-submodules";
 import prisma from "@/lib/prisma";
+import { resolveInboundRecipientEmail } from "@/services/contact-engagements/recipient";
 import type {
   ContactEngagement,
   EngagementDirection,
@@ -57,12 +58,14 @@ type ContactEngagementWithDefaults = Prisma.ContactEngagementGetPayload<{
         mailbox: true;
         fromEmail: true;
         fromName: true;
+        rawHeaders: true;
         messageId: true;
         uid: true;
         emailInbox: {
           select: {
             name: true;
             groupId: true;
+            username: true;
             replyFromEmail: true;
             outboundMode: true;
           };
@@ -116,6 +119,12 @@ const mapEngagement = (
         mailbox: engagement.inboundEmailMessages[0].mailbox,
         fromEmail: engagement.inboundEmailMessages[0].fromEmail,
         fromName: engagement.inboundEmailMessages[0].fromName ?? undefined,
+        receivedAtEmail: resolveInboundRecipientEmail({
+          rawHeaders: engagement.inboundEmailMessages[0].rawHeaders,
+          inboxUsername: engagement.inboundEmailMessages[0].emailInbox.username,
+          replyFromEmail:
+            engagement.inboundEmailMessages[0].emailInbox.replyFromEmail,
+        }),
         messageId: engagement.inboundEmailMessages[0].messageId ?? undefined,
         uid: engagement.inboundEmailMessages[0].uid.toString(),
       }
@@ -174,12 +183,14 @@ const getContactEngagements = async (
           mailbox: true,
           fromEmail: true,
           fromName: true,
+          rawHeaders: true,
           messageId: true,
           uid: true,
           emailInbox: {
             select: {
               name: true,
               groupId: true,
+              username: true,
               replyFromEmail: true,
               outboundMode: true,
             },
@@ -250,12 +261,14 @@ const createEngagement = async (input: CreateEngagementInput) => {
           mailbox: true,
           fromEmail: true,
           fromName: true,
+          rawHeaders: true,
           messageId: true,
           uid: true,
           emailInbox: {
             select: {
               name: true,
               groupId: true,
+              username: true,
               replyFromEmail: true,
               outboundMode: true,
             },
@@ -294,12 +307,14 @@ const updateEngagement = async (input: UpdateEngagementInput) => {
           mailbox: true,
           fromEmail: true,
           fromName: true,
+          rawHeaders: true,
           messageId: true,
           uid: true,
           emailInbox: {
             select: {
               name: true,
               groupId: true,
+              username: true,
               replyFromEmail: true,
               outboundMode: true,
             },

@@ -25,7 +25,7 @@ type ActivityInboxAccess = {
 };
 
 type ActivityInboxFilters = {
-  status: "unread" | "all";
+  status: "unread-first" | "all";
   page: number;
   pageSize: number;
   source?: EngagementSource;
@@ -63,12 +63,14 @@ const getInboxInclude = (userId: string) =>
         mailbox: true,
         fromEmail: true,
         fromName: true,
+        rawHeaders: true,
         messageId: true,
         uid: true,
         emailInbox: {
           select: {
             name: true,
             groupId: true,
+            username: true,
             replyFromEmail: true,
             outboundMode: true,
           },
@@ -148,7 +150,6 @@ export const getActivityInbox = async (
   const filteredWhere: Prisma.ContactEngagementWhereInput = {
     AND: [
       visibleWhere,
-      ...(filters.status === "unread" ? [unreadWhere] : []),
       ...(filters.source ? [{ source: filters.source }] : []),
       ...(filters.direction ? [{ direction: filters.direction }] : []),
       ...(query
@@ -165,21 +166,60 @@ export const getActivityInbox = async (
     ],
   };
   const skip = (filters.page - 1) * filters.pageSize;
+  const orderBy = [{ createdAt: "desc" }, { id: "desc" }] as const;
+  const [total, unreadCount, filteredUnreadCount, replyInboxIds] =
+    await Promise.all([
+      prisma.contactEngagement.count({ where: filteredWhere }),
+      prisma.contactEngagement.count({
+        where: { AND: [visibleWhere, unreadWhere] },
+      }),
+      filters.status === "unread-first"
+        ? prisma.contactEngagement.count({
+            where: { AND: [filteredWhere, unreadWhere] },
+          })
+        : Promise.resolve(0),
+      getReplyInboxIds(access),
+    ]);
 
-  const [engagements, total, unreadCount, replyInboxIds] = await Promise.all([
-    prisma.contactEngagement.findMany({
-      where: filteredWhere,
+  const engagements = await (async () => {
+    if (filters.status === "all") {
+      return prisma.contactEngagement.findMany({
+        where: filteredWhere,
+        include: getInboxInclude(access.userId),
+        orderBy,
+        skip,
+        take: filters.pageSize,
+      });
+    }
+
+    if (skip >= filteredUnreadCount) {
+      return prisma.contactEngagement.findMany({
+        where: { AND: [filteredWhere, { NOT: unreadWhere }] },
+        include: getInboxInclude(access.userId),
+        orderBy,
+        skip: skip - filteredUnreadCount,
+        take: filters.pageSize,
+      });
+    }
+
+    const unreadItems = await prisma.contactEngagement.findMany({
+      where: { AND: [filteredWhere, unreadWhere] },
       include: getInboxInclude(access.userId),
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      orderBy,
       skip,
       take: filters.pageSize,
-    }),
-    prisma.contactEngagement.count({ where: filteredWhere }),
-    prisma.contactEngagement.count({
-      where: { AND: [visibleWhere, unreadWhere] },
-    }),
-    getReplyInboxIds(access),
-  ]);
+    });
+    const remaining = filters.pageSize - unreadItems.length;
+    if (remaining === 0) return unreadItems;
+
+    const readItems = await prisma.contactEngagement.findMany({
+      where: { AND: [filteredWhere, { NOT: unreadWhere }] },
+      include: getInboxInclude(access.userId),
+      orderBy,
+      take: remaining,
+    });
+    return [...unreadItems, ...readItems];
+  })();
 
   const items: ActivityInboxItem[] = engagements.map((engagement) => {
     const explicitState = engagement.userStates.find(

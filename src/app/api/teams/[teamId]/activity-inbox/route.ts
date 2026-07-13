@@ -25,7 +25,7 @@ export async function GET(
       ? Math.min(100, Math.max(1, Math.floor(rawPageSize)))
       : 25;
     const result = await getActivityInbox(access, {
-      status: searchParams.get("status") === "all" ? "all" : "unread",
+      status: searchParams.get("status") === "all" ? "all" : "unread-first",
       page,
       pageSize,
       source: parseEnum(

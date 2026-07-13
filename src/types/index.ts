@@ -354,6 +354,7 @@ export interface ContactEngagement {
     mailbox: string;
     fromEmail: string;
     fromName?: string;
+    receivedAtEmail?: string;
     messageId?: string;
     uid?: string;
   };

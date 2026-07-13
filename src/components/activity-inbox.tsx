@@ -78,6 +78,7 @@ type InboxItem = {
     canReply: boolean;
     fromEmail: string;
     fromName?: string;
+    receivedAtEmail?: string;
     mailbox: string;
   };
   emailInbox?: { name: string; replyFromEmail?: string };
@@ -157,7 +158,7 @@ function SafeHtml({ html }: { html: string }) {
 export default function ActivityInbox({ teamId }: { teamId: string }) {
   const { toast } = useToast();
   const { mutate: mutateGlobal } = useSWRConfig();
-  const [status, setStatus] = useState<"unread" | "all">("unread");
+  const [status, setStatus] = useState<"unread-first" | "all">("unread-first");
   const [page, setPage] = useState(1);
   const [source, setSource] = useState("all");
   const [direction, setDirection] = useState("all");
@@ -321,7 +322,7 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
 
         <div className="flex flex-col gap-3 border-y py-3 lg:flex-row lg:items-center">
           <div className="inline-flex h-9 w-fit items-center rounded-md border p-1">
-            {(["unread", "all"] as const).map((value) => (
+            {(["unread-first", "all"] as const).map((value) => (
               <button
                 key={value}
                 type="button"
@@ -331,8 +332,8 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
                   setPage(1);
                 }}
               >
-                {value === "unread"
-                  ? `Unread${result ? ` (${result.unreadCount})` : ""}`
+                {value === "unread-first"
+                  ? `Unread first${result ? ` (${result.unreadCount})` : ""}`
                   : "All"}
               </button>
             ))}
@@ -432,7 +433,12 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
                       </p>
                       <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
                         <DirectionIcon className="h-3.5 w-3.5" />
-                        {sourceLabels[item.source]}
+                        <span className="truncate">
+                          {sourceLabels[item.source]}
+                          {item.inboundEmail?.receivedAtEmail
+                            ? ` - ${item.inboundEmail.receivedAtEmail}`
+                            : ""}
+                        </span>
                       </div>
                     </div>
                     <div className="col-span-2 min-w-0 sm:col-span-1">
@@ -455,13 +461,9 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
           ) : (
             <div className="flex h-80 flex-col items-center justify-center gap-2 px-6 text-center">
               <Inbox className="h-8 w-8 text-muted-foreground" />
-              <p className="font-medium">
-                {status === "unread" ? "You're caught up" : "No activity found"}
-              </p>
+              <p className="font-medium">No activity found</p>
               <p className="max-w-sm text-sm text-muted-foreground">
-                {status === "unread"
-                  ? "New engagement activity will appear here."
-                  : "Try changing the search or filters."}
+                Try changing the search or filters.
               </p>
             </div>
           )}
@@ -574,6 +576,14 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
                         ? `${selected.inboundEmail.fromName} <${selected.inboundEmail.fromEmail}>`
                         : selected.inboundEmail.fromEmail}
                     </dd>
+                    {selected.inboundEmail.receivedAtEmail ? (
+                      <>
+                        <dt className="text-muted-foreground">Received at</dt>
+                        <dd className="break-all">
+                          {selected.inboundEmail.receivedAtEmail}
+                        </dd>
+                      </>
+                    ) : null}
                   </>
                 ) : null}
                 {selected.userName ? (

@@ -4,8 +4,8 @@ import {
   Building,
   Calendar,
   FolderOpen,
-  List,
   Inbox,
+  List,
   type LucideIcon,
   Mail,
   Scroll,
@@ -96,6 +96,12 @@ const navItems: {
       module: "CRM",
     },
     {
+      title: "Activity Inbox",
+      url: "crm/activity-inbox",
+      icon: Inbox,
+      module: "CRM",
+    },
+    {
       title: "Organizations",
       url: "crm/organizations",
       icon: Building,
@@ -105,12 +111,6 @@ const navItems: {
       title: "Contacts",
       url: "crm/contacts",
       icon: UserCircle2,
-      module: "CRM",
-    },
-    {
-      title: "Activity Inbox",
-      url: "crm/activity-inbox",
-      icon: Inbox,
       module: "CRM",
     },
     {
