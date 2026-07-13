@@ -261,8 +261,8 @@ export default function InboundEmailInboxes({
       password: "",
       mailbox: inbox.mailbox,
       outboundMode: inbox.outboundMode,
-      replyFromEmail: inbox.replyFromEmail ?? "",
-      replyFromName: inbox.replyFromName ?? "",
+      replyFromEmail: inbox.replyFromEmail ?? inbox.username,
+      replyFromName: inbox.replyFromName ?? inbox.name,
       smtpHost: inbox.smtpHost ?? "",
       smtpPort: String(inbox.smtpPort ?? 587),
       smtpSecure: inbox.smtpSecure,
@@ -284,9 +284,50 @@ export default function InboundEmailInboxes({
     setForm((current) => ({ ...current, [key]: value }));
   };
 
+  const updateUsername = (username: string) => {
+    setForm((current) => ({
+      ...current,
+      username,
+      replyFromEmail:
+        !current.replyFromEmail || current.replyFromEmail === current.username
+          ? username
+          : current.replyFromEmail,
+    }));
+  };
+
+  const updateName = (name: string) => {
+    setForm((current) => ({
+      ...current,
+      name,
+      replyFromName:
+        !current.replyFromName || current.replyFromName === current.name
+          ? name
+          : current.replyFromName,
+    }));
+  };
+
+  const updateOutboundMode = (
+    outboundMode: "DISABLED" | "SMTP" | "SCALEWAY",
+  ) => {
+    setForm((current) => ({
+      ...current,
+      outboundMode,
+      replyFromEmail:
+        outboundMode !== "DISABLED" && !current.replyFromEmail
+          ? current.username
+          : current.replyFromEmail,
+      replyFromName:
+        outboundMode !== "DISABLED" && !current.replyFromName
+          ? current.name
+          : current.replyFromName,
+    }));
+  };
+
   const saveInbox = async () => {
     const port = Number(form.port);
     const smtpPort = Number(form.smtpPort);
+    const replyFromEmail = form.replyFromEmail.trim() || form.username.trim();
+    const replyFromName = form.replyFromName.trim() || form.name.trim();
     if (!Number.isFinite(port) || port <= 0 || port > 65535) {
       toast({
         title: "Invalid port",
@@ -305,7 +346,7 @@ export default function InboundEmailInboxes({
       return;
     }
 
-    if (form.outboundMode !== "DISABLED" && !form.replyFromEmail.trim()) {
+    if (form.outboundMode !== "DISABLED" && !replyFromEmail) {
       toast({
         title: "Reply address required",
         description:
@@ -350,8 +391,14 @@ export default function InboundEmailInboxes({
             password: form.password || undefined,
             mailbox: form.mailbox || "INBOX",
             outboundMode: form.outboundMode,
-            replyFromEmail: form.replyFromEmail || undefined,
-            replyFromName: form.replyFromName || undefined,
+            replyFromEmail:
+              form.outboundMode === "DISABLED"
+                ? form.replyFromEmail || undefined
+                : replyFromEmail,
+            replyFromName:
+              form.outboundMode === "DISABLED"
+                ? form.replyFromName || undefined
+                : replyFromName,
             smtpHost: form.smtpHost || undefined,
             smtpPort: form.outboundMode === "SMTP" ? smtpPort : undefined,
             smtpSecure: form.smtpSecure,
@@ -677,7 +724,7 @@ export default function InboundEmailInboxes({
               <Input
                 id="inbound-inbox-name"
                 value={form.name}
-                onChange={(event) => updateForm("name", event.target.value)}
+                onChange={(event) => updateName(event.target.value)}
                 placeholder="Support inbox"
               />
             </div>
@@ -738,7 +785,7 @@ export default function InboundEmailInboxes({
               <Input
                 id="inbound-username"
                 value={form.username}
-                onChange={(event) => updateForm("username", event.target.value)}
+                onChange={(event) => updateUsername(event.target.value)}
                 placeholder="support@example.org"
               />
             </div>
@@ -791,9 +838,7 @@ export default function InboundEmailInboxes({
                 <Label>Delivery method</Label>
                 <Select
                   value={form.outboundMode}
-                  onValueChange={(value: "DISABLED" | "SMTP" | "SCALEWAY") =>
-                    updateForm("outboundMode", value)
-                  }
+                  onValueChange={updateOutboundMode}
                 >
                   <SelectTrigger>
                     <SelectValue />

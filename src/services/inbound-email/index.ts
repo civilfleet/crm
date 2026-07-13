@@ -380,8 +380,22 @@ export const createEmailInbox = async (input: EmailInboxInput) => {
     throw new Error("Group not found for this team.");
   }
 
+  const outboundMode = input.outboundMode ?? EmailInboxOutboundMode.DISABLED;
+  const replyFromEmail =
+    normalizeEmail(input.replyFromEmail) ??
+    (outboundMode === EmailInboxOutboundMode.DISABLED
+      ? null
+      : normalizeEmail(input.username));
+  const replyFromName =
+    normalizeOptional(input.replyFromName) ??
+    (outboundMode === EmailInboxOutboundMode.DISABLED
+      ? null
+      : normalizeOptional(input.name));
+
   validateOutboundConfiguration({
     ...input,
+    outboundMode,
+    replyFromEmail,
     hasSmtpPassword: Boolean(input.smtpPassword),
   });
 
@@ -396,9 +410,9 @@ export const createEmailInbox = async (input: EmailInboxInput) => {
       username: input.username,
       passwordEncrypted: encryptSecret(input.password),
       mailbox: input.mailbox || "INBOX",
-      outboundMode: input.outboundMode ?? EmailInboxOutboundMode.DISABLED,
-      replyFromEmail: normalizeEmail(input.replyFromEmail),
-      replyFromName: normalizeOptional(input.replyFromName),
+      outboundMode,
+      replyFromEmail,
+      replyFromName,
       smtpHost: normalizeOptional(input.smtpHost),
       smtpPort: input.smtpPort,
       smtpSecure: input.smtpSecure ?? false,
@@ -424,8 +438,11 @@ export const updateEmailInbox = async (input: EmailInboxUpdateInput) => {
     where: { id: input.id, teamId: input.teamId },
     select: {
       id: true,
+      name: true,
+      username: true,
       outboundMode: true,
       replyFromEmail: true,
+      replyFromName: true,
       smtpHost: true,
       smtpPort: true,
       smtpUsername: true,
@@ -448,9 +465,35 @@ export const updateEmailInbox = async (input: EmailInboxUpdateInput) => {
     }
   }
 
+  const outboundMode = input.outboundMode ?? existing.outboundMode;
+  const username = input.username ?? existing.username;
+  const existingReplyUsesUsername =
+    normalizeEmail(existing.replyFromEmail) ===
+    normalizeEmail(existing.username);
+  const replyFromEmail =
+    normalizeEmail(input.replyFromEmail) ??
+    (input.username && existingReplyUsesUsername
+      ? normalizeEmail(input.username)
+      : normalizeEmail(existing.replyFromEmail)) ??
+    (outboundMode === EmailInboxOutboundMode.DISABLED
+      ? null
+      : normalizeEmail(username));
+  const name = input.name ?? existing.name;
+  const existingReplyUsesName =
+    normalizeOptional(existing.replyFromName ?? undefined) ===
+    normalizeOptional(existing.name);
+  const replyFromName =
+    normalizeOptional(input.replyFromName) ??
+    (input.name && existingReplyUsesName
+      ? normalizeOptional(input.name)
+      : normalizeOptional(existing.replyFromName ?? undefined)) ??
+    (outboundMode === EmailInboxOutboundMode.DISABLED
+      ? null
+      : normalizeOptional(name));
+
   validateOutboundConfiguration({
-    outboundMode: input.outboundMode ?? existing.outboundMode,
-    replyFromEmail: input.replyFromEmail ?? existing.replyFromEmail,
+    outboundMode,
+    replyFromEmail,
     smtpHost: input.smtpHost ?? existing.smtpHost,
     smtpPort: input.smtpPort ?? existing.smtpPort,
     smtpUsername: input.smtpUsername ?? existing.smtpUsername,
@@ -472,15 +515,9 @@ export const updateEmailInbox = async (input: EmailInboxUpdateInput) => {
         ? encryptSecret(input.password)
         : undefined,
       mailbox: input.mailbox,
-      outboundMode: input.outboundMode,
-      replyFromEmail:
-        input.replyFromEmail === undefined
-          ? undefined
-          : normalizeEmail(input.replyFromEmail),
-      replyFromName:
-        input.replyFromName === undefined
-          ? undefined
-          : normalizeOptional(input.replyFromName),
+      outboundMode,
+      replyFromEmail,
+      replyFromName,
       smtpHost:
         input.smtpHost === undefined
           ? undefined
