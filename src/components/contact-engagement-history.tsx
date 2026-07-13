@@ -5,6 +5,8 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Circle,
   Clock,
   Loader2,
@@ -481,6 +483,7 @@ function EngagementRow({
   teamUsersByEmail: Map<string, TeamUser>;
   useHeader?: boolean;
 }) {
+  const [isContentExpanded, setIsContentExpanded] = useState(false);
   const renderAsInboundHtml = isInboundImapEmail(engagement);
   const parsed =
     engagement.source === EngagementSource.NOTE || renderAsInboundHtml
@@ -490,6 +493,11 @@ function EngagementRow({
     engagement.source === EngagementSource.NOTE
       ? engagement.message
       : getPreviewText(engagement.message, 180);
+  const fullText =
+    engagement.source === EngagementSource.NOTE
+      ? engagement.message
+      : getPreviewText(engagement.message, Number.MAX_SAFE_INTEGER);
+  const hasMoreContent = fullText !== previewText;
 
   const showIconColumn = !useHeader;
 
@@ -668,20 +676,49 @@ function EngagementRow({
         )}
 
         {useHeader ? (
-          <div className="space-y-2">
-            {previewText && (
+          <div className="space-y-3">
+            {isContentExpanded && renderAsInboundHtml ? (
+              containsHtmlTag(engagement.message) ? (
+                <SafeEmailHtmlFrame html={engagement.message} />
+              ) : (
+                <div className="rounded-md border bg-muted/20 px-3 py-3">
+                  <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
+                    {engagement.message}
+                  </p>
+                </div>
+              )
+            ) : fullText ? (
               <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words leading-relaxed">
                 {engagement.source === EngagementSource.NOTE ? (
                   <MentionText
-                    text={previewText}
+                    text={isContentExpanded ? fullText : previewText}
                     teamId={teamId}
                     usersByEmail={teamUsersByEmail}
                   />
+                ) : isContentExpanded ? (
+                  fullText
                 ) : (
                   previewText
                 )}
               </p>
-            )}
+            ) : null}
+            {hasMoreContent ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={() => setIsContentExpanded((expanded) => !expanded)}
+                aria-expanded={isContentExpanded}
+              >
+                {isContentExpanded ? (
+                  <ChevronUp className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                )}
+                {isContentExpanded ? "Collapse message" : "Show full message"}
+              </Button>
+            ) : null}
           </div>
         ) : engagement.source === EngagementSource.NOTE ? (
           <div className="rounded-lg border bg-emerald-50/40 px-4 py-4 space-y-2">
