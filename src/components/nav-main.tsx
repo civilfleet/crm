@@ -8,6 +8,7 @@ import {
   SidebarGroup,
   SidebarMenu,
   SidebarMenuButton,
+  SidebarMenuBadge,
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
@@ -19,6 +20,7 @@ interface NavItem {
   isActive?: boolean;
   type?: "separator";
   label?: string;
+  badge?: number | string;
   items?: {
     title: string;
     url: string;
@@ -88,6 +90,9 @@ export function NavMain({ items = [] }: { items?: NavItem[] }) {
                     <span>{item.title}</span>
                   </Link>
                 </SidebarMenuButton>
+                {item.badge !== undefined ? (
+                  <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>
+                ) : null}
               </SidebarMenuItem>
             );
           })
@@ -127,6 +132,9 @@ export function NavMain({ items = [] }: { items?: NavItem[] }) {
                     <span>{item.title}</span>
                   </Link>
                 </SidebarMenuButton>
+                {item.badge !== undefined ? (
+                  <SidebarMenuBadge>{item.badge}</SidebarMenuBadge>
+                ) : null}
               </SidebarMenuItem>
             );
           })

@@ -325,5 +325,6 @@ export {
   createEngagement,
   deleteEngagement,
   getContactEngagements,
+  mapEngagement,
   updateEngagement,
 };

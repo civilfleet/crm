@@ -1,6 +1,7 @@
 "use client";
 import { usePathname } from "next/navigation";
 import * as React from "react";
+import useSWR from "swr";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
 import { TeamSwitcher } from "@/components/team-switcher";
@@ -75,6 +76,13 @@ export function AppSidebar({
 
   const activeTeam =
     activeType === "team" ? teams.find((item) => item.id === activeId) : null;
+  const { data: activityCountData } = useSWR<{ data: { count: number } }>(
+    activeTeam?.modules?.includes("CRM")
+      ? `/api/teams/${activeTeam.id}/activity-inbox/count`
+      : null,
+    (url: string) => fetch(url).then((response) => response.json()),
+    { refreshInterval: 60_000, revalidateOnFocus: true },
+  );
 
   const allowedModules = React.useMemo(() => {
     if (activeTeam?.modules) {
@@ -151,8 +159,15 @@ export function AppSidebar({
 
   const navItemsToRender = React.useMemo(() => {
     const items = navigationItems[navItems] as NavigationList;
-    return filterNavItemsByModules([...items]);
-  }, [filterNavItemsByModules, navItems]);
+    const count = activityCountData?.data.count ?? 0;
+    return filterNavItemsByModules(
+      items.map((item) =>
+        "title" in item && item.title === "Activity Inbox" && count > 0
+          ? { ...item, badge: count > 99 ? "99+" : count }
+          : item,
+      ),
+    );
+  }, [activityCountData?.data.count, filterNavItemsByModules, navItems]);
 
   return (
     <Sidebar collapsible="icon" {...sidebarProps}>

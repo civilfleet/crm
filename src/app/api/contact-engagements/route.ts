@@ -2,11 +2,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import type { Session } from "next-auth";
 import { z } from "zod";
 import { auth } from "@/auth";
-import {
-  CONTACT_SUBMODULE_FIELDS,
-  CONTACT_SUBMODULES,
-  type ContactSubmodule,
-} from "@/constants/contact-submodules";
+import { CONTACT_SUBMODULES } from "@/constants/contact-submodules";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
@@ -15,12 +11,13 @@ import {
   getContactEngagements,
   updateEngagement,
 } from "@/services/contact-engagements";
+import { getAllowedContactSubmodules } from "@/services/contacts/submodule-access";
 import { sendTagMentionNotifications } from "@/services/mentions";
 import { getTeamAdminAccess } from "@/services/teams/access";
 import {
   EngagementDirection,
   EngagementSource,
-  Roles,
+  type Roles,
   TodoStatus,
 } from "@/types";
 
@@ -36,74 +33,6 @@ const resolveUserId = async (session: Session | null) => {
   }
 
   return userId;
-};
-
-const getAllowedSubmodules = async (
-  teamId: string,
-  userId?: string,
-  roles: Roles[] = [],
-) => {
-  if (!userId) {
-    return [] as ContactSubmodule[];
-  }
-
-  if (roles.includes(Roles.Admin)) {
-    return [...CONTACT_SUBMODULES] as ContactSubmodule[];
-  }
-
-  const [accessEntries, userGroups] = await Promise.all([
-    prisma.contactFieldAccess.findMany({
-      where: { teamId },
-      select: {
-        fieldKey: true,
-        groupId: true,
-      },
-    }),
-    prisma.userGroup.findMany({
-      where: {
-        userId,
-        group: {
-          teamId,
-        },
-      },
-      select: {
-        groupId: true,
-      },
-    }),
-  ]);
-
-  const accessMap = new Map<string, Set<string>>();
-  accessEntries.forEach((entry) => {
-    const existing = accessMap.get(entry.fieldKey);
-    if (existing) {
-      existing.add(entry.groupId);
-      return;
-    }
-    accessMap.set(entry.fieldKey, new Set([entry.groupId]));
-  });
-
-  const userGroupIds = new Set(userGroups.map((group) => group.groupId));
-
-  const isFieldVisible = (fieldKey: string) => {
-    const allowedGroups = accessMap.get(fieldKey);
-    if (!allowedGroups || allowedGroups.size === 0) {
-      return true;
-    }
-    for (const groupId of userGroupIds) {
-      if (allowedGroups.has(groupId)) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  return CONTACT_SUBMODULES.filter((submodule) => {
-    const fields = CONTACT_SUBMODULE_FIELDS[submodule];
-    if (!fields.length) {
-      return false;
-    }
-    return fields.some((fieldKey) => isFieldVisible(fieldKey));
-  }) as ContactSubmodule[];
 };
 
 const createEngagementSchema = z.object({
@@ -190,7 +119,11 @@ export async function GET(request: NextRequest) {
     const session = await auth();
     const userId = await resolveUserId(session);
     const roles = (session?.user?.roles ?? []) as Roles[];
-    const allowedSubmodules = await getAllowedSubmodules(teamId, userId, roles);
+    const allowedSubmodules = await getAllowedContactSubmodules(
+      teamId,
+      userId,
+      roles,
+    );
     const adminAccess = userId
       ? await getTeamAdminAccess(userId, teamId, roles)
       : { allowed: false };
@@ -220,7 +153,7 @@ export async function POST(request: NextRequest) {
     const session = await auth();
     const userId = await resolveUserId(session);
     const roles = (session?.user?.roles ?? []) as Roles[];
-    const allowedSubmodules = await getAllowedSubmodules(
+    const allowedSubmodules = await getAllowedContactSubmodules(
       validatedData.teamId,
       userId,
       roles,

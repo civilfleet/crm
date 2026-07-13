@@ -5,6 +5,7 @@ import {
   Calendar,
   FolderOpen,
   List,
+  Inbox,
   type LucideIcon,
   Mail,
   Scroll,
@@ -22,6 +23,7 @@ type NavItemBase = {
   icon: LucideIcon;
   isActive?: boolean;
   module?: AppModule;
+  badge?: number | string;
 };
 
 type NavItemSeparator = {
@@ -103,6 +105,12 @@ const navItems: {
       title: "Contacts",
       url: "crm/contacts",
       icon: UserCircle2,
+      module: "CRM",
+    },
+    {
+      title: "Activity Inbox",
+      url: "crm/activity-inbox",
+      icon: Inbox,
       module: "CRM",
     },
     {

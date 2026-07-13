@@ -247,6 +247,8 @@ model Teams {
   fileDownloadAudits FileDownloadAudit[]
   pendingUploads PendingUpload[]
   systemLogs SystemLog[]
+  engagementInboxStates ContactEngagementInboxState[]
+  engagementUserStates ContactEngagementUserState[]
 }
 
 model OrganizationType {
@@ -386,6 +388,8 @@ model User {
   pendingUploads PendingUpload[]
   accounts      Account[]
   sessions      Session[]
+  engagementInboxStates ContactEngagementInboxState[]
+  engagementUserStates ContactEngagementUserState[]
 
 
   createdAt      DateTime         @default(now()) @db.Timestamptz(6)
@@ -1194,6 +1198,7 @@ model ContactEngagement {
   createdAt   DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime             @updatedAt @db.Timestamptz(6)
   inboundEmailMessages InboundEmailMessage[]
+  userStates ContactEngagementUserState[]
 
   @@index([contactId])
   @@index([teamId])
@@ -1203,6 +1208,36 @@ model ContactEngagement {
   @@index([assignedToUserId])
   @@index([todoStatus])
   @@unique([teamId, externalId, externalSource])
+}
+
+model ContactEngagementInboxState {
+  teamId        String
+  team          Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  initializedAt DateTime @default(now()) @db.Timestamptz(6)
+  readThroughAt DateTime @default(now()) @db.Timestamptz(6)
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(6)
+
+  @@id([teamId, userId])
+  @@index([userId])
+}
+
+model ContactEngagementUserState {
+  teamId      String
+  team        Teams            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  engagementId String
+  engagement  ContactEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  isRead      Boolean
+  createdAt   DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(6)
+
+  @@id([engagementId, userId])
+  @@index([teamId, userId, isRead])
+  @@index([userId])
 }
 
 enum ChangeAction {

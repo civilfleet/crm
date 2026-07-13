@@ -9,6 +9,7 @@ import { parseCsv, stringifyCsv } from "@/lib/csv";
 import { normalizePostalCode } from "@/lib/geo";
 import prisma from "@/lib/prisma";
 import { parseVCardContacts } from "@/lib/vcard";
+import { getContactVisibility } from "@/services/contacts/access";
 import {
   createChangeLog,
   logContactCreation,
@@ -1230,54 +1231,9 @@ async function getTeamContacts(
     },
   ];
 
-  const isAdmin = roles.includes(Roles.Admin);
-  let userGroupIds: string[] = [];
-
-  if (userId) {
-    const userGroups = await prisma.userGroup.findMany({
-      where: {
-        userId,
-        group: {
-          teamId,
-        },
-      },
-      include: {
-        group: {
-          select: {
-            id: true,
-            canAccessAllContacts: true,
-          },
-        },
-      },
-    });
-
-    userGroupIds = userGroups.map((ug) => ug.groupId);
-
-    if (!isAdmin) {
-      const hasAllAccessPermission = userGroups.some(
-        (ug) => ug.group.canAccessAllContacts,
-      );
-
-      if (!hasAllAccessPermission) {
-        const groupIds = userGroups
-          .map((ug) => ug.groupId)
-          .filter((id): id is string => Boolean(id));
-
-        if (groupIds.length > 0) {
-          andConditions.push({
-            OR: [
-              { groups: { none: {} } },
-              { groups: { some: { groupId: { in: groupIds } } } },
-            ],
-          });
-        } else {
-          andConditions.push({
-            groups: { none: {} },
-          });
-        }
-      }
-    }
-  }
+  const visibility = await getContactVisibility({ teamId, userId, roles });
+  const userGroupIds = visibility.userGroupIds;
+  andConditions[0] = visibility.where;
 
   if (query) {
     const searchConditions: Prisma.ContactWhereInput[] = [
