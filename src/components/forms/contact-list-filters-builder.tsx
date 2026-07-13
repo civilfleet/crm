@@ -5,6 +5,7 @@ import { useMemo, useRef } from "react";
 import useSWR from "swr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Combobox } from "@/components/ui/combobox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -167,13 +168,15 @@ export function ContactListFiltersBuilder({
   onChange,
 }: ContactListFiltersBuilderProps) {
   const filters = value ?? [];
-  const filterKeyMap = useRef(new WeakMap<ContactFilter, string>());
+  const filterKeys = useRef<string[]>([]);
+  const nextFilterKey = useRef(0);
 
-  const getFilterKey = (filter: ContactFilter) => {
-    let key = filterKeyMap.current.get(filter);
-    if (!key) {
-      key = `filter-${Math.random().toString(36).slice(2, 9)}`;
-      filterKeyMap.current.set(filter, key);
+  const getFilterKey = (index: number) => {
+    let key = filterKeys.current[index];
+    if (key === undefined) {
+      key = `filter-${nextFilterKey.current}`;
+      nextFilterKey.current += 1;
+      filterKeys.current[index] = key;
     }
     return key;
   };
@@ -182,6 +185,11 @@ export function ContactListFiltersBuilder({
 
   const { data: rolesData } = useSWR(
     `/api/event-roles?teamId=${teamId}`,
+    fetcher,
+  );
+
+  const { data: attributeKeysData, isLoading: attributeKeysLoading } = useSWR(
+    `/api/contacts/attribute-keys?teamId=${teamId}`,
     fetcher,
   );
 
@@ -201,11 +209,19 @@ export function ContactListFiltersBuilder({
     return rolesData.data as Array<{ id: string; name: string }>;
   }, [rolesData]);
 
+  const attributeKeyOptions = useMemo(() => {
+    const keys = Array.isArray(attributeKeysData?.data)
+      ? (attributeKeysData.data as string[])
+      : [];
+    return keys.map((key) => ({ value: key, label: key }));
+  }, [attributeKeysData]);
+
   const updateFilter = (index: number, updated: ContactFilter) => {
     onChange(filters.map((filter, idx) => (idx === index ? updated : filter)));
   };
 
   const removeFilter = (index: number) => {
+    filterKeys.current.splice(index, 1);
     onChange(filters.filter((_, idx) => idx !== index));
   };
 
@@ -290,6 +306,8 @@ export function ContactListFiltersBuilder({
       return;
     }
 
+    filterKeys.current.push(`filter-${nextFilterKey.current}`);
+    nextFilterKey.current += 1;
     onChange([...filters, createDefaultFilter(option)]);
   };
 
@@ -328,7 +346,7 @@ export function ContactListFiltersBuilder({
       ) : (
         <div className="space-y-3">
           {filters.map((filter, index) => {
-            const filterKey = getFilterKey(filter);
+            const filterKey = getFilterKey(index);
             switch (filter.type) {
               case "contactField": {
                 const fieldLabel = CONTACT_FIELD_LABELS[filter.field];
@@ -413,15 +431,20 @@ export function ContactListFiltersBuilder({
                       </Button>
                     </div>
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
-                      <Input
-                        placeholder="Attribute key (e.g. city)"
+                      <Combobox
                         value={filter.key}
-                        onChange={(event) =>
+                        onChange={(value) =>
                           updateFilter(index, {
                             ...filter,
-                            key: event.target.value,
+                            key: value,
                           })
                         }
+                        options={attributeKeyOptions}
+                        placeholder="Select attribute"
+                        searchPlaceholder="Search or type attribute..."
+                        emptyStateText="No attributes found."
+                        allowCustomValue
+                        isLoading={attributeKeysLoading}
                       />
                       <Select
                         value={filter.operator}
