@@ -17,6 +17,7 @@ import {
   Search,
   Send,
   StickyNote,
+  Trash2,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -24,6 +25,7 @@ import { useMemo, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -103,6 +105,8 @@ const fetcher = async (url: string) => {
   return payload;
 };
 
+const DISMISS_CONFIRMATION_KEY = "crm.activityInbox.dismissConfirmation.v1";
+
 const sourceLabels: Record<EngagementSource, string> = {
   EMAIL: "Email",
   PHONE: "Phone",
@@ -170,6 +174,12 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
   const [replyMessage, setReplyMessage] = useState("");
   const [isReplying, setIsReplying] = useState(false);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [batchAction, setBatchAction] = useState<
+    "mark-unread" | "dismiss" | null
+  >(null);
+  const [dismissConfirmationOpen, setDismissConfirmationOpen] = useState(false);
+  const [skipDismissConfirmation, setSkipDismissConfirmation] = useState(false);
 
   const key = useMemo(() => {
     const params = new URLSearchParams({
@@ -187,6 +197,11 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
     fetcher,
   );
   const result = data?.data;
+  const pageItemIds = result?.items.map(({ id }) => id) ?? [];
+  const selectedCount = selectedIds.size;
+  const selectedOnPage = pageItemIds.filter((id) => selectedIds.has(id)).length;
+  const allPageItemsSelected =
+    pageItemIds.length > 0 && selectedOnPage === pageItemIds.length;
 
   const refreshCount = () =>
     mutateGlobal(`/api/teams/${teamId}/activity-inbox/count`);
@@ -244,6 +259,92 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
     } finally {
       setIsMarkingAll(false);
     }
+  };
+
+  const toggleSelected = (engagementId: string, checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(engagementId);
+      else next.delete(engagementId);
+      return next;
+    });
+  };
+
+  const togglePageSelection = (checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const engagementId of pageItemIds) {
+        if (checked) next.add(engagementId);
+        else next.delete(engagementId);
+      }
+      return next;
+    });
+  };
+
+  const performBatchAction = async (action: "mark-unread" | "dismiss") => {
+    if (selectedIds.size === 0) return;
+    setBatchAction(action);
+    try {
+      const response = await fetch(
+        `/api/teams/${teamId}/activity-inbox/batch`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action,
+            engagementIds: Array.from(selectedIds),
+          }),
+        },
+      );
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(
+          payload?.error ?? "Unable to update selected activity.",
+        );
+      }
+
+      const affectedCount = selectedIds.size;
+      if (action === "dismiss" && selected && selectedIds.has(selected.id)) {
+        setSelected(null);
+      }
+      setSelectedIds(new Set());
+      await Promise.all([mutate(), refreshCount()]);
+      toast({
+        title:
+          action === "dismiss"
+            ? "Removed from Activity Inbox"
+            : "Marked as unread",
+        description:
+          action === "dismiss"
+            ? `${affectedCount} ${affectedCount === 1 ? "engagement was" : "engagements were"} removed from your inbox only.`
+            : `${affectedCount} ${affectedCount === 1 ? "engagement was" : "engagements were"} marked unread.`,
+      });
+    } catch (batchError) {
+      toast({
+        title: "Batch action failed",
+        description:
+          batchError instanceof Error ? batchError.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setBatchAction(null);
+    }
+  };
+
+  const requestDismissSelected = () => {
+    if (localStorage.getItem(DISMISS_CONFIRMATION_KEY) === "true") {
+      void performBatchAction("dismiss");
+      return;
+    }
+    setDismissConfirmationOpen(true);
+  };
+
+  const confirmDismissSelected = () => {
+    if (skipDismissConfirmation) {
+      localStorage.setItem(DISMISS_CONFIRMATION_KEY, "true");
+    }
+    setDismissConfirmationOpen(false);
+    void performBatchAction("dismiss");
   };
 
   const openReply = () => {
@@ -405,58 +506,125 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
               {error.message}
             </div>
           ) : result?.items.length ? (
-            <div className="divide-y">
-              {result.items.map((item) => {
-                const Icon = sourceIcons[item.source];
-                const DirectionIcon =
-                  item.direction === EngagementDirection.INBOUND
-                    ? ArrowDownLeft
-                    : ArrowUpRight;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`grid w-full grid-cols-[auto_minmax(0,1fr)] gap-3 px-4 py-4 text-left hover:bg-muted/40 sm:grid-cols-[auto_minmax(10rem,0.7fr)_minmax(0,1.6fr)_auto] ${item.isRead ? "bg-background" : "bg-primary/[0.045]"}`}
-                    onClick={() => openItem(item)}
-                  >
-                    <div className="relative mt-0.5 flex h-9 w-9 items-center justify-center rounded-md border bg-background">
-                      <Icon className="h-4 w-4" />
-                      {!item.isRead ? (
-                        <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" />
-                      ) : null}
-                    </div>
-                    <div className="min-w-0">
-                      <p
-                        className={`truncate text-sm ${item.isRead ? "font-medium" : "font-semibold"}`}
-                      >
-                        {item.contact.name}
-                      </p>
-                      <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <DirectionIcon className="h-3.5 w-3.5" />
-                        <span className="truncate">
-                          {sourceLabels[item.source]}
-                          {item.inboundEmail?.receivedAtEmail
-                            ? ` - ${item.inboundEmail.receivedAtEmail}`
-                            : ""}
-                        </span>
+            <div>
+              <div className="flex min-h-12 flex-wrap items-center gap-3 border-b bg-muted/20 px-4 py-2">
+                <Checkbox
+                  checked={
+                    allPageItemsSelected
+                      ? true
+                      : selectedOnPage > 0
+                        ? "indeterminate"
+                        : false
+                  }
+                  onCheckedChange={(checked) =>
+                    togglePageSelection(checked === true)
+                  }
+                  aria-label="Select all activity on this page"
+                />
+                <span className="text-sm text-muted-foreground">
+                  {selectedCount > 0
+                    ? `${selectedCount} selected`
+                    : "Select page"}
+                </span>
+                {selectedCount > 0 ? (
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => performBatchAction("mark-unread")}
+                      disabled={batchAction !== null}
+                    >
+                      {batchAction === "mark-unread" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Circle className="h-4 w-4" />
+                      )}
+                      Mark unread
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={requestDismissSelected}
+                      disabled={batchAction !== null}
+                    >
+                      {batchAction === "dismiss" ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                      Delete
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+              <div className="divide-y">
+                {result.items.map((item) => {
+                  const Icon = sourceIcons[item.source];
+                  const DirectionIcon =
+                    item.direction === EngagementDirection.INBOUND
+                      ? ArrowDownLeft
+                      : ArrowUpRight;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex items-stretch ${item.isRead ? "bg-background" : "bg-primary/[0.045]"}`}
+                    >
+                      <div className="flex w-11 shrink-0 items-center justify-center pl-2">
+                        <Checkbox
+                          checked={selectedIds.has(item.id)}
+                          onCheckedChange={(checked) =>
+                            toggleSelected(item.id, checked === true)
+                          }
+                          aria-label={`Select ${item.subject || sourceLabels[item.source]} for ${item.contact.name}`}
+                        />
                       </div>
-                    </div>
-                    <div className="col-span-2 min-w-0 sm:col-span-1">
-                      <p
-                        className={`truncate text-sm ${item.isRead ? "font-medium" : "font-semibold"}`}
+                      <button
+                        type="button"
+                        className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] gap-3 px-3 py-4 text-left hover:bg-muted/40 sm:grid-cols-[auto_minmax(10rem,0.7fr)_minmax(0,1.6fr)_auto]"
+                        onClick={() => openItem(item)}
                       >
-                        {item.subject || sourceLabels[item.source]}
-                      </p>
-                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                        {previewText(item.message) || "No message content"}
-                      </p>
+                        <div className="relative mt-0.5 flex h-9 w-9 items-center justify-center rounded-md border bg-background">
+                          <Icon className="h-4 w-4" />
+                          {!item.isRead ? (
+                            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-background bg-primary" />
+                          ) : null}
+                        </div>
+                        <div className="min-w-0">
+                          <p
+                            className={`truncate text-sm ${item.isRead ? "font-medium" : "font-semibold"}`}
+                          >
+                            {item.contact.name}
+                          </p>
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <DirectionIcon className="h-3.5 w-3.5" />
+                            <span className="truncate">
+                              {sourceLabels[item.source]}
+                              {item.inboundEmail?.receivedAtEmail
+                                ? ` - ${item.inboundEmail.receivedAtEmail}`
+                                : ""}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="col-span-2 min-w-0 sm:col-span-1">
+                          <p
+                            className={`truncate text-sm ${item.isRead ? "font-medium" : "font-semibold"}`}
+                          >
+                            {item.subject || sourceLabels[item.source]}
+                          </p>
+                          <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                            {previewText(item.message) || "No message content"}
+                          </p>
+                        </div>
+                        <time className="col-span-2 whitespace-nowrap text-xs text-muted-foreground sm:col-span-1">
+                          {formatDate(item.engagedAt)}
+                        </time>
+                      </button>
                     </div>
-                    <time className="col-span-2 whitespace-nowrap text-xs text-muted-foreground sm:col-span-1">
-                      {formatDate(item.engagedAt)}
-                    </time>
-                  </button>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           ) : (
             <div className="flex h-80 flex-col items-center justify-center gap-2 px-6 text-center">
@@ -656,6 +824,54 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
                 <Send className="h-4 w-4" />
               )}
               Send reply
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={dismissConfirmationOpen}
+        onOpenChange={(open) => {
+          setDismissConfirmationOpen(open);
+          if (!open) setSkipDismissConfirmation(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove from Activity Inbox?</DialogTitle>
+            <DialogDescription>
+              {selectedCount}{" "}
+              {selectedCount === 1 ? "engagement" : "engagements"} will be
+              removed from your Activity Inbox only. The shared contact history
+              will not be changed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-start gap-3 py-2">
+            <Checkbox
+              id="skip-inbox-delete-confirmation"
+              checked={skipDismissConfirmation}
+              onCheckedChange={(checked) =>
+                setSkipDismissConfirmation(checked === true)
+              }
+            />
+            <Label
+              htmlFor="skip-inbox-delete-confirmation"
+              className="font-normal leading-4"
+            >
+              Do not show this confirmation again
+            </Label>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDismissConfirmationOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={confirmDismissSelected}>
+              <Trash2 className="h-4 w-4" />
+              Remove from inbox
             </Button>
           </DialogFooter>
         </DialogContent>

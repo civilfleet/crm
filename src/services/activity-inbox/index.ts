@@ -123,6 +123,12 @@ const getUnreadWhere = (
   ],
 });
 
+const getNotDismissedWhere = (
+  userId: string,
+): Prisma.ContactEngagementWhereInput => ({
+  userStates: { none: { userId, dismissedAt: { not: null } } },
+});
+
 const getReplyInboxIds = async ({
   teamId,
   userId,
@@ -145,11 +151,14 @@ export const getActivityInbox = async (
 ) => {
   const inboxState = await initializeInbox(access.teamId, access.userId);
   const visibleWhere = await buildVisibleWhere(access);
+  const inboxWhere: Prisma.ContactEngagementWhereInput = {
+    AND: [visibleWhere, getNotDismissedWhere(access.userId)],
+  };
   const unreadWhere = getUnreadWhere(access.userId, inboxState.readThroughAt);
   const query = filters.query?.trim();
   const filteredWhere: Prisma.ContactEngagementWhereInput = {
     AND: [
-      visibleWhere,
+      inboxWhere,
       ...(filters.source ? [{ source: filters.source }] : []),
       ...(filters.direction ? [{ direction: filters.direction }] : []),
       ...(query
@@ -174,7 +183,7 @@ export const getActivityInbox = async (
     await Promise.all([
       prisma.contactEngagement.count({ where: filteredWhere }),
       prisma.contactEngagement.count({
-        where: { AND: [visibleWhere, unreadWhere] },
+        where: { AND: [inboxWhere, unreadWhere] },
       }),
       filters.status === "unread-first"
         ? prisma.contactEngagement.count({
@@ -260,10 +269,13 @@ export const getActivityInboxUnreadCount = async (
 ) => {
   const inboxState = await initializeInbox(access.teamId, access.userId);
   const visibleWhere = await buildVisibleWhere(access);
+  const inboxWhere: Prisma.ContactEngagementWhereInput = {
+    AND: [visibleWhere, getNotDismissedWhere(access.userId)],
+  };
   return prisma.contactEngagement.count({
     where: {
       AND: [
-        visibleWhere,
+        inboxWhere,
         getUnreadWhere(access.userId, inboxState.readThroughAt),
       ],
     },
@@ -317,7 +329,58 @@ export const markAllActivityInboxRead = async (access: ActivityInboxAccess) => {
       update: { readThroughAt: now },
     }),
     prisma.contactEngagementUserState.deleteMany({
-      where: { teamId: access.teamId, userId: access.userId },
+      where: {
+        teamId: access.teamId,
+        userId: access.userId,
+        dismissedAt: null,
+      },
     }),
   ]);
+};
+
+export const applyActivityInboxBatchAction = async ({
+  access,
+  engagementIds,
+  action,
+}: {
+  access: ActivityInboxAccess;
+  engagementIds: string[];
+  action: "mark-unread" | "dismiss";
+}) => {
+  await initializeInbox(access.teamId, access.userId);
+  const ids = Array.from(new Set(engagementIds));
+  if (ids.length === 0 || ids.length > 100) {
+    throw new Error("Select between 1 and 100 engagements.");
+  }
+
+  const visibleWhere = await buildVisibleWhere(access);
+  const visibleEngagements = await prisma.contactEngagement.findMany({
+    where: { id: { in: ids }, AND: [visibleWhere] },
+    select: { id: true },
+  });
+  if (visibleEngagements.length !== ids.length) {
+    throw new Error("One or more engagements are no longer available.");
+  }
+
+  const dismissedAt = action === "dismiss" ? new Date() : null;
+  await prisma.$transaction(
+    ids.map((engagementId) =>
+      prisma.contactEngagementUserState.upsert({
+        where: {
+          engagementId_userId: { engagementId, userId: access.userId },
+        },
+        create: {
+          teamId: access.teamId,
+          userId: access.userId,
+          engagementId,
+          isRead: action === "dismiss",
+          dismissedAt,
+        },
+        update: {
+          isRead: action === "dismiss",
+          dismissedAt,
+        },
+      }),
+    ),
+  );
 };

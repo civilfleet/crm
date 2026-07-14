@@ -1232,11 +1232,13 @@ model ContactEngagementUserState {
   engagementId String
   engagement  ContactEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
   isRead      Boolean
+  dismissedAt DateTime?        @db.Timestamptz(6)
   createdAt   DateTime         @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime         @updatedAt @db.Timestamptz(6)
 
   @@id([engagementId, userId])
   @@index([teamId, userId, isRead])
+  @@index([teamId, userId, dismissedAt])
   @@index([userId])
 }
 
