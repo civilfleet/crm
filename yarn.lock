@@ -7706,16 +7706,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"next-auth@npm:^5.0.0-beta.30":
-  version: 5.0.0-beta.31
-  resolution: "next-auth@npm:5.0.0-beta.31"
+"next-auth@npm:^5.0.0-beta.32":
+  version: 5.0.0-beta.32
+  resolution: "next-auth@npm:5.0.0-beta.32"
   dependencies:
-    "@auth/core": "npm:0.41.2"
+    "@auth/core": "npm:0.41.3"
   peerDependencies:
     "@simplewebauthn/browser": ^9.0.1
     "@simplewebauthn/server": ^9.0.2
     next: ^14.0.0-0 || ^15.0.0 || ^16.0.0
-    nodemailer: ^7.0.7
+    nodemailer: ^7.0.7 || ^8.0.5
     react: ^18.2.0 || ^19.0.0
   peerDependenciesMeta:
     "@simplewebauthn/browser":
@@ -7724,7 +7724,7 @@ __metadata:
       optional: true
     nodemailer:
       optional: true
-  checksum: 10c0/9c021909f3b774f2967f706f5b060d9e8ab6ebd5907f4e810caf6838e983f4e10a3db5481c1de3e3a273f7ea3feeddeff6092a91662a5f5ca7bbf54f439c27d4
+  checksum: 10c0/f3000d6a412eab0e8cfb992eeed88882f15a2672cda3ffeda235f335a1f0809f385bf0d6f2fc58b4cb16e3d5e270124d40a9a952a3f5eca6e111bb7a7e1d2215
   languageName: node
   linkType: hard
 
@@ -7855,7 +7855,7 @@ __metadata:
     lodash: "npm:^4.18.1"
     lucide-react: "npm:^1.11.0"
     next: "npm:16.2.4"
-    next-auth: "npm:^5.0.0-beta.30"
+    next-auth: "npm:^5.0.0-beta.32"
     nextjs-toploader: "npm:^3.9.17"
     nodemailer: "npm:^7.0.1"
     pg: "npm:^8.20.0"
