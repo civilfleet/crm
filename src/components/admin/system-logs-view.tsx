@@ -105,6 +105,7 @@ export default function SystemLogsView({ teamId }: SystemLogsViewProps) {
     data: logs = [],
     error,
     isLoading,
+    isValidating,
     mutate,
   } = useSWR(url, fetchLogs, { refreshInterval: 15_000 });
 
@@ -116,38 +117,49 @@ export default function SystemLogsView({ teamId }: SystemLogsViewProps) {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Logs</h1>
-          <p className="text-muted-foreground">
+        <div className="min-w-0">
+          <h1 className="text-pretty text-3xl font-bold">Logs</h1>
+          <p className="mt-1 text-pretty text-muted-foreground">
             Worker, sync, and integration activity for this team.
           </p>
         </div>
-        <Button variant="outline" onClick={() => void mutate()}>
-          <RefreshCw className="h-4 w-4" />
-          Refresh
+        <Button
+          variant="outline"
+          disabled={isValidating}
+          onClick={() => void mutate()}
+        >
+          <RefreshCw
+            aria-hidden="true"
+            className={`h-4 w-4 ${isValidating ? "animate-spin motion-reduce:animate-none" : ""}`}
+          />
+          {isValidating ? "Refreshing…" : "Refresh"}
         </Button>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <ServerCog className="h-4 w-4" />
-            Activity stream
+            <ServerCog aria-hidden="true" className="h-4 w-4" />
+            Activity Stream
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-[1fr_180px_220px]">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground"
+              />
               <Input
+                aria-label="Search logs"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 className="pl-9"
-                placeholder="Search message, event, worker, entity"
+                placeholder="Search logs…"
               />
             </div>
             <Select value={level} onValueChange={setLevel}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Filter by log level">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -158,7 +170,7 @@ export default function SystemLogsView({ teamId }: SystemLogsViewProps) {
               </SelectContent>
             </Select>
             <Select value={source} onValueChange={setSource}>
-              <SelectTrigger>
+              <SelectTrigger aria-label="Filter by log source">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -173,7 +185,10 @@ export default function SystemLogsView({ teamId }: SystemLogsViewProps) {
           </div>
 
           {error ? (
-            <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+            <div
+              role="alert"
+              className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900"
+            >
               {(error as Error).message}
             </div>
           ) : null}
@@ -197,7 +212,7 @@ export default function SystemLogsView({ teamId }: SystemLogsViewProps) {
                       colSpan={6}
                       className="h-24 text-center text-muted-foreground"
                     >
-                      Loading logs
+                      <span aria-live="polite">Loading logs…</span>
                     </TableCell>
                   </TableRow>
                 ) : logs.length === 0 ? (
@@ -218,7 +233,10 @@ export default function SystemLogsView({ teamId }: SystemLogsViewProps) {
                       <TableRow key={log.id} className="align-top">
                         <TableCell className="whitespace-nowrap text-sm">
                           <div className="flex items-center gap-2">
-                            <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />
+                            <Clock3
+                              aria-hidden="true"
+                              className="h-3.5 w-3.5 text-muted-foreground"
+                            />
                             {formatDateTime(log.createdAt)}
                           </div>
                           {log.workerId ? (
@@ -232,7 +250,10 @@ export default function SystemLogsView({ teamId }: SystemLogsViewProps) {
                             variant="outline"
                             className={levelConfig[log.level].className}
                           >
-                            <LevelIcon className="mr-1 h-3.5 w-3.5" />
+                            <LevelIcon
+                              aria-hidden="true"
+                              className="mr-1 h-3.5 w-3.5"
+                            />
                             {log.level}
                           </Badge>
                         </TableCell>
@@ -266,7 +287,7 @@ export default function SystemLogsView({ teamId }: SystemLogsViewProps) {
                               </div>
                             </div>
                           ) : (
-                            <span className="text-muted-foreground">-</span>
+                            <span className="text-muted-foreground">—</span>
                           )}
                         </TableCell>
                       </TableRow>

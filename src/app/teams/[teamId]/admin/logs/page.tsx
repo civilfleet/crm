@@ -7,5 +7,9 @@ type PageProps = {
 export default async function LogsPage({ params }: PageProps) {
   const { teamId } = await params;
 
-  return <SystemLogsView teamId={teamId} />;
+  return (
+    <div className="p-4">
+      <SystemLogsView teamId={teamId} />
+    </div>
+  );
 }
