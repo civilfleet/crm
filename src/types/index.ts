@@ -416,6 +416,7 @@ export interface User {
 
   createdAt: Date;
   updatedAt: Date;
+  lastLoginAt?: Date | null;
 }
 
 export interface File {

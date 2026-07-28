@@ -48,6 +48,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
       ...teamOidcProviders,
     ],
     session: { strategy: "jwt" },
+    events: {
+      async signIn({ user }) {
+        try {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { lastLoginAt: new Date() },
+          });
+        } catch (error) {
+          logger.error(
+            { error, userId: user.id },
+            "Failed to record user last login",
+          );
+        }
+      },
+    },
     callbacks: {
       async signIn({ user, account }) {
         if (!account || !user.email) return false;

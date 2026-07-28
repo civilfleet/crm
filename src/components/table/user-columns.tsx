@@ -122,6 +122,19 @@ export const columns: ColumnDef<UserRow>[] = [
     ),
   },
   {
+    accessorKey: "lastLoginAt",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Last login" />
+    ),
+    cell: ({ row }) => (
+      <NavigableCell id={row.original.id}>
+        {row.original.lastLoginAt
+          ? format(new Date(row.original.lastLoginAt), "PPp")
+          : "Never"}
+      </NavigableCell>
+    ),
+  },
+  {
     accessorKey: "phone",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Phone" />
