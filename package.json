@@ -91,7 +91,7 @@
     "baseline-browser-mapping": "^2.10.23",
     "dotenv": "^17.4.2",
     "eslint-config-next": "16.2.4",
-    "postcss": "8.5.12",
+    "postcss": "8.5.18",
     "prisma": "^7.8.0",
     "tailwindcss": "^4.2.4",
     "tsx": "4.21.0",
@@ -102,7 +102,7 @@
   "overrides": {
     "@hono/node-server": "1.19.13",
     "hono": "4.12.14",
-    "postcss": "8.5.12"
+    "postcss": "8.5.18"
   },
   "resolutions": {
     "@auth/core": "0.41.1",
@@ -112,7 +112,7 @@
     "js-yaml": ">=4.1.1",
     "lodash": "4.17.23",
     "minimatch": "10.2.1",
-    "postcss": "8.5.12",
+    "postcss": "8.5.18",
     "tar": "7.5.8"
   }
 }
