@@ -14,7 +14,7 @@ export default async function Page({ params }: PageProps) {
   const { teamId } = await params;
   const session = await auth();
   if (!session?.user?.userId) {
-    return redirect("/login");
+    return redirect("/");
   }
 
   const access = await getTeamAdminAccess(

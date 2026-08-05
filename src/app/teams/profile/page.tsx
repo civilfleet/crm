@@ -28,13 +28,13 @@ export default async function ProfilePage() {
   const session = await auth();
 
   if (!session) {
-    return redirect("/login");
+    return redirect("/");
   }
 
   const userId = session.user?.userId;
 
   if (!userId) {
-    return redirect("/login");
+    return redirect("/");
   }
 
   const profile = await getCurrentUserProfile(
@@ -43,7 +43,7 @@ export default async function ProfilePage() {
   );
 
   if (!profile) {
-    return redirect("/login");
+    return redirect("/");
   }
 
   return (

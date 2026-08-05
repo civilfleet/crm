@@ -18,11 +18,11 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await auth();
-  if (!session) return redirect("/login");
+  if (!session) return redirect("/");
 
   const userId = session.user?.userId;
   if (!userId) {
-    return redirect("/login");
+    return redirect("/");
   }
 
   const userData = session.user?.roles?.includes(Roles.Admin)

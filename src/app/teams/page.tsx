@@ -10,7 +10,7 @@ export default async function TeamsPage() {
   const userId = session?.user?.userId;
 
   if (!session || !userId) {
-    return redirect("/login");
+    return redirect("/");
   }
 
   const data = session.user.roles?.includes(Roles.Admin)
