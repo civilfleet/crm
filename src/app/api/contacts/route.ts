@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
-import prisma from "@/lib/prisma";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import {
   createContact,
@@ -42,16 +41,8 @@ export async function GET(req: Request) {
       );
     }
 
-    const session = await auth();
-    let userId = session?.user?.userId ?? undefined;
-
-    if (!userId && session?.user?.email) {
-      const user = await prisma.user.findUnique({
-        where: { email: session.user.email },
-        select: { id: true },
-      });
-      userId = user?.id;
-    }
+    const session = await verifyTeamAccess(teamId, { requireModule: "CRM" });
+    const userId = session.user.userId;
 
     let filters: ContactFilterInput[] | undefined;
     if (filtersParam) {
@@ -96,6 +87,8 @@ export async function GET(req: Request) {
       { status: 200 },
     );
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -106,9 +99,11 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const session = await auth();
     const payload = await req.json();
     const validated = createContactSchema.parse(payload);
+    const session = await verifyTeamAccess(validated.teamId, {
+      requireModule: "CRM",
+    });
 
     const userId = session?.user?.userId;
     const userName = session?.user?.name ?? undefined;
@@ -117,6 +112,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ data: contact }, { status: 201 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -127,9 +124,11 @@ export async function POST(req: Request) {
 
 export async function PATCH(req: Request) {
   try {
-    const session = await auth();
     const payload = await req.json();
     const validated = updateContactSchema.parse(payload);
+    const session = await verifyTeamAccess(validated.teamId, {
+      requireModule: "CRM",
+    });
 
     const userId = session?.user?.userId;
     const userName = session?.user?.name ?? undefined;
@@ -138,6 +137,8 @@ export async function PATCH(req: Request) {
 
     return NextResponse.json({ data: contact }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -150,11 +151,14 @@ export async function DELETE(req: Request) {
   try {
     const payload = await req.json();
     const validated = deleteContactsSchema.parse(payload);
+    await verifyTeamAccess(validated.teamId, { requireModule: "CRM" });
 
     await deleteContacts(validated.teamId, validated.ids);
 
     return NextResponse.json({ data: "success" }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },

@@ -1,3 +1,4 @@
+import { getContactFieldAccessMap, isFieldVisible } from "@/services/contacts/field-access";
 import { type $Enums, Prisma } from "@prisma/client";
 import {
   CONTACT_SUBMODULE_FIELDS,
@@ -346,28 +347,6 @@ const syncContactGroups = async (
   }
 };
 
-const getContactFieldAccessMap = async (teamId: string) => {
-  const entries = await prisma.contactFieldAccess.findMany({
-    where: { teamId },
-    select: {
-      fieldKey: true,
-      groupId: true,
-    },
-  });
-
-  const map = new Map<string, Set<string>>();
-  entries.forEach((entry) => {
-    const existing = map.get(entry.fieldKey);
-    if (existing) {
-      existing.add(entry.groupId);
-      return;
-    }
-    map.set(entry.fieldKey, new Set([entry.groupId]));
-  });
-
-  return map;
-};
-
 const getUserGroupIdsForTeam = async (userId: string, teamId: string) => {
   const memberships = await prisma.userGroup.findMany({
     where: {
@@ -382,18 +361,6 @@ const getUserGroupIdsForTeam = async (userId: string, teamId: string) => {
   });
 
   return memberships.map((membership) => membership.groupId);
-};
-
-const isFieldVisible = (
-  fieldKey: string,
-  accessMap: Map<string, Set<string>>,
-  userGroupIds: string[],
-) => {
-  const allowedGroups = accessMap.get(fieldKey);
-  if (!allowedGroups || allowedGroups.size === 0) {
-    return true;
-  }
-  return userGroupIds.some((groupId) => allowedGroups.has(groupId));
 };
 
 const getAllowedContactSubmodules = async (

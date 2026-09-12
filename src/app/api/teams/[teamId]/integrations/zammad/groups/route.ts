@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import {
   getZammadGroups,
@@ -19,10 +20,13 @@ export async function GET(
 ) {
   try {
     const { teamId } = await params;
+    await verifyTeamAccess(teamId, { requireAdmin: true });
     const groups = await getZammadGroups(teamId);
 
     return NextResponse.json({ data: groups }, { status: 200 });
   } catch (error) {
+    const apiError = handleApiError(error);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(error);
     return NextResponse.json(
       { error: message },
@@ -37,6 +41,7 @@ export async function POST(
 ) {
   try {
     const { teamId } = await params;
+    await verifyTeamAccess(teamId, { requireAdmin: true });
     const payload = await request.json();
     const validated = z.array(groupSchema).parse(payload);
 
@@ -44,6 +49,8 @@ export async function POST(
 
     return NextResponse.json({ data: result }, { status: 200 });
   } catch (error) {
+    const apiError = handleApiError(error);
+    if (apiError) return apiError;
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: error.issues },

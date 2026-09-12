@@ -633,7 +633,6 @@ export type DonationAgreementSignature = {
 export type DonationAgreement = {
   id: string;
   fundingRequestId: string;
-  description: string;
   fileId: string;
   agreement: string;
   createdAt: Date;

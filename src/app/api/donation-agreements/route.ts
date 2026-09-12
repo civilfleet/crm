@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import {
+  ApiError,
+  handleApiError,
+  requireGlobalAdmin,
+  verifyFundingRequestAccess,
+  verifyOrganizationAccess,
+  verifyTeamAccess,
+} from "@/lib/api-guard";
 import { sendEmail } from "@/lib/nodemailer";
 import { handlePrismaError } from "@/lib/utils";
 import {
@@ -16,6 +23,14 @@ export async function GET(req: Request) {
     const teamId = searchParams.get("teamId") as string;
     const orgId = searchParams.get("organizationId") as string;
 
+    if (teamId) {
+      await verifyTeamAccess(teamId, { requireModule: "FUNDING" });
+    } else if (orgId) {
+      await verifyOrganizationAccess(orgId, { requireModule: "FUNDING" });
+    } else {
+      await requireGlobalAdmin();
+    }
+
     const data = await getDonationAgreements({ teamId, orgId }, searchQuery);
 
     return NextResponse.json(
@@ -25,6 +40,8 @@ export async function GET(req: Request) {
       { status: 201 },
     );
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const handledError = handlePrismaError(e);
     return NextResponse.json({ error: handledError.message }, { status: 400 });
   }
@@ -32,11 +49,17 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const session = await auth();
     const donationAgreement = await req.json();
 
     const validatedData =
       createDonationAgreementSchema.parse(donationAgreement);
+    const access = await verifyFundingRequestAccess(
+      validatedData.fundingRequestId,
+      { requireTeamMember: true, requireModule: "FUNDING" },
+    );
+    if (!access.teamId) {
+      throw new ApiError(400, "Funding request is not assigned to a team");
+    }
     const { user: _user, ...agreementData } = validatedData;
     void _user;
     const { agreement, users } = await createDonationAgreement(
@@ -44,8 +67,8 @@ export async function POST(req: Request) {
         ...agreementData,
         users: validatedData.users ?? [],
       },
-      session?.user.userId as string,
-      donationAgreement?.teamId,
+      access.session.user.userId as string,
+      access.teamId,
     );
 
     await Promise.all(
@@ -76,6 +99,8 @@ export async function POST(req: Request) {
       { status: 201 },
     );
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const handledError = handlePrismaError(e);
     return NextResponse.json({ error: handledError.message }, { status: 400 });
   }

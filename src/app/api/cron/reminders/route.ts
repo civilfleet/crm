@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hasValidBearerSecret } from "@/lib/cron-auth";
 import logger from "@/lib/logger";
 import { sendEmail } from "@/lib/nodemailer";
 import {
@@ -6,7 +7,26 @@ import {
   getDonationAgreementPastSevenDays,
 } from "@/services/donation-agreement";
 
-export async function GET() {
+export async function GET(request: Request) {
+  if (!process.env.CRON_SECRET) {
+    logger.error("CRON_SECRET is not configured");
+    return NextResponse.json(
+      { success: false, message: "Cron endpoint is not configured" },
+      { status: 503 },
+    );
+  }
+  if (
+    !hasValidBearerSecret(
+      request.headers.get("authorization"),
+      process.env.CRON_SECRET,
+    )
+  ) {
+    return NextResponse.json(
+      { success: false, message: "Unauthorized" },
+      { status: 401 },
+    );
+  }
+
   try {
     const [donationsForReceiptReminder, donationsForBudgetReportReminder] =
       await Promise.all([

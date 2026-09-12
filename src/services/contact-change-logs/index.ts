@@ -1,4 +1,11 @@
 import type { Prisma } from "@prisma/client";
+import { ApiError } from "@/lib/api-guard";
+import { getContactVisibility } from "@/services/contacts/access";
+import {
+  getContactFieldAccessMap,
+  isFieldVisible,
+} from "@/services/contacts/field-access";
+import type { Roles } from "@/types";
 import prisma from "@/lib/prisma";
 import { ChangeAction, type ContactChangeLog } from "@/types";
 
@@ -41,7 +48,22 @@ const mapChangeLog = (log: ContactChangeLogWithDefaults): ContactChangeLog => ({
   createdAt: log.createdAt,
 });
 
-const getContactChangeLogs = async (contactId: string) => {
+const getContactChangeLogs = async (
+  contactId: string,
+  teamId: string,
+  userId: string,
+  roles: Roles[] = [],
+) => {
+  const visibility = await getContactVisibility({ teamId, userId, roles });
+  const contact = await prisma.contact.findFirst({
+    where: { AND: [{ id: contactId }, visibility.where] },
+    select: { id: true },
+  });
+  if (!contact) throw new ApiError(404, "Contact not found");
+  const accessMap = await getContactFieldAccessMap(teamId);
+  const hiddenKeys = Array.from(accessMap.keys()).filter(
+    (key) => !isFieldVisible(key, accessMap, visibility.userGroupIds),
+  );
   const logs = await prisma.contactChangeLog.findMany({
     where: {
       contactId,
@@ -51,7 +73,24 @@ const getContactChangeLogs = async (contactId: string) => {
     },
   });
 
-  return logs.map(mapChangeLog);
+  return logs
+    .filter((log) => {
+      const key = log.fieldName?.replace(/^profileAttribute\./, "");
+      return !key || !hiddenKeys.includes(key);
+    })
+    .map((log) => {
+      const mapped = mapChangeLog(log);
+      if (!hiddenKeys.length) return mapped;
+      // Aggregate history can contain snapshots of fields now hidden from this user.
+      return {
+        ...mapped,
+        metadata: undefined,
+        ...(!log.fieldName ||
+        ["merge", "profileAttributes"].includes(log.fieldName)
+          ? { oldValue: undefined, newValue: undefined }
+          : {}),
+      };
+    });
 };
 
 const createChangeLog = async (

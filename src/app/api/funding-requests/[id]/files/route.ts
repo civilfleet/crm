@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import { handleApiError, verifyFundingRequestAccess } from "@/lib/api-guard";
 import { sendEmail } from "@/lib/nodemailer";
 import { handlePrismaError } from "@/lib/utils";
 import { uploadFundingRequestFile } from "@/services/funding-request";
@@ -19,14 +19,16 @@ export async function PUT(
     if (!fundingRequestId) {
       return NextResponse.json({ error: "ID is required" }, { status: 400 });
     }
-    const session = await auth();
+    const access = await verifyFundingRequestAccess(fundingRequestId, {
+      requireModule: "FUNDING",
+    });
     const data = await req.json();
 
     const response = await uploadFundingRequestFile(
       fundingRequestId,
       data.file,
       data?.type as FileTypes,
-      session?.user?.userId as string,
+      access.session.user.userId as string,
     );
 
     await sendEmail(
@@ -50,6 +52,8 @@ export async function PUT(
       { status: 201 },
     );
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json({ error: message }, { status: 400 });
   }

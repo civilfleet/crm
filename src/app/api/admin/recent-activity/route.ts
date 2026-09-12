@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { handleApiError, requireGlobalAdmin } from "@/lib/api-guard";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 
 export async function GET() {
   try {
+    await requireGlobalAdmin();
     // Get recent activities from different entities
     const [users, organizations, fundingRequests, transactions, files] =
       await Promise.all([
@@ -167,6 +169,8 @@ export async function GET() {
       activities: sortedActivities,
     });
   } catch (error) {
+    const apiError = handleApiError(error);
+    if (apiError) return apiError;
     logger.error({ error }, "Error fetching recent activity");
     return NextResponse.json(
       { error: "Failed to fetch recent activity" },

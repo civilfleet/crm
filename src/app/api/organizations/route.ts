@@ -2,9 +2,17 @@ import type { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { APP_NAME } from "@/constants/app";
+import {
+  ApiError,
+  handleApiError,
+  requireGlobalAdmin,
+  verifyOrganizationAccess,
+  verifyTeamAccess,
+} from "@/lib/api-guard";
 import logger from "@/lib/logger";
 import { sendEmail } from "@/lib/nodemailer";
 import prisma from "@/lib/prisma";
+import { enforcePublicRateLimit } from "@/lib/public-rate-limit";
 import { getAppUrl, getLoginUrl, handlePrismaError } from "@/lib/utils";
 import {
   createOrUpdateOrganization,
@@ -38,6 +46,12 @@ export async function GET(req: Request) {
       ? organizationFiltersSchema.parse(JSON.parse(filtersParam))
       : [];
 
+    if (teamId) {
+      await verifyTeamAccess(teamId);
+    } else {
+      await requireGlobalAdmin();
+    }
+
     const { data, total } = await getOrganizations(
       searchQuery,
       teamId,
@@ -57,6 +71,8 @@ export async function GET(req: Request) {
       { status: 200 },
     );
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -81,6 +97,14 @@ export async function POST(req: Request) {
       .parse({ ...organizationData });
 
     if (validatedData.isFilledByOrg) {
+      enforcePublicRateLimit(
+        req,
+        `organization-registration:${validatedData.teamId}`,
+        {
+          limit: 5,
+          windowMs: 60 * 60 * 1000,
+        },
+      );
       const team = await prisma.teams.findUnique({
         where: { id: validatedData.teamId },
         select: { modules: true },
@@ -99,6 +123,24 @@ export async function POST(req: Request) {
           },
         );
       }
+
+      const publicUploadPrefix = `public-registrations/${validatedData.teamId}/`;
+      const uploadKeys = [
+        validatedData.logo,
+        validatedData.taxExemptionCertificate,
+        validatedData.articlesOfAssociation,
+      ].filter((value): value is string => Boolean(value));
+      if (uploadKeys.some((key) => !key.startsWith(publicUploadPrefix))) {
+        throw new ApiError(400, "Invalid public registration upload");
+      }
+      if (uploadKeys.length > 0 && !validatedData.user?.email) {
+        throw new ApiError(
+          400,
+          "A portal user email is required when uploading registration files",
+        );
+      }
+    } else {
+      await verifyTeamAccess(validatedData.teamId, { requireAdmin: true });
     }
     const normalizedData = {
       ...validatedData,
@@ -169,6 +211,8 @@ export async function POST(req: Request) {
       { status: 201 },
     );
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     logger.error({ message }, "Organization create failed");
     return NextResponse.json(
@@ -185,6 +229,14 @@ export async function PUT(req: Request) {
     const validatedData = updateOrganizationSchema
       .and(z.object({ isFilledByOrg: z.boolean() }))
       .parse({ ...organization });
+    const existingOrganization = await prisma.organization.findUnique({
+      where: { email: validatedData.email },
+      select: { id: true },
+    });
+    if (!existingOrganization) {
+      throw new ApiError(404, "Organization not found");
+    }
+    await verifyOrganizationAccess(existingOrganization.id);
     const normalizedData = {
       ...validatedData,
       profileData: validatedData.profileData as
@@ -199,6 +251,8 @@ export async function PUT(req: Request) {
       { status: 201 },
     );
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },

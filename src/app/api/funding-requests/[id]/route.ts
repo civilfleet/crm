@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { EMAIL_TEMPLATES_TYPES } from "@/constants";
+import { handleApiError, verifyFundingRequestAccess } from "@/lib/api-guard";
 import { sendEmail } from "@/lib/nodemailer";
 import { handlePrismaError } from "@/lib/utils";
 import { getEmailTemplateByType } from "@/services/email-templates";
@@ -23,9 +24,14 @@ export async function GET(
     if (!fundingRequestId) {
       return NextResponse.json({ error: "ID is required" }, { status: 400 });
     }
+    await verifyFundingRequestAccess(fundingRequestId, {
+      requireModule: "FUNDING",
+    });
     const data = await getFundingRequestById(fundingRequestId);
     return NextResponse.json({ data }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json({ error: message }, { status: 400 });
   }
@@ -47,11 +53,23 @@ export async function PUT(
     const validatedData = updateFundingRequestSchema.parse({
       ...fundingRequest,
     });
+    const access = await verifyFundingRequestAccess(fundingRequestId, {
+      requireModule: "FUNDING",
+    });
+    const isTeamActor = access.isGlobalAdmin || access.isTeamMember;
+    const safeData = isTeamActor
+      ? validatedData
+      : {
+          ...validatedData,
+          amountAgreed: undefined,
+          remainingAmount: undefined,
+          status: undefined,
+        };
 
     const response = await updateFundingRequest(
       fundingRequestId,
-      validatedData,
-      fundingRequest.teamId as string,
+      safeData,
+      access.teamId as string,
     );
     const status = response.status;
     let emailTemplate: Awaited<
@@ -59,12 +77,12 @@ export async function PUT(
     > | null = null;
     if (status === FundingStatus.Accepted) {
       emailTemplate = await getEmailTemplateByType(
-        fundingRequest.teamId as string,
+        access.teamId as string,
         EMAIL_TEMPLATES_TYPES.FUNDING_REQUEST_ACCEPTED,
       );
     } else if (status === FundingStatus.Rejected) {
       emailTemplate = await getEmailTemplateByType(
-        fundingRequest.teamId as string,
+        access.teamId as string,
         EMAIL_TEMPLATES_TYPES.FUNDING_REQUEST_REJECTED,
       );
     }
@@ -94,6 +112,8 @@ export async function PUT(
       { status: 201 },
     );
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const handledError = handlePrismaError(e);
     return NextResponse.json({ error: handledError.message }, { status: 400 });
   }

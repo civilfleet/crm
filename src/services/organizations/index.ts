@@ -272,7 +272,8 @@ const createOrUpdateOrganization = async (formData: Organization) => {
     );
 
     // Batch file creation
-    if (user?.id) {
+    const fileOwnerId = user?.id ?? orgUser?.id;
+    if (fileOwnerId) {
       const files = [
         {
           type: "TAX_EXEMPTION_CERTIFICATE",
@@ -294,15 +295,15 @@ const createOrUpdateOrganization = async (formData: Organization) => {
               update: {
                 type,
                 url,
-                updatedBy: { connect: { id: user.id } },
+                updatedBy: { connect: { id: fileOwnerId } },
               },
               create: {
                 type,
                 url,
                 createdBy: {
-                  connect: { id: user.id },
+                  connect: { id: fileOwnerId },
                 },
-                updatedBy: { connect: { id: user.id } },
+                updatedBy: { connect: { id: fileOwnerId } },
                 organization: { connect: { id: organization.id } },
               },
             }),

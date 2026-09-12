@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import {
+  handleApiError,
+  verifyOrganizationAccess,
+  verifyTeamAccess,
+} from "@/lib/api-guard";
 import { sendEmail } from "@/lib/nodemailer";
 import { handlePrismaError } from "@/lib/utils";
 import {
@@ -21,6 +26,12 @@ export async function GET(req: Request) {
       return NextResponse.json({ data: [] });
     }
 
+    if (teamId) {
+      await verifyTeamAccess(teamId, { requireModule: "FUNDING" });
+    } else {
+      await verifyOrganizationAccess(orgId, { requireModule: "FUNDING" });
+    }
+
     const data = await getFundingRequests(
       { teamId, orgId },
       searchQuery,
@@ -34,6 +45,8 @@ export async function GET(req: Request) {
       { status: 201 },
     );
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -53,9 +66,19 @@ export async function POST(req: Request) {
         }),
       )
       .parse(fundingRequestData);
+    const access = await verifyOrganizationAccess(
+      validatedData.organizationId,
+      {
+        requireModule: "FUNDING",
+      },
+    );
+    const safeData =
+      access.isGlobalAdmin || access.isTeamMember
+        ? validatedData
+        : { ...validatedData, status: undefined };
 
     const { fundingRequest, user, organization } =
-      await createFundingRequest(validatedData);
+      await createFundingRequest(safeData);
 
     await sendEmail(
       {
@@ -82,6 +105,8 @@ export async function POST(req: Request) {
       { status: 201 },
     );
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
 
     return NextResponse.json(

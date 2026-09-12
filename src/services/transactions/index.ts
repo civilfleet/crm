@@ -1,14 +1,12 @@
+import { Prisma } from "@prisma/client";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
+import { calculateTransactionBalance } from "@/services/transactions/balance";
 import { FundingStatus } from "@/types";
 
 type CreateTransaction = {
   amount: number;
   fundingRequestId: string;
-  organizationId: string;
-  teamId: string;
-  totalAmount: number;
-  remainingAmount: number;
 };
 
 type GetTransactionsParams = {
@@ -19,42 +17,53 @@ type GetTransactionsParams = {
 };
 
 const createTransaction = async (transaction: CreateTransaction) => {
-  const response = await prisma.transaction.create({
-    data: {
-      amount: transaction.amount,
-      fundingRequest: {
-        connect: {
-          id: transaction.fundingRequestId,
+  return prisma.$transaction(
+    async (tx) => {
+      const fundingRequest = await tx.fundingRequest.findUnique({
+        where: { id: transaction.fundingRequestId },
+        select: {
+          amountAgreed: true,
+          organizationId: true,
+          teamId: true,
         },
-      },
-      organization: {
-        connect: {
-          id: transaction.organizationId,
-        },
-      },
-      team: {
-        connect: {
-          id: transaction.teamId,
-        },
-      },
-      totalAmount: transaction.totalAmount,
-      remainingAmount: transaction.remainingAmount,
-    },
-  });
+      });
+      if (!fundingRequest?.amountAgreed || !fundingRequest.teamId) {
+        throw new Error("Funding request is not ready for disbursement");
+      }
 
-  await prisma.fundingRequest.update({
-    where: {
-      id: transaction.fundingRequestId,
-    },
-    data: {
-      remainingAmount: transaction.remainingAmount,
-      ...(transaction.remainingAmount === 0 && {
-        status: FundingStatus.Completed,
-      }),
-    },
-  });
+      const aggregate = await tx.transaction.aggregate({
+        where: { fundingRequestId: transaction.fundingRequestId },
+        _sum: { amount: true },
+      });
+      const alreadyDisbursed = aggregate._sum.amount ?? new Prisma.Decimal(0);
+      const { amount, remainingAmount } = calculateTransactionBalance({
+        amount: transaction.amount,
+        alreadyDisbursed,
+        totalAmount: fundingRequest.amountAgreed,
+      });
+      const response = await tx.transaction.create({
+        data: {
+          amount,
+          fundingRequestId: transaction.fundingRequestId,
+          organizationId: fundingRequest.organizationId,
+          teamId: fundingRequest.teamId,
+          totalAmount: fundingRequest.amountAgreed,
+          remainingAmount,
+        },
+      });
 
-  return response;
+      await tx.fundingRequest.update({
+        where: { id: transaction.fundingRequestId },
+        data: {
+          remainingAmount,
+          ...(remainingAmount.isZero() && { status: FundingStatus.Completed }),
+        },
+      });
+
+      return response;
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 };
 
 const getTransactions = async ({
@@ -117,49 +126,34 @@ const updateTransactionReceipt = async (
   transactionReciept: string,
   userId: string,
 ) => {
-  const transaction = await prisma.transaction.findUnique({
-    where: { id },
-    select: {
-      organizationId: true,
-      fundingRequestId: true,
-    },
-  });
-  if (!transaction) {
-    throw new Error("Transaction not found");
-  }
+  return prisma.$transaction(async (tx) => {
+    const transaction = await tx.transaction.findUnique({
+      where: { id },
+      select: {
+        organizationId: true,
+        fundingRequestId: true,
+      },
+    });
+    if (!transaction) {
+      throw new Error("Transaction not found");
+    }
 
-  const file = await prisma.file.create({
-    data: {
-      url: transactionReciept,
-      type: "TRANSACTION_RECEIPT",
-      organization: {
-        connect: { id: transaction.organizationId },
+    const file = await tx.file.create({
+      data: {
+        url: transactionReciept,
+        type: "TRANSACTION_RECEIPT",
+        organizationId: transaction.organizationId,
+        fundingRequestId: transaction.fundingRequestId,
+        createdById: userId,
+        updatedById: userId,
       },
-      FundingRequest: {
-        connect: { id: transaction.fundingRequestId },
-      },
-      createdBy: {
-        connect: {
-          id: userId,
-        },
-      },
-      updatedBy: {
-        connect: { id: userId },
-      },
-    },
-  });
+    });
 
-  const response = await prisma.transaction.update({
-    where: { id },
-    data: {
-      file: {
-        connect: {
-          id: file.id,
-        },
-      },
-    },
+    return tx.transaction.update({
+      where: { id },
+      data: { transactionReciept: file.id },
+    });
   });
-  return response;
 };
 
 export {

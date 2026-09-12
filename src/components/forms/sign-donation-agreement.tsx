@@ -21,16 +21,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { type DonationAgreement, FundingStatus, Roles } from "@/types";
+import { type DonationAgreement, FundingStatus } from "@/types";
 import { updateDonationAgreementSchema as schema } from "@/validations/donation-agreement";
 import DetailItem from "../helper/detail-item";
 import formatCurrency from "../helper/format-currency";
@@ -39,19 +32,15 @@ export default function SignDonationAgreement({
   data: initialData,
   teamId,
   userId,
-  userRoles,
 }: {
   data: DonationAgreement;
   teamId?: string;
   userId?: string | null;
-  userRoles?: Roles[];
 }) {
   const { toast } = useToast();
-  const isAdmin = userRoles?.includes(Roles.Admin);
 
   const [data, setData] = useState<DonationAgreement>(initialData);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
 
   const currentUserSignature = data.userSignatures.find(
     (signature) => signature.user?.id === userId,
@@ -83,6 +72,7 @@ export default function SignDonationAgreement({
     resolver: zodResolver(schema),
     defaultValues: {
       file: "",
+      pendingUploadId: "",
     },
   });
 
@@ -100,7 +90,7 @@ export default function SignDonationAgreement({
   };
 
   async function onSubmit(values: z.infer<typeof schema>) {
-    if (!isAdmin && !userId) {
+    if (!userId) {
       toast({
         title: "Error",
         description: "You must be logged in to sign this agreement.",
@@ -109,11 +99,10 @@ export default function SignDonationAgreement({
       return;
     }
 
-    if (!isAdmin && !canCurrentUserSign) {
+    if (!canCurrentUserSign) {
       toast({
         title: "Not Authorized",
-        description:
-          "You are not assigned to sign this agreement. Please ask a team admin to sign on behalf of an assigned user.",
+        description: "You are not assigned to sign this agreement.",
         variant: "destructive",
       });
       return;
@@ -128,8 +117,6 @@ export default function SignDonationAgreement({
         },
         body: JSON.stringify({
           ...values,
-          id: data.id,
-          userId: isAdmin ? selectedUserId : userId,
         }),
       });
       if (!response.ok) {
@@ -305,50 +292,29 @@ export default function SignDonationAgreement({
                   <h2 className="text-lg font-semibold mb-2">
                     Upload Signed Agreement
                   </h2>
-                  {!isAdmin && !canCurrentUserSign && (
+                  {!canCurrentUserSign && (
                     <p className="text-sm text-destructive mb-4">
                       You are not assigned as a signer for this agreement.
                     </p>
                   )}
-                  {isAdmin && (
-                    <div className="mb-4">
-                      <label
-                        className="text-sm font-medium mb-2 block"
-                        htmlFor="sign-on-behalf"
-                      >
-                        Sign on behalf of:
-                      </label>
-                      <Select
-                        value={selectedUserId}
-                        onValueChange={setSelectedUserId}
-                      >
-                        <SelectTrigger id="sign-on-behalf">
-                          <SelectValue placeholder="Select user to sign for" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {data.userSignatures.map((signature, index) => (
-                            <SelectItem
-                              key={
-                                signature.id ||
-                                `${signature.user?.id || signature.user?.email || "signature"}-${index}`
-                              }
-                              value={signature.user?.id || ""}
-                              disabled={signature.signedAt !== null}
-                            >
-                              {signature.user?.email}
-                              {signature.signedAt && " (Already signed)"}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  {canCurrentUserSign && (
+                    <FileUpload
+                      placeholder="Drag and drop or click to upload"
+                      name="file"
+                      data={""}
+                      uploadUrl={`/api/donation-agreements/${data.id}/upload`}
+                      onFileUpload={(url, upload) => {
+                        form.setValue("file", upload?.key ?? url, {
+                          shouldValidate: true,
+                        });
+                        form.setValue(
+                          "pendingUploadId",
+                          upload?.pendingUploadId ?? "",
+                          { shouldValidate: true },
+                        );
+                      }}
+                    />
                   )}
-                  <FileUpload
-                    placeholder="Drag and drop or click to upload"
-                    name="file"
-                    data={""}
-                    onFileUpload={(url) => form.setValue("file", url)}
-                  />
                 </div>
               )}
             </div>
@@ -361,13 +327,13 @@ export default function SignDonationAgreement({
             type="submit"
             form="organization-form"
             disabled={
-              isSubmitting || (isAdmin ? !selectedUserId : !canCurrentUserSign)
+              isSubmitting ||
+              !canCurrentUserSign ||
+              !form.watch("pendingUploadId")
             }
           >
             <Upload className="mr-2 h-4 w-4" />
-            {isAdmin
-              ? "Submit Signed Agreement on Behalf of User"
-              : "Submit Signed Agreement"}
+            Submit Signed Agreement
           </Button>
         )}
 

@@ -451,14 +451,17 @@ const getUsersForDonation = async ({
   fundingRequestId: string;
 }) => {
   const fundingRequest = await prisma.fundingRequest.findUnique({
-    where: { id: fundingRequestId },
+    where: { id: fundingRequestId, teamId },
     select: { organizationId: true },
   });
+
+  if (!fundingRequest)
+    throw new Error("Funding request not found in this team");
 
   return await prisma.user.findMany({
     where: {
       OR: [
-        { organizations: { some: { id: fundingRequest?.organizationId } } },
+        { organizations: { some: { id: fundingRequest.organizationId } } },
         { teams: { some: { id: teamId } } },
       ],
     },

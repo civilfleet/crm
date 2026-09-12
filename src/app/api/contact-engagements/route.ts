@@ -3,6 +3,7 @@ import type { Session } from "next-auth";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { CONTACT_SUBMODULES } from "@/constants/contact-submodules";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
@@ -116,6 +117,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    await verifyTeamAccess(teamId, { requireModule: "CRM" });
     const session = await auth();
     const userId = await resolveUserId(session);
     const roles = (session?.user?.roles ?? []) as Roles[];
@@ -137,6 +139,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ data: engagements }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -149,6 +153,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const validatedData = createEngagementSchema.parse(body);
+    await verifyTeamAccess(validatedData.teamId, { requireModule: "CRM" });
 
     const session = await auth();
     const userId = await resolveUserId(session);
@@ -226,6 +231,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: engagement }, { status: 201 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     if (e instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: e.issues },
@@ -245,6 +252,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
     const validatedData = updateEngagementSchema.parse(body);
+    await verifyTeamAccess(validatedData.teamId, { requireModule: "CRM" });
 
     const engagement = await updateEngagement({
       ...validatedData,
@@ -255,6 +263,8 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ data: engagement }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     if (e instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: e.issues },

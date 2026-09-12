@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { handleApiError, verifyOrganizationAccess } from "@/lib/api-guard";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
 import {
@@ -68,6 +69,10 @@ export async function POST(
     }
 
     const payload = await req.json();
+    await verifyOrganizationAccess(organizationId, {
+      requireTeamMember: true,
+      requireModule: "CRM",
+    });
     const { contactId } = organizationContactSchema.parse(payload);
     const contact = await getOrganizationAndContact(organizationId, contactId);
 
@@ -87,6 +92,8 @@ export async function POST(
 
     return NextResponse.json({ data: contact }, { status: 201 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -110,6 +117,10 @@ export async function DELETE(
     }
 
     const payload = await req.json();
+    await verifyOrganizationAccess(organizationId, {
+      requireTeamMember: true,
+      requireModule: "CRM",
+    });
     const { contactId } = organizationContactSchema.parse(payload);
 
     await prisma.contactOrganization.deleteMany({
@@ -121,6 +132,8 @@ export async function DELETE(
 
     return NextResponse.json({ data: "success" }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },

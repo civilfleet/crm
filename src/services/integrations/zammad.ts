@@ -8,7 +8,11 @@ import {
 } from "@/services/contact-emails";
 import { findContactByIdentityEmail } from "@/services/contacts";
 import { enqueueZammadTicketSyncJob } from "@/services/integrations/zammad-queue";
-import { ContactEmailKind, EngagementDirection, EngagementSource } from "@/types";
+import {
+  ContactEmailKind,
+  EngagementDirection,
+  EngagementSource,
+} from "@/types";
 
 const ZAMMAD_SOURCE_PREFIX = "ZAMMAD";
 
@@ -790,16 +794,19 @@ export const handleZammadWebhook = async ({
     throw new Error("Zammad integration is currently disabled.");
   }
 
-  if (integration.webhookSecret) {
-    const isValid = verifyWebhookSignature(
-      rawBody,
-      integration.webhookSecret,
-      signature,
-    );
-    if (!isValid) {
-      logger.error({ teamId }, "[Zammad] Webhook signature invalid");
-      throw new Error("Invalid webhook signature.");
-    }
+  if (!integration.webhookSecret) {
+    logger.error({ teamId }, "[Zammad] Webhook secret is not configured");
+    throw new Error("Zammad webhook secret is not configured.");
+  }
+
+  const isValid = verifyWebhookSignature(
+    rawBody,
+    integration.webhookSecret,
+    signature,
+  );
+  if (!isValid) {
+    logger.error({ teamId }, "[Zammad] Webhook signature invalid");
+    throw new Error("Invalid webhook signature.");
   }
 
   logger.debug({ teamId }, "[Zammad] Webhook received");

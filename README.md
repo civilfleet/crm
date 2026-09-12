@@ -149,6 +149,9 @@ yarn s3:cors:check
 yarn s3:cors:apply
 ```
 
+Scheduled reminder requests must send `Authorization: Bearer $CRON_SECRET`.
+Use a dedicated random `CRON_SECRET`; do not reuse `AUTH_SECRET`.
+
 ## S3 CORS Bootstrap
 
 For direct browser uploads with pre-signed URLs, bucket CORS must allow preflight and `PUT`.

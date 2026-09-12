@@ -286,11 +286,15 @@ export default function PublicOrganizationRegistration({
                     <FileUpload
                       label="Organization logo"
                       uploadUrl="/api/public/upload"
+                      teamId={teamId}
+                      accept="image/jpeg,image/png,image/webp"
                       onFileUpload={(fileUrl) => form.setValue("logo", fileUrl)}
                     />
                     <FileUpload
                       label="Tax exemption certificate"
                       uploadUrl="/api/public/upload"
+                      teamId={teamId}
+                      accept="application/pdf,image/jpeg,image/png,image/webp"
                       onFileUpload={(fileUrl) =>
                         form.setValue("taxExemptionCertificate", fileUrl)
                       }
@@ -298,6 +302,8 @@ export default function PublicOrganizationRegistration({
                     <FileUpload
                       label="Articles of association"
                       uploadUrl="/api/public/upload"
+                      teamId={teamId}
+                      accept="application/pdf,image/jpeg,image/png,image/webp"
                       onFileUpload={(fileUrl) =>
                         form.setValue("articlesOfAssociation", fileUrl)
                       }

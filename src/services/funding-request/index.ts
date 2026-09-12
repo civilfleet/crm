@@ -282,10 +282,18 @@ const updateFundingRequestStatus = async (
   };
   try {
     if (donationId) {
+      const agreement = await prisma.donationAgreement.findFirst({
+        where: { id: donationId, fundingRequestId: id },
+        select: { id: true },
+      });
+      if (!agreement) {
+        throw new Error("Donation agreement does not belong to this request");
+      }
+
       const signedAgreements = await prisma.donationAgreementSignature.findMany(
         {
           where: {
-            donationAgreementId: donationId as string,
+            donationAgreementId: donationId,
             signedAt: null,
           },
         },
@@ -300,6 +308,7 @@ const updateFundingRequestStatus = async (
           select: selectedFields,
         });
       }
+      throw new Error("Donation agreement still has unsigned signatures");
     } else {
       return await prisma.fundingRequest.update({
         where: { id },

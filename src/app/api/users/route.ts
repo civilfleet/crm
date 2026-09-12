@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
 import { APP_NAME } from "@/constants/app";
+import {
+  ApiError,
+  handleApiError,
+  verifyFundingRequestAccess,
+  requireGlobalAdmin,
+  verifyOrganizationAccess,
+  verifyTeamAccess,
+} from "@/lib/api-guard";
 import { sendEmail } from "@/lib/nodemailer";
 import { getAppUrl, getLoginUrl, handlePrismaError } from "@/lib/utils";
 import { ensureTeamOwner } from "@/services/teams";
@@ -25,6 +33,25 @@ export async function GET(req: Request) {
       Number.isFinite(pageSizeParam) && pageSizeParam > 0
         ? Math.min(Math.floor(pageSizeParam), 100)
         : 10;
+
+    if (teamId) {
+      await verifyTeamAccess(teamId);
+    } else if (organizationId) {
+      await verifyOrganizationAccess(organizationId);
+    } else {
+      await requireGlobalAdmin();
+    }
+    if (fundingRequestId) {
+      const access = await verifyFundingRequestAccess(fundingRequestId, {
+        requireModule: "FUNDING",
+      });
+      if (
+        (teamId && access.fundingRequest.teamId !== teamId) ||
+        (organizationId && access.organizationId !== organizationId)
+      ) {
+        throw new ApiError(404, "Funding request not found in this scope");
+      }
+    }
     const dataPromise =
       fundingRequestId && teamId
         ? getUsersForDonation({
@@ -57,6 +84,8 @@ export async function GET(req: Request) {
       { status: 200 },
     );
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const handledError = handlePrismaError(e);
     return NextResponse.json(
       { error: handledError?.message },
@@ -73,16 +102,24 @@ export async function POST(req: Request) {
     const validatedData = createUserSchema.parse(user);
 
     if (!teamId) {
+      if (!organizationId) {
+        await requireGlobalAdmin();
+      } else {
+        await verifyOrganizationAccess(organizationId);
+      }
       await createUser({
         ...validatedData,
         organizationId: organizationId,
-        roles: user.roles || [Roles.Organization],
+        roles: organizationId
+          ? [Roles.Organization]
+          : user.roles || [Roles.Organization],
       });
     } else {
+      await verifyTeamAccess(teamId, { requireAdmin: true });
       await createUser({
         ...validatedData,
         teamId: teamId,
-        roles: user.roles || [Roles.Team],
+        roles: [Roles.Team],
       });
     }
 
@@ -117,6 +154,8 @@ export async function POST(req: Request) {
       { status: 201 },
     );
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },

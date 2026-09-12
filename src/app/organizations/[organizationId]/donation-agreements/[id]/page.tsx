@@ -1,21 +1,27 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { notFound, redirect } from "next/navigation";
+import { verifyDonationAgreementAccess } from "@/lib/api-guard";
 import SignDonationAgreement from "@/components/forms/sign-donation-agreement";
+import { getDonationAgreementById } from "@/services/donation-agreement";
+import type { DonationAgreement } from "@/types";
 
 export default async function Page({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ id: string; organizationId: string }>;
 }) {
-  const { id } = await params;
-  const session = await auth();
-  const donationAgreement = await fetch(
-    `${process.env.NEXT_PUBLIC_BASE_URL}/api/donation-agreements/${id}`,
-  );
-  const { data: donationData } = await donationAgreement.json();
-  if (!donationData) {
-    redirect("/team/organization");
+  const { id, organizationId } = await params;
+  const access = await verifyDonationAgreementAccess(id, {
+    requireModule: "FUNDING",
+  });
+  if (access.organizationId !== organizationId) notFound();
+  const session = access.session;
+  const donationAgreement = await getDonationAgreementById(id);
+  if (!donationAgreement) {
+    redirect("/organizations");
   }
+  const donationData = JSON.parse(
+    JSON.stringify(donationAgreement),
+  ) as DonationAgreement;
 
   return (
     <div>
@@ -23,7 +29,6 @@ export default async function Page({
         <SignDonationAgreement
           data={donationData}
           userId={session?.user?.userId ?? null}
-          userRoles={session?.user?.roles ?? []}
         />
       </div>
     </div>

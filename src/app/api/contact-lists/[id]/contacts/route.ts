@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { ApiError, handleApiError, verifyTeamAccess } from "@/lib/api-guard";
+import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
 import {
   addContactsToList,
@@ -16,6 +18,12 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
+    const list = await prisma.contactList.findUnique({
+      where: { id },
+      select: { teamId: true },
+    });
+    if (!list) throw new ApiError(404, "Contact list not found");
+    await verifyTeamAccess(list.teamId, { requireModule: "CRM" });
     const body = await request.json();
     const validated = addContactsToListSchema.parse({ ...body, listId: id });
 
@@ -23,6 +31,8 @@ export async function POST(
 
     return NextResponse.json({ data: "success" }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     if (e instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: e.issues },
@@ -44,6 +54,12 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const list = await prisma.contactList.findUnique({
+      where: { id },
+      select: { teamId: true },
+    });
+    if (!list) throw new ApiError(404, "Contact list not found");
+    await verifyTeamAccess(list.teamId, { requireModule: "CRM" });
     const body = await request.json();
     const validated = removeContactsFromListSchema.parse({
       ...body,
@@ -54,6 +70,8 @@ export async function DELETE(
 
     return NextResponse.json({ data: "success" }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     if (e instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: e.issues },

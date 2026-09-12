@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import { getEventById, updateEvent } from "@/services/events";
 import { updateEventSchema } from "@/validations/events";
@@ -22,6 +23,7 @@ export async function GET(req: Request, { params }: RouteParams) {
       );
     }
 
+    await verifyTeamAccess(teamId, { requireModule: "CRM" });
     const event = await getEventById(id, teamId);
 
     if (!event) {
@@ -30,6 +32,8 @@ export async function GET(req: Request, { params }: RouteParams) {
 
     return NextResponse.json({ data: event }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -43,11 +47,14 @@ export async function PUT(req: Request, { params }: RouteParams) {
     const { id } = await params;
     const payload = await req.json();
     const validated = updateEventSchema.parse({ ...payload, id });
+    await verifyTeamAccess(validated.teamId, { requireModule: "CRM" });
 
     const event = await updateEvent(validated);
 
     return NextResponse.json({ data: event }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },

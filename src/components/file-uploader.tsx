@@ -21,6 +21,8 @@ interface FileUploadProps {
   onUploadingChange?: (isUploading: boolean) => void;
   uploadUrl?: string;
   teamId?: string;
+  accept?: string;
+  maxSizeBytes?: number;
 }
 
 const FileUpload = ({
@@ -35,6 +37,8 @@ const FileUpload = ({
   onUploadingChange,
   uploadUrl = "/api/upload",
   teamId,
+  accept,
+  maxSizeBytes = 10 * 1024 * 1024,
 }: FileUploadProps) => {
   const [_fileUrl, setFileUrl] = useState<string | null>(data || null);
   const [loading, setLoading] = useState(false);
@@ -47,27 +51,56 @@ const FileUpload = ({
     const file = event.target.files?.[0];
     if (!file) return;
 
+    if (file.size > maxSizeBytes) {
+      const message = `File must be no larger than ${Math.floor(maxSizeBytes / 1024 / 1024)} MB.`;
+      setUploadError(message);
+      onUploadError?.(message);
+      event.target.value = "";
+      return;
+    }
+
     setUploadError(null);
     onUploadError?.("");
     setLoading(true);
     onUploadingChange?.(true);
 
     try {
+      const isPublicUpload = uploadUrl === "/api/public/upload";
+      const publicUploadData = new FormData();
+      publicUploadData.append("file", file);
+      if (teamId) publicUploadData.append("teamId", teamId);
+
       const upload = await fetch(uploadUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileName: file.name,
-          fileType: file.type,
-          ...(teamId ? { teamId } : {}),
-        }),
+        ...(isPublicUpload
+          ? { body: publicUploadData }
+          : {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                fileName: file.name,
+                fileType: file.type,
+                ...(teamId ? { teamId } : {}),
+              }),
+            }),
       });
 
       if (!upload.ok) {
         throw new Error("Failed to request upload URL");
       }
 
-      const { expiresAt, key, pendingUploadId, putUrl } = await upload.json();
+      const {
+        expiresAt,
+        fileUrl: directFileUrl,
+        key,
+        pendingUploadId,
+        putUrl,
+      } = await upload.json();
+
+      if (directFileUrl) {
+        setFileUrl(directFileUrl);
+        onFileUpload(directFileUrl);
+        return;
+      }
       if (!putUrl) {
         throw new Error("Upload URL is missing");
       }
@@ -107,6 +140,7 @@ const FileUpload = ({
         id={inputId}
         label={label || placeholder}
         type="file"
+        accept={accept}
         className="pr-10"
         onChange={handleFileChange}
         name={name}

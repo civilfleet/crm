@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
 import { ensureTeamOwner, transferTeamOwnership } from "@/services/teams";
@@ -15,6 +16,7 @@ export async function GET(
 ) {
   try {
     const { teamId } = await params;
+    await verifyTeamAccess(teamId);
     const ownerId = await ensureTeamOwner(teamId);
 
     if (!ownerId) {
@@ -31,6 +33,8 @@ export async function GET(
 
     return NextResponse.json({ data: owner }, { status: 200 });
   } catch (error) {
+    const apiError = handleApiError(error);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(error);
     return NextResponse.json(
       { error: message },
@@ -50,6 +54,7 @@ export async function PATCH(
     }
 
     const { teamId } = await params;
+    await verifyTeamAccess(teamId, { requireAdmin: true });
     const payload = await request.json();
     const { newOwnerId } = transferSchema.parse(payload);
 
@@ -62,6 +67,8 @@ export async function PATCH(
 
     return NextResponse.json({ data: { ownerId } }, { status: 200 });
   } catch (error) {
+    const apiError = handleApiError(error);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(error);
     return NextResponse.json(
       { error: message },

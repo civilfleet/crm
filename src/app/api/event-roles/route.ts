@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import {
   createEventRole,
@@ -22,9 +23,12 @@ export async function GET(req: Request) {
       );
     }
 
+    await verifyTeamAccess(teamId, { requireModule: "CRM" });
     const roles = await getTeamEventRoles(teamId);
     return NextResponse.json({ data: roles }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -37,11 +41,14 @@ export async function POST(req: Request) {
   try {
     const payload = await req.json();
     const validated = createEventRoleSchema.parse(payload);
+    await verifyTeamAccess(validated.teamId, { requireAdmin: true });
 
     const role = await createEventRole(validated);
 
     return NextResponse.json({ data: role }, { status: 201 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -54,11 +61,14 @@ export async function DELETE(req: Request) {
   try {
     const payload = await req.json();
     const validated = deleteEventRolesSchema.parse(payload);
+    await verifyTeamAccess(validated.teamId, { requireAdmin: true });
 
     await deleteEventRoles(validated.teamId, validated.ids);
 
     return NextResponse.json({ data: "success" }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },

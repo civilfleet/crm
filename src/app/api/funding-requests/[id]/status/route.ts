@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { EMAIL_TEMPLATES_TYPES } from "@/constants";
+import {
+  ApiError,
+  handleApiError,
+  verifyFundingRequestAccess,
+} from "@/lib/api-guard";
 import { sendEmail } from "@/lib/nodemailer";
 import { handlePrismaError } from "@/lib/utils";
 import { getEmailTemplateByType } from "@/services/email-templates";
@@ -21,61 +27,73 @@ export async function PUT(
       throw new Error("ID is required");
     }
 
-    const fundingRequestData = await req.json();
-    const teamId = fundingRequestData?.teamId;
+    const fundingRequestData = z
+      .object({
+        status: z.enum(FundingStatus),
+        donationId: z.uuid().nullable().optional(),
+      })
+      .parse(await req.json());
+    const access = await verifyFundingRequestAccess(fundingRequestId, {
+      requireTeamMember: true,
+      requireModule: "FUNDING",
+    });
+    const teamId = access.teamId;
 
-    if (teamId) {
-      const fundingRequest = await updateFundingRequestStatus(
-        fundingRequestId,
-        fundingRequestData.status,
-        fundingRequestData?.donationId,
+    if (!teamId) {
+      throw new ApiError(400, "Funding request is not assigned to a team");
+    }
+    const fundingRequest = await updateFundingRequestStatus(
+      fundingRequestId,
+      fundingRequestData.status,
+      fundingRequestData?.donationId,
+    );
+
+    const status = fundingRequest?.status;
+    let emailTemplate: Awaited<
+      ReturnType<typeof getEmailTemplateByType>
+    > | null = null;
+    if (status === FundingStatus.Accepted) {
+      emailTemplate = await getEmailTemplateByType(
+        teamId,
+        EMAIL_TEMPLATES_TYPES.FUNDING_REQUEST_ACCEPTED,
       );
-
-      const status = fundingRequest?.status;
-      let emailTemplate: Awaited<
-        ReturnType<typeof getEmailTemplateByType>
-      > | null = null;
-      if (status === FundingStatus.Accepted) {
-        emailTemplate = await getEmailTemplateByType(
-          teamId as string,
-          EMAIL_TEMPLATES_TYPES.FUNDING_REQUEST_ACCEPTED,
-        );
-      } else if (status === FundingStatus.Rejected) {
-        emailTemplate = await getEmailTemplateByType(
-          teamId as string,
-          EMAIL_TEMPLATES_TYPES.FUNDING_REQUEST_REJECTED,
-        );
-      }
-
-      await sendEmail(
-        {
-          to: fundingRequest?.organization?.email as string,
-          subject: emailTemplate?.subject || `Funding Request Status Updated`,
-          template: "funding-status-update",
-          content: emailTemplate?.content || "",
-        },
-        {
-          organizationName: fundingRequest?.organization?.name,
-
-          requestName: fundingRequest?.name,
-          submittedDate: fundingRequest?.createdAt,
-          status: fundingRequestData.status,
-
-          requestLink: `${process.env.NEXT_PUBLIC_BASE_URL}/organization/funding-requests/${fundingRequest?.id}`,
-          supportEmail: "support@partnerapp.com",
-          teamName: fundingRequest?.organization?.team?.name,
-        },
-      );
-
-      return NextResponse.json(
-        {
-          message: "success",
-          data: fundingRequest,
-        },
-        { status: 201 },
+    } else if (status === FundingStatus.Rejected) {
+      emailTemplate = await getEmailTemplateByType(
+        teamId,
+        EMAIL_TEMPLATES_TYPES.FUNDING_REQUEST_REJECTED,
       );
     }
+
+    await sendEmail(
+      {
+        to: fundingRequest?.organization?.email as string,
+        subject: emailTemplate?.subject || `Funding Request Status Updated`,
+        template: "funding-status-update",
+        content: emailTemplate?.content || "",
+      },
+      {
+        organizationName: fundingRequest?.organization?.name,
+
+        requestName: fundingRequest?.name,
+        submittedDate: fundingRequest?.createdAt,
+        status: fundingRequestData.status,
+
+        requestLink: `${process.env.NEXT_PUBLIC_BASE_URL}/organization/funding-requests/${fundingRequest?.id}`,
+        supportEmail: "support@partnerapp.com",
+        teamName: fundingRequest?.organization?.team?.name,
+      },
+    );
+
+    return NextResponse.json(
+      {
+        message: "success",
+        data: fundingRequest,
+      },
+      { status: 201 },
+    );
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json({ error: message }, { status: 400 });
   }

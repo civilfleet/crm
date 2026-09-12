@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import { ensureTeamOwner } from "@/services/teams";
@@ -9,6 +10,7 @@ export async function GET(
 ) {
   try {
     const { teamId } = await params;
+    await verifyTeamAccess(teamId);
 
     const ownerId = await ensureTeamOwner(teamId);
 
@@ -38,6 +40,8 @@ export async function GET(
       { status: 200 },
     );
   } catch (error) {
+    const apiError = handleApiError(error);
+    if (apiError) return apiError;
     logger.error({ error }, "Error fetching team users");
     return NextResponse.json(
       { error: "Failed to fetch team users" },

@@ -44,6 +44,21 @@ type RemoveContactsInput = {
   contactIds: string[];
 };
 
+const assertContactsBelongToTeam = async (
+  teamId: string,
+  contactIds: string[],
+) => {
+  const uniqueIds = Array.from(new Set(contactIds));
+  if (uniqueIds.length === 0) return;
+
+  const count = await prisma.contact.count({
+    where: { id: { in: uniqueIds }, teamId },
+  });
+  if (count !== uniqueIds.length) {
+    throw new Error("One or more contacts do not belong to this team");
+  }
+};
+
 const parseFilters = (
   value: Prisma.JsonValue | null | undefined,
 ): ContactFilter[] => {
@@ -303,6 +318,7 @@ const createContactList = async (input: CreateContactListInput) => {
   const filtersData = isSmartList
     ? ((filters ?? []) as Prisma.InputJsonValue)
     : undefined;
+  await assertContactsBelongToTeam(teamId, contactIds ?? []);
 
   const list = await prisma.contactList.create({
     data: {
@@ -453,6 +469,8 @@ const addContactsToList = async (input: AddContactsInput) => {
   if (list.type === ContactListType.SMART) {
     throw new Error("Cannot manually modify contacts for smart lists");
   }
+
+  await assertContactsBelongToTeam(teamId, contactIds);
 
   // Get existing contacts in list
   const existing = await prisma.contactListMember.findMany({

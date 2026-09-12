@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import { getEventRoleById, updateEventRole } from "@/services/event-roles";
 import { updateEventRoleSchema } from "@/validations/event-roles";
@@ -22,6 +23,7 @@ export async function GET(req: Request, { params }: RouteParams) {
       );
     }
 
+    await verifyTeamAccess(teamId, { requireModule: "CRM" });
     const role = await getEventRoleById(id, teamId);
 
     if (!role) {
@@ -33,6 +35,8 @@ export async function GET(req: Request, { params }: RouteParams) {
 
     return NextResponse.json({ data: role }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -46,11 +50,14 @@ export async function PUT(req: Request, { params }: RouteParams) {
     const { id } = await params;
     const payload = await req.json();
     const validated = updateEventRoleSchema.parse({ ...payload, id });
+    await verifyTeamAccess(validated.teamId, { requireAdmin: true });
 
     const role = await updateEventRole(validated);
 
     return NextResponse.json({ data: role }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },

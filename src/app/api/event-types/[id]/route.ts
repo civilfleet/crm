@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import { getEventTypeById, updateEventType } from "@/services/event-types";
 import { updateEventTypeSchema } from "@/validations/event-types";
@@ -22,6 +23,7 @@ export async function GET(req: Request, { params }: RouteParams) {
       );
     }
 
+    await verifyTeamAccess(teamId, { requireModule: "CRM" });
     const type = await getEventTypeById(id, teamId);
 
     if (!type) {
@@ -33,6 +35,8 @@ export async function GET(req: Request, { params }: RouteParams) {
 
     return NextResponse.json({ data: type }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -46,11 +50,14 @@ export async function PUT(req: Request, { params }: RouteParams) {
     const { id } = await params;
     const payload = await req.json();
     const validated = updateEventTypeSchema.parse({ ...payload, id });
+    await verifyTeamAccess(validated.teamId, { requireAdmin: true });
 
     const type = await updateEventType(validated);
 
     return NextResponse.json({ data: type }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },

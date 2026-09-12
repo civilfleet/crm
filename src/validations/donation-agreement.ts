@@ -9,7 +9,8 @@ const createDonationAgreementSchema = z.object({
 });
 
 const updateDonationAgreementSchema = z.object({
-  file: z.string().optional(),
+  file: z.string().trim().min(1, "Upload a signed agreement"),
+  pendingUploadId: z.uuid("Upload a signed agreement"),
 });
 
 export { createDonationAgreementSchema, updateDonationAgreementSchema };

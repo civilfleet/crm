@@ -1,3 +1,10 @@
+import { Prisma } from "@prisma/client";
+import { ApiError } from "@/lib/api-guard";
+import {
+  assertPendingUploadsAvailable,
+  consumePendingUploads,
+} from "@/services/file/pending-uploads";
+import { assertStoredFileExists } from "@/services/file/s3-service";
 import prisma from "@/lib/prisma";
 import { FundingStatus } from "@/types";
 
@@ -235,7 +242,8 @@ const getDonationAgreementById = async (id: string) => {
 
 const updateDonationAgreement = async (
   id: string,
-  updatedDonationAgreement: DonationAgreement & { userId?: string },
+  updatedDonationAgreement: { file: string; pendingUploadId: string },
+  signingUserId: string,
 ) => {
   const donation = await prisma.donationAgreement.findUnique({
     where: {
@@ -267,67 +275,112 @@ const updateDonationAgreement = async (
       },
     },
   });
+  if (!donation) {
+    throw new Error("Donation agreement not found");
+  }
 
-  await prisma.$transaction(async (prisma) => {
-    await prisma.file.update({
-      where: {
-        id: donation?.file.id as string,
-      },
-      data: {
-        url: updatedDonationAgreement.file as string,
-        ...(donation?.organization?.id
-          ? { organization: { connect: { id: donation.organization.id } } }
-          : {}),
-        ...(donation?.fundingRequest?.id
-          ? { FundingRequest: { connect: { id: donation.fundingRequest.id } } }
-          : {}),
-        updatedBy: {
-          connect: { id: updatedDonationAgreement.userId as string },
-        },
-      },
-    });
-
-    // Update the signature for either the current user or the selected user (for admin)
-    const signatureUserId = updatedDonationAgreement.userId as string;
-
-    await prisma.donationAgreementSignature.update({
-      where: {
-        donationAgreementId_userId: {
-          donationAgreementId: id,
-          userId: signatureUserId,
-        },
-      },
-      data: {
-        signedAt: new Date(),
-      },
-    });
-
-    const remainingSignatures = await prisma.donationAgreementSignature.count({
-      where: {
-        donationAgreementId: id,
-        signedAt: null,
-      },
-    });
-
-    if (
-      remainingSignatures === 0 &&
-      donation?.fundingRequest?.status === FundingStatus.WaitingForSignature
-    ) {
-      await prisma.fundingRequest.update({
+  if (!donation.teamId || !updatedDonationAgreement.file.trim()) {
+    throw new ApiError(400, "A signed upload and agreement team are required");
+  }
+  const teamId = donation.teamId;
+  const files = [
+    {
+      url: updatedDonationAgreement.file,
+      pendingUploadId: updatedDonationAgreement.pendingUploadId,
+    },
+  ];
+  await assertPendingUploadsAvailable({ files, teamId, userId: signingUserId });
+  await assertStoredFileExists(updatedDonationAgreement.file, 10 * 1024 * 1024);
+  return prisma.$transaction(
+    async (prisma) => {
+      const current = await prisma.donationAgreement.findUnique({
+        where: { id },
+        select: { fundingRequest: { select: { status: true } } },
+      });
+      if (
+        current?.fundingRequest.status !== FundingStatus.WaitingForSignature
+      ) {
+        throw new ApiError(409, "Agreement is no longer awaiting signatures");
+      }
+      await assertPendingUploadsAvailable({
+        files,
+        teamId,
+        userId: signingUserId,
+        tx: prisma,
+      });
+      const signed = await prisma.donationAgreementSignature.updateMany({
         where: {
-          id: donation.fundingRequest.id,
+          donationAgreementId: id,
+          userId: signingUserId,
+          signedAt: null,
+        },
+        data: { signedAt: new Date() },
+      });
+      if (signed.count !== 1) {
+        throw new ApiError(
+          409,
+          "You are not an unsigned signer of this agreement",
+        );
+      }
+      await prisma.file.update({
+        where: {
+          id: donation.file.id,
         },
         data: {
-          status: FundingStatus.FundsDisbursing,
+          ...(updatedDonationAgreement.file
+            ? { url: updatedDonationAgreement.file }
+            : {}),
+          ...(donation?.organization?.id
+            ? { organization: { connect: { id: donation.organization.id } } }
+            : {}),
+          ...(donation?.fundingRequest?.id
+            ? {
+                FundingRequest: { connect: { id: donation.fundingRequest.id } },
+              }
+            : {}),
+          updatedBy: {
+            connect: { id: signingUserId },
+          },
         },
       });
-    }
 
-    return {
-      data: donation,
-      message: "Donation agreement updated successfully",
-    };
-  });
+      await consumePendingUploads({
+        files,
+        teamId,
+        userId: signingUserId,
+        tx: prisma,
+      });
+
+      const remainingSignatures = await prisma.donationAgreementSignature.count(
+        {
+          where: {
+            donationAgreementId: id,
+            signedAt: null,
+          },
+        },
+      );
+
+      if (
+        remainingSignatures === 0 &&
+        donation?.fundingRequest?.status === FundingStatus.WaitingForSignature
+      ) {
+        await prisma.fundingRequest.update({
+          where: {
+            id: donation.fundingRequest.id,
+          },
+          data: {
+            status: FundingStatus.FundsDisbursing,
+          },
+        });
+      }
+
+      return {
+        data: donation,
+        message: "Donation agreement updated successfully",
+      };
+    },
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 };
 
 const getDonationAgreementPastSevenDays = async () => {
