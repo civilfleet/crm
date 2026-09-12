@@ -468,6 +468,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
   const [emailSenderLabelMode, setEmailSenderLabelMode] =
     useState<SenderLabelMode>("default");
   const [filters, setFilters] = useState<ContactFilter[]>([]);
+  const filterKeys = useRef<string[]>([]);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -756,11 +757,13 @@ export default function ContactTable({ teamId }: ContactTableProps) {
       return;
     }
 
+    filterKeys.current.push(crypto.randomUUID());
     setFilters((previous) => [...previous, createDefaultFilter(option)]);
     setIsFilterMenuOpen(false);
   };
 
   const handleRemoveFilter = (index: number) => {
+    filterKeys.current.splice(index, 1);
     setFilters((previous) => previous.filter((_, idx) => idx !== index));
   };
 
@@ -1512,7 +1515,10 @@ export default function ContactTable({ teamId }: ContactTableProps) {
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => setFilters([])}
+            onClick={() => {
+              filterKeys.current = [];
+              setFilters([]);
+            }}
           >
             Clear filters
           </Button>
@@ -1529,7 +1535,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
             );
             return (
               <div
-                key={getContactFilterKey(filter)}
+                key={filterKeys.current[index]}
                 className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 p-3"
               >
                 <span className="text-sm font-medium">
