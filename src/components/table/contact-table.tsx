@@ -1441,7 +1441,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
       if (file.name.toLowerCase().endsWith(".vcf")) {
         setImportFormat("vcf");
         const { parseVCardContacts } = await import("@/lib/vcard");
-        const contacts = parseVCardContacts(contents);
+        const contacts = await parseVCardContacts(contents);
         if (contacts.length === 0) {
           throw new Error("The VCF file does not contain any contacts.");
         }

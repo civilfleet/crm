@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 
+const require = createRequire(import.meta.url);
 const children = [];
 let shuttingDown = false;
 
@@ -9,7 +11,6 @@ function start(name, command, args) {
       ...process.env,
       FORCE_COLOR: "1",
     },
-    shell: process.platform === "win32",
     stdio: "inherit",
   });
 
@@ -58,5 +59,12 @@ function shutdown(exitCode = 0) {
 process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
 
-start("web", "next", ["dev", "--turbopack"]);
-start("worker", "tsx", ["scripts/background-worker.ts"]);
+start("web", process.execPath, [
+  require.resolve("next/dist/bin/next"),
+  "dev",
+  "--turbopack",
+]);
+start("worker", process.execPath, [
+  require.resolve("tsx/cli"),
+  "scripts/background-worker.ts",
+]);

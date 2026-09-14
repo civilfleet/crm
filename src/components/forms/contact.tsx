@@ -15,6 +15,7 @@ import { useFieldArray, useForm } from "react-hook-form";
 import useSWR from "swr";
 import type { z } from "zod";
 import FileUpload from "@/components/file-uploader";
+import { ContactPasteDialog } from "@/components/forms/contact-paste-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -47,6 +48,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import type { ContactSubmodule } from "@/constants/contact-submodules";
 import { useToast } from "@/hooks/use-toast";
+import type { ContactPasteField } from "@/lib/contact-paste";
 import { EUROPEAN_COUNTRY_OPTIONS } from "@/lib/countries";
 import {
   type Contact,
@@ -728,6 +730,21 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
               </TabsList>
 
               <TabsContent value="general" className="space-y-6">
+                {!isEditMode && (
+                  <ContactPasteDialog
+                    onApply={(values) => {
+                      for (const [key, value] of Object.entries(values)) {
+                        const field = key as ContactPasteField;
+                        if (typeof value === "string") {
+                          form.setValue(field, value.trim(), {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                        }
+                      }
+                    }}
+                  />
+                )}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <FormField
                     control={typedControl}
@@ -832,10 +849,14 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                                       </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                      <SelectItem value={ContactEmailKind.ALIAS}>
+                                      <SelectItem
+                                        value={ContactEmailKind.ALIAS}
+                                      >
                                         Alias
                                       </SelectItem>
-                                      <SelectItem value={ContactEmailKind.SHARED}>
+                                      <SelectItem
+                                        value={ContactEmailKind.SHARED}
+                                      >
                                         Shared
                                       </SelectItem>
                                     </SelectContent>

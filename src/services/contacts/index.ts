@@ -2199,7 +2199,7 @@ const importContactsFromVCard = async ({
   userId,
   userName,
 }: ImportContactsFromVCardInput): Promise<ContactImportResult> => {
-  const contacts = parseVCardContacts(vcard);
+  const contacts = await parseVCardContacts(vcard);
 
   if (contacts.length === 0) {
     throw new Error("VCF file does not contain any contacts.");

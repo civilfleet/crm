@@ -1,9 +1,26 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { resolve } from "node:path";
 import test from "node:test";
 import { parseVCardContacts } from "@/lib/vcard";
 
-test("parses multiple vCards and maps preferred contact fields", () => {
-  const contacts = parseVCardContacts(`BEGIN:VCARD
+test("loads and parses vCards through the worker's CommonJS loader", () => {
+  const output = execFileSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "-e",
+      'const { parseVCardContacts } = require(process.argv[1]); parseVCardContacts("BEGIN:VCARD\\nVERSION:4.0\\nFN:Worker Test\\nEND:VCARD").then(cards => console.log(cards[0].name)).catch(() => process.exit(1));',
+      resolve("src/lib/vcard.ts"),
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(output.trim(), "Worker Test");
+});
+
+test("parses multiple vCards and maps preferred contact fields", async () => {
+  const contacts = await parseVCardContacts(`BEGIN:VCARD
 VERSION:4.0
 FN:Ada Example
 EMAIL;TYPE=work;PREF=2:other@example.com
@@ -39,8 +56,8 @@ END:VCARD`);
   assert.equal(contacts[1]?.email, undefined);
 });
 
-test("normalizes duplicate email addresses within a card", () => {
-  const [contact] = parseVCardContacts(`BEGIN:VCARD
+test("normalizes duplicate email addresses within a card", async () => {
+  const [contact] = await parseVCardContacts(`BEGIN:VCARD
 VERSION:2.1
 FN:Example Person
 EMAIL:mailto:PERSON@EXAMPLE.COM

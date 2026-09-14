@@ -1,4 +1,4 @@
-import { VCard } from "@pipobscure/vcard";
+import type { VCard } from "@pipobscure/vcard";
 
 export type VCardEmail = {
   email: string;
@@ -32,7 +32,10 @@ const preferredFirst = <T extends { pref?: number }>(values: T[]) =>
     .map(({ value }) => value);
 
 const normalizeEmail = (email: string) =>
-  email.trim().replace(/^mailto:/i, "").toLowerCase();
+  email
+    .trim()
+    .replace(/^mailto:/i, "")
+    .toLowerCase();
 
 const normalizePhone = (phone: string) => {
   const trimmed = phone.trim();
@@ -65,8 +68,12 @@ const buildStructuredName = (card: VCard) => {
     .join(" ");
 };
 
-export const parseVCardContacts = (text: string): VCardContact[] =>
-  VCard.parse(text.replace(/^\uFEFF/, "")).map((card) => {
+export const parseVCardContacts = async (
+  text: string,
+): Promise<VCardContact[]> => {
+  // The package only exports an ESM entry; tsx also loads this file from CommonJS.
+  const { VCard } = await import("@pipobscure/vcard");
+  return VCard.parse(text.replace(/^\uFEFF/, "")).map((card) => {
     const emails = preferredFirst(card.email)
       .map((property) => ({
         email: normalizeEmail(property.value),
@@ -112,3 +119,4 @@ export const parseVCardContacts = (text: string): VCardContact[] =>
       warnings: card.parseWarnings.map((warning) => warning.message),
     };
   });
+};
