@@ -37,11 +37,15 @@ export function ContactPasteDialog({
   const worker = useRef<Worker | null>(null);
   const timeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  function clearDetectorTimeout() {
+    if (timeout.current) clearTimeout(timeout.current);
+    timeout.current = null;
+  }
+
   function stop() {
     worker.current?.terminate();
     worker.current = null;
-    if (timeout.current) clearTimeout(timeout.current);
-    timeout.current = null;
+    clearDetectorTimeout();
   }
 
   useEffect(
@@ -53,7 +57,8 @@ export function ContactPasteDialog({
   );
 
   function changeOpen(next: boolean) {
-    stop();
+    if (busy) stop();
+    else clearDetectorTimeout();
     setBusy(false);
     setStatus("");
     setOpen(next);
@@ -64,9 +69,16 @@ export function ContactPasteDialog({
   }
 
   function detect() {
-    stop();
+    clearDetectorTimeout();
     const parsed = parseContactPaste(text);
     setValues(parsed);
+    if (parsed.name) {
+      setBusy(false);
+      setStatus(
+        "Detection complete. Check the suggestions before filling the form.",
+      );
+      return;
+    }
     setBusy(true);
     setStatus("Loading contact detector…");
     const fallback = () => {
@@ -77,10 +89,12 @@ export function ContactPasteDialog({
       );
     };
     try {
-      const instance = new Worker(
-        new URL("../../workers/contact-paste.worker.ts", import.meta.url),
-        { type: "module" },
-      );
+      const instance =
+        worker.current ??
+        new Worker(
+          new URL("../../workers/contact-paste.worker.ts", import.meta.url),
+          { type: "module" },
+        );
       worker.current = instance;
       instance.onmessage = (event: MessageEvent<ContactPasteWorkerMessage>) => {
         const message = event.data;
@@ -100,7 +114,7 @@ export function ContactPasteDialog({
           "Detection complete. Check the suggestions before filling the form.",
         );
         setBusy(false);
-        stop();
+        clearDetectorTimeout();
       };
       instance.onerror = fallback;
       timeout.current = setTimeout(fallback, 60000);
@@ -137,7 +151,7 @@ export function ContactPasteDialog({
                 "Jane Smith\nEmail: jane@example.org\nPhone: +49 30 1234567\nWebsite: https://example.org"
               }
               onChange={(event) => {
-                stop();
+                if (busy) stop();
                 setBusy(false);
                 setStatus("");
                 setValues(null);

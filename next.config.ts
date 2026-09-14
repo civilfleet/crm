@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
         ],
       },
       {
-        source: "/runtime/transformers-3.8.1/:path*",
+        source: "/runtime/onnxruntime-web-1.22/:path*",
         headers: [
           {
             key: "Cache-Control",

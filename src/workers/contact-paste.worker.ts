@@ -16,22 +16,26 @@ env.localModelPath = "/models/";
 if (env.backends.onnx.wasm) {
   env.backends.onnx.wasm.numThreads = 1;
   env.backends.onnx.wasm.wasmPaths = {
-    mjs: "/runtime/transformers-3.8.1/ort-wasm-simd-threaded.jsep.mjs",
-    wasm: "/runtime/transformers-3.8.1/ort-wasm-simd-threaded.jsep.wasm",
+    mjs: "/runtime/onnxruntime-web-1.22/ort-wasm-simd-threaded.mjs",
+    wasm: "/runtime/onnxruntime-web-1.22/ort-wasm-simd-threaded.wasm",
   };
 }
 
 const post = (message: ContactPasteWorkerMessage) => self.postMessage(message);
-const createDetector = () =>
-  pipeline("token-classification", DETECTOR_MODEL, {
+const createDetector = () => {
+  let announcedDownload = false;
+  return pipeline("token-classification", DETECTOR_MODEL, {
     dtype: "q8",
     device: "wasm",
     local_files_only: true,
     progress_callback: (progress) => {
-      if (progress.status === "progress")
+      if (progress.status === "progress" && !announcedDownload) {
+        announcedDownload = true;
         post({ type: "status", message: "Downloading contact detector…" });
+      }
     },
   });
+};
 let detector: ReturnType<typeof createDetector> | undefined;
 
 self.onmessage = async (event: MessageEvent<string>) => {
