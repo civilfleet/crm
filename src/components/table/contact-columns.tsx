@@ -118,6 +118,12 @@ const renderAttributes = (attributes: ContactProfileAttribute[] = []) => {
   );
 };
 
+const ContactTextCell = ({ value }: { value?: string | null }) => (
+  <span className="block max-w-[260px] truncate" title={value || undefined}>
+    {value || "-"}
+  </span>
+);
+
 const ContactNameCell = ({ contact }: { contact: ContactRow }) => {
   const params = useParams();
   const teamId = params.teamId as string;
@@ -128,10 +134,10 @@ const ContactNameCell = ({ contact }: { contact: ContactRow }) => {
       className="font-medium hover:underline"
     >
       <div className="flex flex-col gap-1">
-        <span>{contact.name}</span>
+        <ContactTextCell value={contact.name} />
         {contact.pronouns && (
           <span className="text-xs text-muted-foreground">
-            {contact.pronouns}
+            <ContactTextCell value={contact.pronouns} />
           </span>
         )}
       </div>
@@ -144,7 +150,7 @@ const ContactEmailCell = ({ contact }: { contact: ContactRow }) => {
 
   return (
     <div className="flex max-w-[260px] flex-col gap-1">
-      <span className="break-all">{contact.email || "-"}</span>
+      <ContactTextCell value={contact.email} />
       {additionalCount > 0 ? (
         <span className="text-xs text-muted-foreground">
           +{additionalCount} additional
@@ -174,14 +180,14 @@ export const contactColumns: ColumnDef<ContactRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Phone" />
     ),
-    cell: ({ row }) => <span>{row.original.phone || "-"}</span>,
+    cell: ({ row }) => <ContactTextCell value={row.original.phone} />,
   },
   {
     accessorKey: "signal",
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Signal" />
     ),
-    cell: ({ row }) => <span>{row.original.signal || "-"}</span>,
+    cell: ({ row }) => <ContactTextCell value={row.original.signal} />,
   },
   {
     accessorKey: "website",
@@ -196,7 +202,8 @@ export const contactColumns: ColumnDef<ContactRow>[] = [
       return (
         <a
           href={website}
-          className="text-blue-600 hover:underline"
+          className="block max-w-[260px] truncate text-blue-600 hover:underline"
+          title={website}
           target="_blank"
           rel="noreferrer"
         >
@@ -210,7 +217,7 @@ export const contactColumns: ColumnDef<ContactRow>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="City" />
     ),
-    cell: ({ row }) => <span>{row.original.city || "-"}</span>,
+    cell: ({ row }) => <ContactTextCell value={row.original.city} />,
   },
   {
     accessorKey: "address",
@@ -225,7 +232,7 @@ export const contactColumns: ColumnDef<ContactRow>[] = [
         row.original.state,
         row.original.country,
       ].filter(Boolean);
-      return <span>{parts.length ? parts.join(", ") : "-"}</span>;
+      return <ContactTextCell value={parts.join(", ")} />;
     },
   },
   {
