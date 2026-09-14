@@ -19,6 +19,8 @@
       "!dist",
       "!build",
       "!docs",
+      "!public/models",
+      "!public/runtime",
       "!templates",
       "!prisma/migrations"
     ]
