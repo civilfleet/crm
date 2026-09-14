@@ -36,7 +36,7 @@ export default async function TeamPage({ params }: TeamPageProps) {
     if (canAccessCrm) {
       const [contactsCount, listsCount, eventsCount] = await Promise.all([
         prisma.contact.count({
-          where: { teamId },
+          where: { teamId, deletedAt: null },
         }),
         prisma.contactList.count({
           where: { teamId },

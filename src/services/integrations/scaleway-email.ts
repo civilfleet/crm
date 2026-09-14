@@ -655,6 +655,7 @@ export const sendMassEmailToContacts = async ({
     where: {
       teamId,
       id: { in: uniqueContactIds },
+      deletedAt: null,
     },
     select: {
       id: true,

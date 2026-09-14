@@ -294,6 +294,7 @@ export const getTeamEvents = async (
         contacts: {
           some: {
             contact: {
+              deletedAt: null,
               name: { contains: query, mode: "insensitive" },
             },
           },
@@ -306,6 +307,7 @@ export const getTeamEvents = async (
     include: {
       eventType: true,
       contacts: {
+        where: { contact: { deletedAt: null } },
         include: {
           contact: {
             include: {
@@ -345,6 +347,7 @@ export const getEventById = async (eventId: string, teamId: string) => {
     include: {
       eventType: true,
       contacts: {
+        where: { contact: { deletedAt: null } },
         include: {
           contact: {
             include: {
@@ -437,6 +440,7 @@ export const createEvent = async (input: CreateEventInput) => {
         where: {
           id: { in: contactIds },
           teamId,
+          deletedAt: null,
         },
         select: { id: true },
       });
@@ -497,6 +501,7 @@ export const createEvent = async (input: CreateEventInput) => {
       include: {
         eventType: true,
         contacts: {
+          where: { contact: { deletedAt: null } },
           include: {
             contact: {
               include: {
@@ -609,6 +614,7 @@ export const updateEvent = async (input: UpdateEventInput) => {
         where: {
           id: { in: contactIds },
           teamId,
+          deletedAt: null,
         },
         select: { id: true },
       });
@@ -672,6 +678,7 @@ export const updateEvent = async (input: UpdateEventInput) => {
       include: {
         eventType: true,
         contacts: {
+          where: { contact: { deletedAt: null } },
           include: {
             contact: {
               include: {
@@ -999,6 +1006,7 @@ export const createEventRegistration = async (
         where: {
           teamId: event.teamId,
           phone: trimmedPhone,
+          deletedAt: null,
         },
         include: { emails: true },
       });

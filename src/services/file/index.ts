@@ -50,7 +50,9 @@ const getFiles = async (
         { FundingRequest: { teamId } },
         { donationAgreement: { some: { teamId } } },
         { Transaction: { some: { teamId } } },
-        ...(includeContactFiles ? [{ contact: { teamId } }] : []),
+        ...(includeContactFiles
+          ? [{ contact: { teamId, deletedAt: null } }]
+          : []),
       ],
     };
   } else if (organizationId) {
@@ -325,8 +327,8 @@ const canUserAccessContactScope = async ({
 }) => {
   const [scope, contact] = await Promise.all([
     getUserAccessScope(userId),
-    prisma.contact.findUnique({
-      where: { id: contactId },
+    prisma.contact.findFirst({
+      where: { id: contactId, deletedAt: null },
       select: { teamId: true },
     }),
   ]);

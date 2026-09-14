@@ -396,6 +396,7 @@ const getOrganizationById = async (id: string) => {
         },
       },
       contacts: {
+        where: { contact: { deletedAt: null } },
         include: {
           contact: {
             select: {
@@ -485,6 +486,7 @@ const organizationListInclude = {
   contactPerson: true,
   users: true,
   contacts: {
+    where: { contact: { deletedAt: null } },
     include: {
       contact: {
         select: {

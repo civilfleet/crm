@@ -890,7 +890,7 @@ export const replyToZammadTicket = async ({
   }
 
   const contact = await prisma.contact.findFirst({
-    where: { id: contactId, teamId },
+    where: { id: contactId, teamId, deletedAt: null },
     select: {
       name: true,
       emails: primaryContactEmailSelect,
@@ -979,7 +979,7 @@ export const createZammadTicket = async ({
   }
 
   const contact = await prisma.contact.findFirst({
-    where: { id: contactId, teamId },
+    where: { id: contactId, teamId, deletedAt: null },
     select: {
       name: true,
       emails: primaryContactEmailSelect,

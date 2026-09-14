@@ -52,7 +52,7 @@ const assertContactsBelongToTeam = async (
   if (uniqueIds.length === 0) return;
 
   const count = await prisma.contact.count({
-    where: { id: { in: uniqueIds }, teamId },
+    where: { id: { in: uniqueIds }, teamId, deletedAt: null },
   });
   if (count !== uniqueIds.length) {
     throw new Error("One or more contacts do not belong to this team");
@@ -79,7 +79,7 @@ const buildContactVisibilityFilter = async (
   roles: Roles[] = [],
 ): Promise<Prisma.ContactListMemberWhereInput | undefined> => {
   if (!userId || roles.includes(Roles.Admin)) {
-    return undefined;
+    return { contact: { deletedAt: null } };
   }
 
   await ensureDefaultGroup(teamId);
@@ -102,7 +102,7 @@ const buildContactVisibilityFilter = async (
   });
 
   if (memberships.some((membership) => membership.group.canAccessAllContacts)) {
-    return undefined;
+    return { contact: { deletedAt: null } };
   }
 
   const accessibleGroupIds = memberships
@@ -112,6 +112,7 @@ const buildContactVisibilityFilter = async (
   if (!accessibleGroupIds.length) {
     return {
       contact: {
+        deletedAt: null,
         groups: {
           none: {},
         },
@@ -121,6 +122,7 @@ const buildContactVisibilityFilter = async (
 
   return {
     contact: {
+      deletedAt: null,
       OR: [
         { groups: { none: {} } },
         { groups: { some: { groupId: { in: accessibleGroupIds } } } },

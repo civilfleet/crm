@@ -11,11 +11,19 @@ export const getContactVisibility = async ({
   teamId,
   userId,
   roles = [],
+  deleted = "active",
 }: {
   teamId: string;
   userId?: string;
   roles?: Roles[];
+  deleted?: "active" | "trashed" | "all";
 }): Promise<ContactVisibility> => {
+  const deletionFilter: Prisma.ContactWhereInput =
+    deleted === "all"
+      ? {}
+      : deleted === "trashed"
+        ? { deletedAt: { not: null } }
+        : { deletedAt: null };
   const userGroups = userId
     ? await prisma.userGroup.findMany({
         where: { userId, group: { teamId } },
@@ -28,12 +36,13 @@ export const getContactVisibility = async ({
     roles.includes(Roles.Admin) ||
     userGroups.some(({ group }) => group.canAccessAllContacts)
   ) {
-    return { where: { teamId }, userGroupIds };
+    return { where: { teamId, ...deletionFilter }, userGroupIds };
   }
 
   return {
     where: {
       teamId,
+      ...deletionFilter,
       OR: [
         { groups: { none: {} } },
         ...(userGroupIds.length

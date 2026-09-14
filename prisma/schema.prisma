@@ -527,6 +527,7 @@ model Contact {
   group             Group?               @relation(fields: [groupId], references: [id], onDelete: SetNull)
   createdAt         DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt         DateTime             @updatedAt @db.Timestamptz(6)
+  deletedAt         DateTime?            @db.Timestamptz(6)
   emails            ContactEmail[]
   attributes        ContactAttribute[]
   socialLinks       ContactSocialLink[]
@@ -545,6 +546,7 @@ model Contact {
 
   @@index([groupId])
   @@index([teamId, groupId])
+  @@index([teamId, deletedAt])
 }
 
 model ContactEmail {

@@ -46,10 +46,10 @@ export default function DeleteContactButton({
       }
 
       toast({
-        title: "Contact deleted",
+        title: "Contact moved to trash",
         description: contactName
-          ? `${contactName} has been removed.`
-          : "Contact removed.",
+          ? `${contactName} can be restored from the contacts trash.`
+          : "The contact can be restored from the contacts trash.",
         variant: "default",
       });
 
@@ -70,18 +70,18 @@ export default function DeleteContactButton({
     <AlertDialog>
       <AlertDialogTrigger asChild>
         <Button variant="destructive" size="sm">
-          Delete Contact
+          Move to trash
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete contact</AlertDialogTitle>
+          <AlertDialogTitle>Move contact to trash?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently remove{" "}
+            This will remove{" "}
             <span className="font-semibold">
               {contactName ?? "this contact"}
             </span>{" "}
-            and all related data. This action cannot be undone.
+            from active contacts. You can restore it from the trash later.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -91,7 +91,7 @@ export default function DeleteContactButton({
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             disabled={isDeleting}
           >
-            {isDeleting ? "Deleting..." : "Delete"}
+            {isDeleting ? "Moving..." : "Move to trash"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

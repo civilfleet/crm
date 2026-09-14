@@ -739,6 +739,7 @@ const findContactByIdentityEmail = async (
       teamId,
       email: normalizedEmail,
       kind: { in: [ContactEmailKind.PRIMARY, ContactEmailKind.ALIAS] },
+      contact: { deletedAt: null },
     },
     select: {
       contact: {
@@ -1165,6 +1166,7 @@ const mapContact = (contact: ContactWithAttributes): ContactType => ({
   })(),
   createdAt: contact.createdAt,
   updatedAt: contact.updatedAt,
+  deletedAt: contact.deletedAt ?? undefined,
 });
 
 async function getTeamContacts(
@@ -1180,7 +1182,7 @@ async function getTeamContacts(
   userId: string | undefined,
   filters: ContactFilter[] | undefined,
   roles: Roles[] | undefined,
-  pagination: { page: number; pageSize: number },
+  pagination: { page: number; pageSize: number; deletedOnly?: boolean },
 ): Promise<{ data: ContactType[]; total: number }>;
 async function getTeamContacts(
   teamId: string,
@@ -1188,7 +1190,7 @@ async function getTeamContacts(
   userId?: string,
   filters?: ContactFilter[],
   roles: Roles[] = [],
-  pagination?: { page: number; pageSize: number },
+  pagination?: { page: number; pageSize: number; deletedOnly?: boolean },
 ) {
   await ensureDefaultGroup(teamId);
 
@@ -1198,7 +1200,12 @@ async function getTeamContacts(
     },
   ];
 
-  const visibility = await getContactVisibility({ teamId, userId, roles });
+  const visibility = await getContactVisibility({
+    teamId,
+    userId,
+    roles,
+    deleted: pagination?.deletedOnly ? "trashed" : "active",
+  });
   const userGroupIds = visibility.userGroupIds;
   andConditions[0] = visibility.where;
 
@@ -1745,6 +1752,7 @@ const getContactById = async (
     where: {
       id: contactId,
       teamId,
+      deletedAt: null,
     },
     include: contactInclude,
   });
@@ -2546,6 +2554,7 @@ const updateContact = async (
       where: {
         id: contactId,
         teamId,
+        deletedAt: null,
       },
       include: {
         attributes: true,
@@ -3275,6 +3284,7 @@ const deleteContactFile = async (
       where: {
         id: contactId,
         teamId,
+        deletedAt: null,
       },
       include: {
         files: {
@@ -3405,6 +3415,7 @@ const previewContactMerge = async (input: MergeContactsPreviewInput) => {
     where: {
       teamId: input.teamId,
       id: { in: input.contactIds },
+      deletedAt: null,
     },
     include: contactInclude,
     orderBy: { createdAt: "asc" },
@@ -3440,6 +3451,7 @@ const mergeContacts = async (
       where: {
         teamId: input.teamId,
         id: { in: allContactIds },
+        deletedAt: null,
       },
       include: {
         ...contactInclude,
@@ -3735,17 +3747,72 @@ const mergeContacts = async (
   });
 };
 
-const deleteContacts = async (teamId: string, ids: string[]) => {
+const deleteContacts = async (
+  teamId: string,
+  ids: string[],
+  userId?: string,
+  roles: Roles[] = [],
+) => {
   if (!ids.length) {
-    return;
+    return 0;
   }
 
-  await prisma.contact.deleteMany({
+  const visibility = await getContactVisibility({
+    teamId,
+    userId,
+    roles,
+    deleted: "active",
+  });
+  const result = await prisma.contact.updateMany({
     where: {
-      id: { in: ids },
-      teamId,
+      AND: [visibility.where, { id: { in: ids }, deletedAt: null }],
+    },
+    data: { deletedAt: new Date() },
+  });
+  return result.count;
+};
+
+const restoreContacts = async (
+  teamId: string,
+  ids: string[],
+  userId?: string,
+  roles: Roles[] = [],
+) => {
+  if (!ids.length) return 0;
+  const visibility = await getContactVisibility({
+    teamId,
+    userId,
+    roles,
+    deleted: "trashed",
+  });
+  const result = await prisma.contact.updateMany({
+    where: {
+      AND: [visibility.where, { id: { in: ids }, deletedAt: { not: null } }],
+    },
+    data: { deletedAt: null },
+  });
+  return result.count;
+};
+
+const permanentlyDeleteContacts = async (
+  teamId: string,
+  ids: string[],
+  userId?: string,
+  roles: Roles[] = [],
+) => {
+  if (!ids.length) return 0;
+  const visibility = await getContactVisibility({
+    teamId,
+    userId,
+    roles,
+    deleted: "trashed",
+  });
+  const result = await prisma.contact.deleteMany({
+    where: {
+      AND: [visibility.where, { id: { in: ids }, deletedAt: { not: null } }],
     },
   });
+  return result.count;
 };
 
 const getTeamContactAttributeKeys = async (
@@ -3849,7 +3916,9 @@ export {
   importContactsFromCsv,
   importContactsFromVCard,
   mergeContacts,
+  permanentlyDeleteContacts,
   previewContactMerge,
+  restoreContacts,
   updateContact,
   exportContacts,
   findContactByIdentityEmail,

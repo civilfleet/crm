@@ -21,8 +21,8 @@ const getOrganizationAndContact = async (
       where: { id: organizationId },
       select: { id: true, teamId: true },
     }),
-    prisma.contact.findUnique({
-      where: { id: contactId },
+    prisma.contact.findFirst({
+      where: { id: contactId, deletedAt: null },
       select: {
         id: true,
         teamId: true,

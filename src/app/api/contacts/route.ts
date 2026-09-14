@@ -22,9 +22,10 @@ export async function GET(req: Request) {
     const teamId = searchParams.get("teamId");
     const query = searchParams.get("query") || "";
     const filtersParam = searchParams.get("filters");
+    const deletedOnly = searchParams.get("deleted") === "true";
     const hasPageParam = searchParams.has("page");
     const hasPageSizeParam = searchParams.has("pageSize");
-    const hasPagination = hasPageParam || hasPageSizeParam;
+    const hasPagination = hasPageParam || hasPageSizeParam || deletedOnly;
     const pageParam = Number(searchParams.get("page") || "1");
     const pageSizeParam = Number(searchParams.get("pageSize") || "10");
     const page =
@@ -66,7 +67,7 @@ export async function GET(req: Request) {
           userId,
           filters,
           roles,
-          { page, pageSize },
+          { page, pageSize, deletedOnly },
         )
       : await getTeamContacts(
           teamId,
@@ -151,11 +152,18 @@ export async function DELETE(req: Request) {
   try {
     const payload = await req.json();
     const validated = deleteContactsSchema.parse(payload);
-    await verifyTeamAccess(validated.teamId, { requireModule: "CRM" });
+    const session = await verifyTeamAccess(validated.teamId, {
+      requireModule: "CRM",
+    });
 
-    await deleteContacts(validated.teamId, validated.ids);
+    const count = await deleteContacts(
+      validated.teamId,
+      validated.ids,
+      session.user.userId,
+      (session.user.roles ?? []) as Roles[],
+    );
 
-    return NextResponse.json({ data: "success" }, { status: 200 });
+    return NextResponse.json({ data: { count } }, { status: 200 });
   } catch (e) {
     const apiError = handleApiError(e);
     if (apiError) return apiError;

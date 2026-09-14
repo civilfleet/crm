@@ -223,6 +223,7 @@ export interface Contact {
   files?: { id?: string; name: string; type: string; url: string }[];
   createdAt: Date;
   updatedAt: Date;
+  deletedAt?: Date;
 }
 
 export interface ContactEmail {

@@ -44,6 +44,7 @@ export type ContactRow = {
   events?: ContactEvent[];
   createdAt: string | Date;
   updatedAt: string | Date;
+  deletedAt?: string | Date | null;
 };
 
 const formatDate = (value?: string | Date | null) => {
@@ -128,19 +129,27 @@ const ContactNameCell = ({ contact }: { contact: ContactRow }) => {
   const params = useParams();
   const teamId = params.teamId as string;
 
+  const content = (
+    <div className="flex flex-col gap-1">
+      <ContactTextCell value={contact.name} />
+      {contact.pronouns && (
+        <span className="text-xs text-muted-foreground">
+          <ContactTextCell value={contact.pronouns} />
+        </span>
+      )}
+    </div>
+  );
+
+  if (contact.deletedAt) {
+    return content;
+  }
+
   return (
     <Link
       href={`/teams/${teamId}/crm/contacts/${contact.id}`}
       className="font-medium hover:underline"
     >
-      <div className="flex flex-col gap-1">
-        <ContactTextCell value={contact.name} />
-        {contact.pronouns && (
-          <span className="text-xs text-muted-foreground">
-            <ContactTextCell value={contact.pronouns} />
-          </span>
-        )}
-      </div>
+      {content}
     </Link>
   );
 };

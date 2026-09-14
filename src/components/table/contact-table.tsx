@@ -2,13 +2,16 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  ArrowLeft,
   Download,
   Filter,
   GitMerge,
   Loader2,
   Mail,
   Plus,
+  RotateCcw,
   Send,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -31,6 +34,17 @@ import {
   renderContactCard,
 } from "@/components/table/contact-columns";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -472,6 +486,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [showTrash, setShowTrash] = useState(false);
 
   const form = useForm<z.infer<typeof querySchema>>({
     resolver: zodResolver(querySchema),
@@ -493,7 +508,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
     return `&filters=${encodeURIComponent(JSON.stringify(activeFilters))}`;
   }, [activeFilters]);
 
-  const contactsKey = `/api/contacts?teamId=${teamId}&query=${encodeURIComponent(query)}${filtersQuery}`;
+  const contactsKey = `/api/contacts?teamId=${teamId}&query=${encodeURIComponent(query)}${filtersQuery}${showTrash ? "&deleted=true" : ""}`;
   const paginatedContactsKey = `${contactsKey}&page=${page}&pageSize=${pageSize}`;
 
   const { data, error, isLoading, isValidating, mutate } = useSWR(
@@ -613,7 +628,8 @@ export default function ContactTable({ teamId }: ContactTableProps) {
     form.setValue("query", values.query);
   };
 
-  const handleDeleteSelected = async (
+  const handleContactAction = async (
+    action: "trash" | "restore" | "delete",
     selectedRows: ContactRow[],
     clearSelection: () => void,
   ) => {
@@ -624,41 +640,81 @@ export default function ContactTable({ teamId }: ContactTableProps) {
     setIsDeleting(true);
 
     try {
-      const response = await fetch("/api/contacts", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        action === "trash" ? "/api/contacts" : "/api/contacts/trash",
+        {
+          method: action === "restore" ? "PATCH" : "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            teamId,
+            ids: selectedRows.map((contact) => contact.id),
+          }),
         },
-        body: JSON.stringify({
-          teamId,
-          ids: selectedRows.map((contact) => contact.id),
-        }),
-      });
+      );
 
       if (!response.ok) {
         const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody.error || "Failed to delete contacts");
+        throw new Error(errorBody.error || "Failed to update contacts");
       }
 
+      const result = await response.json();
+      const count = Number(result?.data?.count ?? 0);
+      if (count === 0) {
+        throw new Error("No matching contacts were updated.");
+      }
+      const plural = count === 1 ? "contact" : "contacts";
       toast({
-        title: "Contacts deleted",
-        description: `${selectedRows.length} contact${selectedRows.length > 1 ? "s" : ""} removed successfully.`,
+        title:
+          action === "trash"
+            ? `${count} ${plural} moved to trash`
+            : action === "restore"
+              ? `${count} ${plural} restored`
+              : `${count} ${plural} permanently deleted`,
+        description:
+          action === "trash"
+            ? "You can restore them from the trash."
+            : action === "restore"
+              ? "They are available in active contacts again."
+              : "This action cannot be undone.",
       });
 
       clearSelection();
       await mutate();
-    } catch (deleteError) {
+    } catch (actionError) {
       toast({
-        title: "Unable to delete contacts",
+        title: "Unable to update contacts",
         description:
-          deleteError instanceof Error
-            ? deleteError.message
+          actionError instanceof Error
+            ? actionError.message
             : "An unexpected error occurred.",
         variant: "destructive",
       });
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const handleDeleteSelected = async (
+    selectedRows: ContactRow[],
+    clearSelection: () => void,
+  ) => {
+    await handleContactAction("trash", selectedRows, clearSelection);
+  };
+
+  const handleRestoreSelected = async (
+    selectedRows: ContactRow[],
+    clearSelection: () => void,
+  ) => {
+    await handleContactAction("restore", selectedRows, clearSelection);
+  };
+
+  const handlePermanentlyDeleteSelected = async (
+    selectedRows: ContactRow[],
+    clearSelection: () => void,
+  ) => {
+    await handleContactAction("delete", selectedRows, clearSelection);
   };
 
   const updateFilter = useCallback(
@@ -1468,6 +1524,14 @@ export default function ContactTable({ teamId }: ContactTableProps) {
 
   return (
     <div className="my-4 flex flex-col gap-5">
+      {showTrash && (
+        <div className="rounded-md border bg-muted/30 p-4">
+          <h2 className="font-medium">Contact trash</h2>
+          <p className="text-sm text-muted-foreground">
+            Restore contacts or permanently delete them and their related data.
+          </p>
+        </div>
+      )}
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(handleSubmit)}
@@ -1596,55 +1660,86 @@ export default function ContactTable({ teamId }: ContactTableProps) {
             }}
             toolbar={
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="hidden gap-2 px-3 sm:inline-flex"
-                  onClick={() => setIsImportDialogOpen(true)}
-                >
-                  <Upload className="h-4 w-4" />
-                  <span>Import contacts</span>
-                </Button>
-                <Link
-                  href={`/teams/${teamId}/crm/contacts/create`}
-                  aria-label="Add contact"
-                >
+                {showTrash ? (
                   <Button
                     type="button"
+                    variant="outline"
                     size="sm"
-                    className="hidden gap-2 px-3 sm:inline-flex"
+                    className="gap-2"
+                    onClick={() => {
+                      setShowTrash(false);
+                      setPage(1);
+                    }}
                   >
-                    <Plus className="h-4 w-4" />
-                    <span>Add contact</span>
+                    <ArrowLeft className="h-4 w-4" />
+                    Active contacts
                   </Button>
-                </Link>
-                <ContactImportDialog
-                  open={isImportDialogOpen}
-                  file={importFile}
-                  headers={importHeaders}
-                  previewRows={importPreviewRows}
-                  format={importFormat}
-                  vcardContacts={importVCardContacts}
-                  sourceMapping={importSourceMapping}
-                  result={importResult}
-                  isImporting={isImporting}
-                  onOpenChange={(open) => {
-                    setIsImportDialogOpen(open);
-                    if (!open) {
-                      setImportFile(null);
-                      setImportHeaders([]);
-                      setImportPreviewRows([]);
-                      setImportSourceMapping({});
-                      setImportFormat("csv");
-                      setImportVCardContacts([]);
-                      setImportResult(null);
-                    }
-                  }}
-                  onFileChange={handleImportFileChange}
-                  onSourceMappingChange={setImportSourceMapping}
-                  onImport={handleImportContacts}
-                />
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="hidden gap-2 px-3 sm:inline-flex"
+                      onClick={() => setIsImportDialogOpen(true)}
+                    >
+                      <Upload className="h-4 w-4" />
+                      <span>Import contacts</span>
+                    </Button>
+                    <Link
+                      href={`/teams/${teamId}/crm/contacts/create`}
+                      aria-label="Add contact"
+                    >
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="hidden gap-2 px-3 sm:inline-flex"
+                      >
+                        <Plus className="h-4 w-4" />
+                        <span>Add contact</span>
+                      </Button>
+                    </Link>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => {
+                        setShowTrash(true);
+                        setPage(1);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Trash
+                    </Button>
+                    <ContactImportDialog
+                      open={isImportDialogOpen}
+                      file={importFile}
+                      headers={importHeaders}
+                      previewRows={importPreviewRows}
+                      format={importFormat}
+                      vcardContacts={importVCardContacts}
+                      sourceMapping={importSourceMapping}
+                      result={importResult}
+                      isImporting={isImporting}
+                      onOpenChange={(open) => {
+                        setIsImportDialogOpen(open);
+                        if (!open) {
+                          setImportFile(null);
+                          setImportHeaders([]);
+                          setImportPreviewRows([]);
+                          setImportSourceMapping({});
+                          setImportFormat("csv");
+                          setImportVCardContacts([]);
+                          setImportResult(null);
+                        }
+                      }}
+                      onFileChange={handleImportFileChange}
+                      onSourceMappingChange={setImportSourceMapping}
+                      onImport={handleImportContacts}
+                    />
+                  </>
+                )}
               </div>
             }
             selectable
@@ -1654,54 +1749,139 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                   {selectedRows.length} selected
                 </span>
                 <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={
-                      isDeleting ||
-                      isSendingEmail ||
-                      selectedRows.filter((contact) => contact.email).length ===
-                        0
-                    }
-                    onClick={() => openEmailDialog(selectedRows)}
-                  >
-                    <Mail className="mr-2 h-4 w-4" />
-                    Email selected
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={
-                      isDeleting ||
-                      isMerging ||
-                      isMergePreviewLoading ||
-                      selectedRows.length < 2
-                    }
-                    onClick={() => openMergeDialog(selectedRows)}
-                  >
-                    <GitMerge className="mr-2 h-4 w-4" />
-                    Merge selected
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    disabled={isDeleting}
-                    onClick={() =>
-                      handleDeleteSelected(selectedRows, clearSelection)
-                    }
-                  >
-                    {isDeleting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      "Delete selected"
-                    )}
-                  </Button>
+                  {showTrash ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={isDeleting}
+                        onClick={() =>
+                          handleRestoreSelected(selectedRows, clearSelection)
+                        }
+                      >
+                        <RotateCcw className="mr-2 h-4 w-4" />
+                        Restore selected
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            disabled={isDeleting}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete permanently
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              Permanently delete {selectedRows.length}{" "}
+                              {selectedRows.length === 1
+                                ? "contact"
+                                : "contacts"}
+                              ?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              All related data will be deleted. This action
+                              cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={() =>
+                                handlePermanentlyDeleteSelected(
+                                  selectedRows,
+                                  clearSelection,
+                                )
+                              }
+                            >
+                              Delete permanently
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={
+                          isDeleting ||
+                          isSendingEmail ||
+                          selectedRows.filter((contact) => contact.email)
+                            .length === 0
+                        }
+                        onClick={() => openEmailDialog(selectedRows)}
+                      >
+                        <Mail className="mr-2 h-4 w-4" />
+                        Email selected
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={
+                          isDeleting ||
+                          isMerging ||
+                          isMergePreviewLoading ||
+                          selectedRows.length < 2
+                        }
+                        onClick={() => openMergeDialog(selectedRows)}
+                      >
+                        <GitMerge className="mr-2 h-4 w-4" />
+                        Merge selected
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            disabled={isDeleting}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Move to trash
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              Move {selectedRows.length}{" "}
+                              {selectedRows.length === 1
+                                ? "contact"
+                                : "contacts"}{" "}
+                              to trash?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              They will disappear from active contacts and can
+                              be restored from the trash later.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={() =>
+                                handleDeleteSelected(
+                                  selectedRows,
+                                  clearSelection,
+                                )
+                              }
+                            >
+                              Move to trash
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </>
+                  )}
                   <Button
                     type="button"
                     variant="ghost"
@@ -1711,16 +1891,18 @@ export default function ContactTable({ teamId }: ContactTableProps) {
                   >
                     Clear
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={isDeleting || selectedRows.length === 0}
-                    onClick={() => setIsExportDialogOpen(true)}
-                  >
-                    <Download className="mr-2 h-4 w-4" />
-                    Export
-                  </Button>
+                  {!showTrash && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={isDeleting || selectedRows.length === 0}
+                      onClick={() => setIsExportDialogOpen(true)}
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Export
+                    </Button>
+                  )}
                 </div>
                 <ContactExportDialog
                   teamId={teamId}
@@ -1781,30 +1963,34 @@ export default function ContactTable({ teamId }: ContactTableProps) {
         )}
       </div>
 
-      <Link
-        href={`/teams/${teamId}/crm/contacts/create`}
-        aria-label="Add contact"
-        className="fixed bottom-5 right-5 z-40 sm:hidden"
-      >
-        <Button
-          type="button"
-          size="icon"
-          className="h-12 w-12 rounded-full shadow-lg"
-        >
-          <Plus className="h-5 w-5" />
-          <span className="sr-only">Add contact</span>
-        </Button>
-      </Link>
-      <Button
-        type="button"
-        variant="outline"
-        size="icon"
-        aria-label="Import contacts"
-        className="fixed bottom-20 right-5 z-40 h-12 w-12 rounded-full bg-background shadow-lg sm:hidden"
-        onClick={() => setIsImportDialogOpen(true)}
-      >
-        <Upload className="h-5 w-5" />
-      </Button>
+      {!showTrash && (
+        <>
+          <Link
+            href={`/teams/${teamId}/crm/contacts/create`}
+            aria-label="Add contact"
+            className="fixed bottom-5 right-5 z-40 sm:hidden"
+          >
+            <Button
+              type="button"
+              size="icon"
+              className="h-12 w-12 rounded-full shadow-lg"
+            >
+              <Plus className="h-5 w-5" />
+              <span className="sr-only">Add contact</span>
+            </Button>
+          </Link>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Import contacts"
+            className="fixed bottom-20 right-5 z-40 h-12 w-12 rounded-full bg-background shadow-lg sm:hidden"
+            onClick={() => setIsImportDialogOpen(true)}
+          >
+            <Upload className="h-5 w-5" />
+          </Button>
+        </>
+      )}
     </div>
   );
 }
