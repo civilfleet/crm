@@ -122,9 +122,7 @@ export function ContactPasteDialog({
         <DialogHeader>
           <DialogTitle>Paste contact info</DialogTitle>
           <DialogDescription>
-            Paste a contact section or email signature. Detection runs on your
-            device. First use downloads the contact detector (about 10 MB), plus
-            supporting files. Name detection works best with English text.
+            Paste a contact section or email signature to fill the form.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

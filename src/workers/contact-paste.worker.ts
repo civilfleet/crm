@@ -6,17 +6,27 @@ import {
   extractContactName,
 } from "@/lib/contact-paste";
 
-env.allowLocalModels = false;
+const DETECTOR_MODEL = "contact-detector-e3a6a290";
+
+env.allowLocalModels = true;
+env.allowRemoteModels = false;
+env.localModelPath = "/models/";
 // A worker already keeps inference off the UI thread. One WASM thread also works
 // without cross-origin isolation headers.
-if (env.backends.onnx.wasm) env.backends.onnx.wasm.numThreads = 1;
+if (env.backends.onnx.wasm) {
+  env.backends.onnx.wasm.numThreads = 1;
+  env.backends.onnx.wasm.wasmPaths = {
+    mjs: "/runtime/transformers-3.8.1/ort-wasm-simd-threaded.jsep.mjs",
+    wasm: "/runtime/transformers-3.8.1/ort-wasm-simd-threaded.jsep.wasm",
+  };
+}
 
 const post = (message: ContactPasteWorkerMessage) => self.postMessage(message);
 const createDetector = () =>
-  pipeline("token-classification", "onnx-community/NeuroBERT-NER-ONNX", {
-    revision: "e3a6a290e438a506d2ba7bbb0f5875b7f034cebf",
+  pipeline("token-classification", DETECTOR_MODEL, {
     dtype: "q8",
     device: "wasm",
+    local_files_only: true,
     progress_callback: (progress) => {
       if (progress.status === "progress")
         post({ type: "status", message: "Downloading contact detector…" });

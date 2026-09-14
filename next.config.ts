@@ -3,6 +3,28 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  async headers() {
+    return [
+      {
+        source: "/models/contact-detector-e3a6a290/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        source: "/runtime/transformers-3.8.1/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+    ];
+  },
   experimental: {
     serverActions: {
       allowedOrigins: [
