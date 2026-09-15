@@ -265,56 +265,66 @@ export const contactColumns: ColumnDef<ContactRow>[] = [
 ];
 
 export const renderContactCard = (contact: ContactRow, teamId: string) => {
-  return (
-    <Link href={`/teams/${teamId}/crm/contacts/${contact.id}`}>
-      <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-3 hover:bg-accent transition-colors cursor-pointer">
-        <div>
-          <div className="flex flex-col gap-1">
-            <h3 className="text-base font-semibold">{contact.name}</h3>
-            {contact.pronouns && (
-              <p className="text-xs text-muted-foreground">
-                {contact.pronouns}
-              </p>
-            )}
-            {(contact.email ||
-              contact.phone ||
-              contact.signal ||
-              contact.website ||
-              contact.city ||
-              contact.address ||
-              contact.postalCode ||
-              contact.state ||
-              contact.country) && (
-              <p className="text-xs text-muted-foreground">
-                {[
-                  contact.email,
-                  ...(contact.additionalEmails?.map((entry) => entry.email) ??
-                    []),
-                  contact.phone,
-                  contact.signal,
-                  contact.website,
-                  contact.address,
-                  contact.postalCode,
-                  contact.city,
-                  contact.state,
-                  contact.country,
-                ]
-                  .filter(Boolean)
-                  .join(" | ")}
-              </p>
-            )}
-          </div>
+  const summary = [
+    contact.email,
+    ...(contact.additionalEmails?.map((entry) => entry.email) ?? []),
+    contact.phone,
+    contact.signal,
+    contact.website,
+    contact.address,
+    contact.postalCode,
+    contact.city,
+    contact.state,
+    contact.country,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
+  const card = (
+    <div className="min-w-0 space-y-3 rounded-lg border bg-card p-4 text-card-foreground shadow-sm transition-colors hover:bg-accent">
+      <div className="min-w-0">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h3 className="truncate text-base font-semibold" title={contact.name}>
+            {contact.name}
+          </h3>
+          {contact.pronouns && (
+            <p
+              className="truncate text-xs text-muted-foreground"
+              title={contact.pronouns}
+            >
+              {contact.pronouns}
+            </p>
+          )}
+          {summary && (
+            <p
+              className="truncate text-xs text-muted-foreground"
+              title={summary}
+            >
+              {summary}
+            </p>
+          )}
         </div>
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">
-            Attributes
-          </p>
-          {renderAttributes(contact.profileAttributes)}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Added {formatDate(contact.createdAt)}
-        </p>
       </div>
+      <div className="min-w-0 space-y-2 overflow-hidden">
+        <p className="text-xs uppercase tracking-wide text-muted-foreground">
+          Attributes
+        </p>
+        {renderAttributes(contact.profileAttributes)}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Added {formatDate(contact.createdAt)}
+      </p>
+    </div>
+  );
+
+  if (contact.deletedAt) return card;
+
+  return (
+    <Link
+      href={`/teams/${teamId}/crm/contacts/${contact.id}`}
+      className="block min-w-0"
+    >
+      {card}
     </Link>
   );
 };

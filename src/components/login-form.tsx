@@ -57,11 +57,16 @@ export function LoginForm({
   };
 
   return (
-    <div className="flex flex-col items-center gap-2 text-center">
-      <h1 className="text-2xl font-bold">Login to your account</h1>
+    <div className="flex min-w-0 flex-col items-center gap-5 text-center">
+      <div className="space-y-1.5">
+        <h1 className="text-xl font-bold sm:text-2xl">Login to your account</h1>
+        <p className="text-sm text-muted-foreground">
+          Enter your work email to continue.
+        </p>
+      </div>
 
       <form
-        className={cn("flex flex-col gap-3 w-full text-center", className)}
+        className={cn("flex w-full min-w-0 flex-col gap-3", className)}
         action={async (formData) => {
           setIsLoading(true);
           const email = formData.get("email") as string;
@@ -101,20 +106,19 @@ export function LoginForm({
             <input
               type="email"
               name="email"
-              placeholder="Email"
+              placeholder="name@organization.org"
               disabled={isLoading}
               aria-label="Email address"
               aria-invalid={!!error}
               aria-describedby={error ? "email-error" : undefined}
-              className={cn(
-                "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
-                className,
-              )}
+              autoComplete="email"
+              inputMode="email"
+              className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
             />
             {error && (
               <div
                 id="email-error"
-                className="text-red-600 text-sm mt-1 text-left"
+                className="mt-1 break-words text-left text-sm text-red-600"
                 role="alert"
               >
                 {error}
@@ -122,20 +126,20 @@ export function LoginForm({
             )}
             <Button
               variant="outline"
-              className="w-44 mx-auto"
+              className="w-full sm:mx-auto sm:w-44"
               disabled={isLoading}
             >
               {isLoading ? "Sending..." : "Login"}
             </Button>
           </>
         ) : (
-          <div className="text-green-600 font-medium">
+          <div className="break-words text-sm font-medium text-green-600">
             Login link has been sent to your email!
           </div>
         )}
       </form>
 
-      <div className="text-center text-sm">
+      <div className="text-center text-sm leading-relaxed">
         <div>Don&apos;t have an account?</div>
         <a
           href="mailto:it@sea-watch.org"
