@@ -76,6 +76,14 @@ import {
   type InternalCopyMode,
 } from "@/constants/email";
 import { useToast } from "@/hooks/use-toast";
+import {
+  buildDefaultContactImportSourceMapping,
+  CONTACT_IMPORT_FIELDS,
+  type ContactImportField,
+  type ContactImportSourceMapping,
+  hasContactNameMapping,
+  toContactImportColumnMapping,
+} from "@/lib/contact-csv-import";
 import { parseCsv } from "@/lib/csv";
 import type { VCardContact } from "@/lib/vcard";
 import {
@@ -274,117 +282,6 @@ const CONTACT_FIELD_LABELS: Record<
   country: "Country",
   website: "Website",
   notes: "Notes",
-};
-
-const CONTACT_IMPORT_FIELDS: ReadonlyArray<{
-  field: ContactImportField;
-  label: string;
-  required?: boolean;
-}> = [
-  { field: "name", label: "Name", required: true },
-  { field: "email", label: "Email", required: true },
-  { field: "phone", label: "Phone" },
-  { field: "signal", label: "Signal" },
-  { field: "pronouns", label: "Pronouns" },
-  { field: "address", label: "Address" },
-  { field: "postalCode", label: "Postal code" },
-  { field: "city", label: "City" },
-  { field: "state", label: "State" },
-  { field: "country", label: "Country" },
-  { field: "website", label: "Website" },
-  { field: "notes", label: "Notes" },
-  { field: "group", label: "Group name" },
-  { field: "groupId", label: "Group ID" },
-] as const;
-
-type ContactImportField =
-  | "name"
-  | "email"
-  | "phone"
-  | "signal"
-  | "pronouns"
-  | "address"
-  | "postalCode"
-  | "city"
-  | "state"
-  | "country"
-  | "website"
-  | "notes"
-  | "group"
-  | "groupId";
-type ContactImportColumnMapping = Partial<Record<ContactImportField, string>>;
-type ContactImportSourceMapping = Record<
-  string,
-  ContactImportField | "__none__"
->;
-
-const CONTACT_IMPORT_HEADER_ALIASES: Record<ContactImportField, string[]> = {
-  name: ["name", "fullname", "contactname"],
-  email: ["email", "emailaddress", "e-mail", "mail"],
-  phone: ["phone", "phonenumber", "mobile", "telephone"],
-  signal: ["signal", "signalphone"],
-  pronouns: ["pronouns"],
-  address: ["address", "street"],
-  postalCode: ["postalcode", "postcode", "zip", "zipcode"],
-  state: ["state", "region", "province"],
-  city: ["city", "town"],
-  country: ["country"],
-  website: ["website", "url", "homepage"],
-  notes: ["notes", "note", "additionalinfo", "additionalinformation"],
-  group: ["group", "groupname"],
-  groupId: ["groupid"],
-};
-
-const normalizeImportHeader = (header: string) =>
-  header.toLowerCase().replace(/[^a-z0-9]/g, "");
-
-const buildDefaultImportMapping = (headers: string[]) => {
-  const normalizedHeaders = new Map(
-    headers.map((header) => [normalizeImportHeader(header), header]),
-  );
-  const mapping: ContactImportColumnMapping = {};
-
-  CONTACT_IMPORT_FIELDS.forEach(({ field }) => {
-    const alias = CONTACT_IMPORT_HEADER_ALIASES[field].find((value) =>
-      normalizedHeaders.has(normalizeImportHeader(value)),
-    );
-    if (alias) {
-      mapping[field] = normalizedHeaders.get(normalizeImportHeader(alias));
-    }
-  });
-
-  return mapping;
-};
-
-const buildDefaultImportSourceMapping = (headers: string[]) => {
-  const fieldMapping = buildDefaultImportMapping(headers);
-  const sourceMapping: ContactImportSourceMapping = {};
-
-  headers.forEach((header) => {
-    sourceMapping[header] = "__none__";
-  });
-
-  Object.entries(fieldMapping).forEach(([field, header]) => {
-    if (header) {
-      sourceMapping[header] = field as ContactImportField;
-    }
-  });
-
-  return sourceMapping;
-};
-
-const toContactImportColumnMapping = (
-  sourceMapping: ContactImportSourceMapping,
-) => {
-  const columnMapping: ContactImportColumnMapping = {};
-
-  Object.entries(sourceMapping).forEach(([header, field]) => {
-    if (field !== "__none__") {
-      columnMapping[field] = header;
-    }
-  });
-
-  return columnMapping;
 };
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -1509,7 +1406,9 @@ export default function ContactTable({ teamId }: ContactTableProps) {
       const parsed = parseCsv(contents);
       setImportHeaders(parsed.headers);
       setImportPreviewRows(parsed.rows.slice(0, 3));
-      setImportSourceMapping(buildDefaultImportSourceMapping(parsed.headers));
+      setImportSourceMapping(
+        buildDefaultContactImportSourceMapping(parsed.headers),
+      );
     } catch (error) {
       toast({
         title: "Unable to read import file",
@@ -2328,7 +2227,8 @@ const ContactImportDialog = ({
     Boolean(file) &&
     (format === "vcf"
       ? vcardContacts.length > 0
-      : selectedFields.includes("name") && selectedFields.includes("email")) &&
+      : hasContactNameMapping(selectedFields) &&
+        selectedFields.includes("email")) &&
     !isImporting;
 
   return (
@@ -2355,13 +2255,19 @@ const ContactImportDialog = ({
               }}
             />
             <p className="text-xs text-muted-foreground">
-              CSV rows require a name and email. VCards require a name and at
-              least one email or phone number.
+              CSV rows require an email and either a full name or a first/last
+              name. VCards require a name and at least one email or phone
+              number.
             </p>
           </div>
 
           {format === "csv" && headers.length > 0 && (
             <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Separate first and last names are combined into the contact
+                name. Street name and house number are combined into the
+                address.
+              </p>
               <div className="rounded-md border">
                 <div className="grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(12rem,0.8fr)] gap-3 border-b bg-muted/50 px-3 py-2 text-xs font-medium text-muted-foreground">
                   <span>CSV column</span>
@@ -2419,14 +2325,14 @@ const ContactImportDialog = ({
                           <SelectItem value="__none__">
                             Do not import
                           </SelectItem>
-                          {CONTACT_IMPORT_FIELDS.map(
-                            ({ field, label, required }) => (
-                              <SelectItem key={field} value={field}>
-                                {label}
-                                {required ? " *" : ""}
-                              </SelectItem>
-                            ),
-                          )}
+                          {CONTACT_IMPORT_FIELDS.map((entry) => (
+                            <SelectItem key={entry.field} value={entry.field}>
+                              {entry.label}
+                              {"required" in entry && entry.required
+                                ? " *"
+                                : ""}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>

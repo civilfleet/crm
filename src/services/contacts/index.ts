@@ -5,6 +5,14 @@ import {
   CONTACT_SUBMODULES,
   type ContactSubmodule,
 } from "@/constants/contact-submodules";
+import {
+  buildContactImportHeaderMap,
+  type ContactImportColumnMapping,
+  getCsvContactAddress,
+  getCsvContactName,
+  getCsvValue,
+  hasContactNameMapping,
+} from "@/lib/contact-csv-import";
 import { normalizeCountryCode } from "@/lib/countries";
 import { parseCsv, stringifyCsv } from "@/lib/csv";
 import { normalizePostalCode } from "@/lib/geo";
@@ -159,7 +167,7 @@ type MergeContactsInput = {
 type ImportContactsFromCsvInput = {
   teamId: string;
   csv: string;
-  columnMapping?: Partial<Record<ContactImportField, string>>;
+  columnMapping?: ContactImportColumnMapping;
   userId?: string;
   userName?: string;
 };
@@ -757,99 +765,6 @@ const findContactByIdentityEmail = async (
   });
 
   return contactEmail?.contact ?? null;
-};
-
-const normalizeCsvHeader = (header: string) =>
-  header.toLowerCase().replace(/[^a-z0-9]/g, "");
-
-const CONTACT_IMPORT_HEADER_ALIASES = {
-  name: ["name", "fullname", "contactname"],
-  email: ["email", "emailaddress", "e-mail", "mail"],
-  phone: ["phone", "phonenumber", "mobile", "telephone"],
-  signal: ["signal", "signalphone"],
-  pronouns: ["pronouns"],
-  address: ["address", "street"],
-  postalCode: ["postalcode", "postcode", "zip", "zipcode"],
-  state: ["state", "region", "province"],
-  city: ["city", "town"],
-  country: ["country"],
-  website: ["website", "url", "homepage"],
-  notes: ["notes", "note", "additionalinfo", "additionalinformation"],
-  group: ["group", "groupname"],
-  groupId: ["groupid"],
-} as const;
-
-type ContactImportField = keyof typeof CONTACT_IMPORT_HEADER_ALIASES;
-
-const CONTACT_IMPORT_FIELDS = Object.keys(
-  CONTACT_IMPORT_HEADER_ALIASES,
-) as ContactImportField[];
-
-const isContactImportField = (field: string): field is ContactImportField =>
-  CONTACT_IMPORT_FIELDS.includes(field as ContactImportField);
-
-const buildContactImportHeaderMap = (
-  headers: string[],
-  columnMapping?: Partial<Record<ContactImportField, string>>,
-) => {
-  const normalizedHeaderToIndex = new Map<string, number>();
-
-  headers.forEach((header, index) => {
-    const normalized = normalizeCsvHeader(header);
-    if (normalized && !normalizedHeaderToIndex.has(normalized)) {
-      normalizedHeaderToIndex.set(normalized, index);
-    }
-  });
-
-  const fieldToIndex = new Map<ContactImportField, number>();
-
-  Object.entries(columnMapping ?? {}).forEach(([field, header]) => {
-    if (!isContactImportField(field) || typeof header !== "string") {
-      return;
-    }
-
-    const normalizedHeader = normalizeCsvHeader(header);
-    const index = normalizedHeaderToIndex.get(normalizedHeader);
-    if (index !== undefined) {
-      fieldToIndex.set(field, index);
-    }
-  });
-
-  Object.entries(CONTACT_IMPORT_HEADER_ALIASES).forEach(([field, aliases]) => {
-    const importField = field as ContactImportField;
-    if (fieldToIndex.has(importField)) {
-      return;
-    }
-
-    const matchingAlias = aliases.find((alias) =>
-      normalizedHeaderToIndex.has(normalizeCsvHeader(alias)),
-    );
-
-    if (!matchingAlias) {
-      return;
-    }
-
-    fieldToIndex.set(
-      importField,
-      normalizedHeaderToIndex.get(normalizeCsvHeader(matchingAlias)) ?? -1,
-    );
-  });
-
-  return fieldToIndex;
-};
-
-const getCsvValue = (
-  row: string[],
-  headerMap: Map<ContactImportField, number>,
-  field: ContactImportField,
-) => {
-  const index = headerMap.get(field);
-  if (index === undefined || index < 0) {
-    return undefined;
-  }
-
-  const value = row[index]?.trim();
-  return value ? value : undefined;
 };
 
 const toProfileAttribute = (
@@ -2054,8 +1969,13 @@ const importContactsFromCsv = async ({
     throw new Error("CSV file does not contain any contact rows.");
   }
 
-  if (!headerMap.has("name") || !headerMap.has("email")) {
-    throw new Error("CSV file must include name and email columns.");
+  if (
+    !hasContactNameMapping(Array.from(headerMap.keys())) ||
+    !headerMap.has("email")
+  ) {
+    throw new Error(
+      "CSV file must include an email and either a full name or a first/last name column.",
+    );
   }
 
   if (parsed.rows.length > 1000) {
@@ -2096,7 +2016,7 @@ const importContactsFromCsv = async ({
 
   for (const [index, row] of parsed.rows.entries()) {
     const rowNumber = index + 2;
-    const name = getCsvValue(row, headerMap, "name");
+    const name = getCsvContactName(row, headerMap);
     const email = getCsvValue(row, headerMap, "email")?.toLowerCase();
 
     if (!name) {
@@ -2164,7 +2084,7 @@ const importContactsFromCsv = async ({
           name,
           email,
           pronouns: getCsvValue(row, headerMap, "pronouns"),
-          address: getCsvValue(row, headerMap, "address"),
+          address: getCsvContactAddress(row, headerMap),
           postalCode: getCsvValue(row, headerMap, "postalCode"),
           state: getCsvValue(row, headerMap, "state"),
           city: getCsvValue(row, headerMap, "city"),
