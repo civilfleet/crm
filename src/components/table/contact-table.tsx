@@ -85,6 +85,7 @@ import {
   toContactImportColumnMapping,
 } from "@/lib/contact-csv-import";
 import { parseCsv } from "@/lib/csv";
+import { persistTablePageSize } from "@/lib/table-page-size";
 import type { VCardContact } from "@/lib/vcard";
 import {
   ContactEmailKind,
@@ -103,6 +104,7 @@ const ContactMap = dynamic(() => import("@/components/contacts/contact-map"), {
 
 interface ContactTableProps {
   teamId: string;
+  initialPageSize: number;
 }
 
 type SenderLabelMode = "default" | "user";
@@ -339,7 +341,10 @@ const getContactFilterKey = (filter: ContactFilter) => {
   }
 };
 
-export default function ContactTable({ teamId }: ContactTableProps) {
+export default function ContactTable({
+  teamId,
+  initialPageSize,
+}: ContactTableProps) {
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -382,7 +387,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
   const filterKeys = useRef<string[]>([]);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(initialPageSize);
   const [showTrash, setShowTrash] = useState(false);
 
   const form = useForm<z.infer<typeof querySchema>>({
@@ -1553,6 +1558,7 @@ export default function ContactTable({ teamId }: ContactTableProps) {
               total: totalContacts,
               onPageChange: setPage,
               onPageSizeChange: (nextPageSize) => {
+                persistTablePageSize(nextPageSize);
                 setPageSize(nextPageSize);
                 setPage(1);
               },

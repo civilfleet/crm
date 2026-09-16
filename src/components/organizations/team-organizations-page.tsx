@@ -7,12 +7,14 @@ type TeamOrganizationsPageProps = {
   teamId: string;
   scope: "crm" | "funding";
   showRegistrationLink?: boolean;
+  initialPageSize: number;
 };
 
 export default function TeamOrganizationsPage({
   teamId,
   scope,
   showRegistrationLink = true,
+  initialPageSize,
 }: TeamOrganizationsPageProps) {
   const basePath = `/teams/${teamId}/${scope}/organizations`;
 
@@ -29,7 +31,11 @@ export default function TeamOrganizationsPage({
           </Link>
         </div>
       </div>
-      <OrganizationTable teamId={teamId} basePath={basePath} />
+      <OrganizationTable
+        teamId={teamId}
+        basePath={basePath}
+        initialPageSize={initialPageSize}
+      />
     </div>
   );
 }

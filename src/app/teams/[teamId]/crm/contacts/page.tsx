@@ -1,11 +1,19 @@
+import { cookies } from "next/headers";
 import ContactTable from "@/components/table/contact-table";
+import {
+  parseTablePageSize,
+  TABLE_PAGE_SIZE_COOKIE,
+} from "@/lib/table-page-size";
 
 interface ContactsPageProps {
   params: Promise<{ teamId: string }>;
 }
 
 export default async function ContactsPage({ params }: ContactsPageProps) {
-  const { teamId } = await params;
+  const [{ teamId }, cookieStore] = await Promise.all([params, cookies()]);
+  const initialPageSize = parseTablePageSize(
+    cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+  );
 
   return (
     <div className="p-4 space-y-6">
@@ -17,7 +25,7 @@ export default async function ContactsPage({ params }: ContactsPageProps) {
         </p>
       </div>
 
-      <ContactTable teamId={teamId} />
+      <ContactTable teamId={teamId} initialPageSize={initialPageSize} />
     </div>
   );
 }

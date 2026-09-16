@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { persistTablePageSize } from "@/lib/table-page-size";
 import ButtonControl from "../helper/button-control";
 import FormInputControl from "../helper/form-input-control";
 
@@ -53,6 +54,7 @@ const fetcher = (url: string) => fetch(url).then((res) => res.json());
 interface IOrganizationProps {
   teamId?: string;
   basePath?: string;
+  initialPageSize: number;
 }
 
 type FieldFilter = {
@@ -103,6 +105,7 @@ const getSelectedOrganizationTeamIds = (organizations: OrganizationColumns[]) =>
 export default function OrganizationTable({
   teamId,
   basePath,
+  initialPageSize,
 }: IOrganizationProps) {
   const { toast } = useToast();
   const pathname = usePathname();
@@ -119,7 +122,7 @@ export default function OrganizationTable({
   const [emailSenderLabelMode, setEmailSenderLabelMode] =
     useState<SenderLabelMode>("default");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(initialPageSize);
   const resolvedBasePath = (basePath ?? pathname).replace(/\/$/, "");
 
   const form = useForm<z.infer<typeof querySchema>>({
@@ -549,6 +552,7 @@ export default function OrganizationTable({
                 total: totalOrganizations,
                 onPageChange: setPage,
                 onPageSizeChange: (nextPageSize) => {
+                  persistTablePageSize(nextPageSize);
                   setPageSize(nextPageSize);
                   setPage(1);
                 },

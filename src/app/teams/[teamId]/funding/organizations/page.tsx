@@ -1,5 +1,10 @@
+import { cookies } from "next/headers";
 import TeamOrganizationsPage from "@/components/organizations/team-organizations-page";
 import prisma from "@/lib/prisma";
+import {
+  parseTablePageSize,
+  TABLE_PAGE_SIZE_COOKIE,
+} from "@/lib/table-page-size";
 import { DEFAULT_TEAM_MODULES } from "@/types";
 
 export default async function FundingOrganizationsPage({
@@ -7,7 +12,10 @@ export default async function FundingOrganizationsPage({
 }: {
   params: Promise<{ teamId: string }>;
 }) {
-  const { teamId } = await params;
+  const [{ teamId }, cookieStore] = await Promise.all([params, cookies()]);
+  const initialPageSize = parseTablePageSize(
+    cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+  );
   const team = await prisma.teams.findUnique({
     where: { id: teamId },
     select: { modules: true },
@@ -23,6 +31,7 @@ export default async function FundingOrganizationsPage({
       teamId={teamId}
       scope="funding"
       showRegistrationLink={showRegistrationLink}
+      initialPageSize={initialPageSize}
     />
   );
 }
