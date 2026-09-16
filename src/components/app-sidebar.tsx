@@ -7,6 +7,7 @@ import { NavUser } from "@/components/nav-user";
 import { TeamSwitcher } from "@/components/team-switcher";
 import {
   Sidebar,
+  SidebarCollapseTrigger,
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
@@ -49,16 +50,15 @@ export function AppSidebar({
   const pathSegments = pathname.split("/").filter(Boolean);
   const isProfilePage =
     pathSegments[0] === "teams" && pathSegments[1] === "profile";
-  const activeType =
-    isProfilePage
-      ? null
-      : pathSegments[0] === "teams"
-        ? "team"
-        : pathSegments[0] === "organizations"
-          ? "organization"
-          : pathSegments[0] === "admin"
-            ? "admin"
-            : null;
+  const activeType = isProfilePage
+    ? null
+    : pathSegments[0] === "teams"
+      ? "team"
+      : pathSegments[0] === "organizations"
+        ? "organization"
+        : pathSegments[0] === "admin"
+          ? "admin"
+          : null;
   const activeId =
     pathSegments[0] === "admin" ? "admin" : (pathSegments[1] ?? null);
 
@@ -180,6 +180,7 @@ export function AppSidebar({
           userRoles={user?.roles}
         />
       </SidebarHeader>
+      <SidebarCollapseTrigger />
 
       <SidebarContent>
         <NavMain items={navItemsToRender} />

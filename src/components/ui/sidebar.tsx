@@ -2,7 +2,7 @@
 
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
-import { PanelLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight, PanelLeft } from "lucide-react";
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -314,6 +314,51 @@ const SidebarTrigger = React.forwardRef<
   );
 });
 SidebarTrigger.displayName = "SidebarTrigger";
+
+const SidebarCollapseTrigger = React.forwardRef<
+  React.ElementRef<typeof Button>,
+  React.ComponentProps<typeof Button> & {
+    side?: "left" | "right";
+  }
+>(({ className, onClick, side = "left", ...props }, ref) => {
+  const { state, toggleSidebar } = useSidebar();
+  const isExpanded = state === "expanded";
+  const label = isExpanded ? "Collapse sidebar" : "Expand sidebar";
+  const pointsLeft = side === "left" ? isExpanded : !isExpanded;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          ref={ref}
+          type="button"
+          data-sidebar="collapse-trigger"
+          variant="ghost"
+          size="icon"
+          aria-label={label}
+          aria-expanded={isExpanded}
+          aria-keyshortcuts="Control+B Meta+B"
+          className={cn(
+            "absolute top-[4.5rem] z-30 hidden size-7 rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-md hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring md:inline-flex",
+            side === "left" ? "-right-3.5" : "-left-3.5",
+            className,
+          )}
+          onClick={(event) => {
+            onClick?.(event);
+            toggleSidebar();
+          }}
+          {...props}
+        >
+          {pointsLeft ? <ChevronLeft /> : <ChevronRight />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side={side === "left" ? "right" : "left"}>
+        {label} (Ctrl/⌘ B)
+      </TooltipContent>
+    </Tooltip>
+  );
+});
+SidebarCollapseTrigger.displayName = "SidebarCollapseTrigger";
 
 const SidebarRail = React.forwardRef<
   HTMLButtonElement,
@@ -767,6 +812,7 @@ SidebarMenuSubButton.displayName = "SidebarMenuSubButton";
 
 export {
   Sidebar,
+  SidebarCollapseTrigger,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
