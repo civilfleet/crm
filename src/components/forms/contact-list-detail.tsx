@@ -11,6 +11,7 @@ import useSWR from "swr";
 import type { z } from "zod";
 import { ContactListExportDialog } from "@/components/forms/contact-list-export-dialog";
 import { ContactListFiltersBuilder } from "@/components/forms/contact-list-filters-builder";
+import { TagPicker } from "@/components/tags/tag-picker";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -59,6 +60,7 @@ type ContactList = {
   type: ContactListType;
   filters?: ContactFilter[];
   contacts: Contact[];
+  tags: string[];
   teamId: string;
   createdAt: string | Date;
   updatedAt: string | Date;
@@ -471,6 +473,16 @@ export function ContactListDetail({ teamId, listId }: ContactListDetailProps) {
             <p className="mt-1 break-words text-muted-foreground">
               {headerDescription}
             </p>
+          )}
+          {!isNewList && list && (
+            <TagPicker
+              teamId={teamId}
+              entityType="CONTACT_LIST"
+              entityId={list.id}
+              initialTags={list.tags}
+              className="mt-3"
+              compact
+            />
           )}
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">

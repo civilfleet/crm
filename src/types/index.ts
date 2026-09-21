@@ -22,6 +22,50 @@ export const APP_MODULES = ["CRM", "FUNDING", "ADMIN"] as const;
 export const DEFAULT_TEAM_MODULES = ["CRM", "FUNDING"] as const;
 export type AppModule = (typeof APP_MODULES)[number];
 
+export const TAGGABLE_ENTITY_TYPES = [
+  "CONTACT",
+  "ORGANIZATION",
+  "CONTACT_LIST",
+  "CONTACT_ENGAGEMENT",
+  "ORGANIZATION_ENGAGEMENT",
+  "EVENT",
+  "FILE",
+] as const;
+
+export type TaggableEntityType = (typeof TAGGABLE_ENTITY_TYPES)[number];
+
+export interface Tag {
+  id: string;
+  teamId: string;
+  name: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export type TagResultSection =
+  | "contacts"
+  | "organizations"
+  | "lists"
+  | "interactions"
+  | "events"
+  | "files";
+
+export interface TagResultItem {
+  id: string;
+  entityType: TaggableEntityType;
+  title: string;
+  description?: string;
+  href: string;
+  date?: string;
+}
+
+export interface TagResultGroup {
+  section: TagResultSection;
+  total: number;
+  items: TagResultItem[];
+  hasMore: boolean;
+}
+
 export enum IntegrationProvider {
   KLAVIYO = "KLAVIYO",
   ZAMMAD = "ZAMMAD",
@@ -221,6 +265,7 @@ export interface Contact {
   profileAttributes: ContactProfileAttribute[];
   events?: ContactEvent[];
   files?: { id?: string; name: string; type: string; url: string }[];
+  tags: string[];
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date;
@@ -371,6 +416,7 @@ export interface ContactEngagement {
   engagedAt: Date;
   createdAt: Date;
   updatedAt: Date;
+  tags?: string[];
 }
 
 export enum ChangeAction {
@@ -556,6 +602,7 @@ export interface OrganizationEngagement {
   engagedAt: Date;
   createdAt: Date;
   updatedAt: Date;
+  tags?: string[];
 }
 
 export type OrganizationFieldType =

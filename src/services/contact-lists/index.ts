@@ -277,6 +277,7 @@ const getContactListById = async (
       description: list.description ?? undefined,
       type: list.type,
       filters,
+      tags: list.tags,
       contacts: smartContacts.map((contact) => ({
         id: contact.id,
         name: contact.name,
@@ -295,6 +296,7 @@ const getContactListById = async (
     description: list.description ?? undefined,
     type: list.type,
     filters,
+    tags: list.tags,
     contacts: list.contacts.map((c) => ({
       id: c.contact.id,
       name: c.contact.name,
@@ -356,6 +358,7 @@ const createContactList = async (input: CreateContactListInput) => {
     description: list.description ?? undefined,
     type: list.type,
     filters: parsedFilters,
+    tags: list.tags,
     contactCount:
       list.type === ContactListType.MANUAL ? list._count.contacts : 0,
     createdAt: list.createdAt,
@@ -433,6 +436,7 @@ const updateContactList = async (input: UpdateContactListInput) => {
     description: list.description ?? undefined,
     type: list.type,
     filters: parsedFilters,
+    tags: list.tags,
     contactCount:
       list.type === ContactListType.MANUAL ? list._count.contacts : 0,
     createdAt: list.createdAt,

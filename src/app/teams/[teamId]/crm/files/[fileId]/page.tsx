@@ -2,6 +2,7 @@ import { ArrowLeft, Download, ExternalLink, FileText } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
+import { TagPicker } from "@/components/tags/tag-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -158,6 +159,22 @@ export default async function FileDetailPage({ params }: FileDetailPageProps) {
         </Card>
 
         <div className="space-y-6 lg:col-span-4">
+          <Card>
+            <CardHeader className="border-b pb-3">
+              <CardTitle className="text-lg">Topics</CardTitle>
+              <CardDescription>
+                Connect this file to work happening across the team.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <TagPicker
+                teamId={teamId}
+                entityType="FILE"
+                entityId={fileId}
+                initialTags={file.tags}
+              />
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader className="border-b pb-3">
               <CardTitle className="text-lg">Details</CardTitle>

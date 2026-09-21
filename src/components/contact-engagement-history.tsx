@@ -19,6 +19,7 @@ import useSWR from "swr";
 import ContactEngagementForm from "@/components/forms/contact-engagement";
 import { Loader } from "@/components/helper/loader";
 import MentionText from "@/components/mention-text";
+import { TagPicker } from "@/components/tags/tag-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -674,6 +675,15 @@ function EngagementRow({
             </div>
           </div>
         )}
+
+        <TagPicker
+          teamId={teamId}
+          entityType="CONTACT_ENGAGEMENT"
+          entityId={engagement.id}
+          initialTags={engagement.tags}
+          className="mb-3"
+          compact
+        />
 
         {useHeader ? (
           <div className="space-y-3">

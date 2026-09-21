@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import useSWR from "swr";
 import type { z } from "zod";
 import MentionText from "@/components/mention-text";
+import { TagPicker } from "@/components/tags/tag-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +36,7 @@ type OrganizationEngagement = {
   type: string;
   note?: string | null;
   engagedAt: string;
+  tags?: string[];
 };
 
 type TeamUser = {
@@ -407,6 +409,13 @@ export default function OrganizationEngagements({
                     />
                   </p>
                 )}
+                <TagPicker
+                  teamId={teamId}
+                  entityType="ORGANIZATION_ENGAGEMENT"
+                  entityId={engagement.id}
+                  initialTags={engagement.tags}
+                  compact
+                />
               </div>
             ))}
           </div>

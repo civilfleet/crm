@@ -227,6 +227,69 @@ test("history denies hidden contacts and removes restricted values and metadata"
   assert(logs.every((log) => log.metadata === undefined));
 });
 
+test("tag attribute updates reject hidden contacts before writing", async () => {
+  let contactVisible = false;
+  let catalogWrites = 0;
+  let contactWrites = 0;
+  const transactionClient = {
+    tag: {
+      createMany: async () => {
+        catalogWrites++;
+      },
+    },
+    contact: {
+      findFirst: async () => (contactVisible ? { id: "contact-a" } : null),
+      update: async () => {
+        contactWrites++;
+      },
+    },
+  };
+  const service = loadModule<{
+    updateEntityTags: (
+      context: { teamId: string; userId: string; roles: string[] },
+      entityType: "CONTACT",
+      entityId: string,
+      tags: string[],
+    ) => Promise<string[]>;
+  }>("src/services/tags/index.ts", {
+    "@/lib/api-guard": { ApiError },
+    "@/lib/tags": {
+      normalizeTagNames: (names: string[]) =>
+        [...new Set(names.map((name) => name.toLowerCase()))].sort(),
+      normalizeTagSearchQuery: (query: string) => query.toLowerCase(),
+    },
+    "@/lib/prisma": {
+      $transaction: async (
+        callback: (client: typeof transactionClient) => Promise<unknown>,
+      ) => callback(transactionClient),
+    },
+    "@/services/contacts/access": {
+      getContactVisibility: async () => ({
+        where: { teamId: "team-a", deletedAt: null },
+        userGroupIds: [],
+      }),
+    },
+    "@/services/contacts/submodule-access": {
+      getAllowedContactSubmodules: async () => [],
+    },
+  });
+  const update = () =>
+    service.updateEntityTags(
+      { teamId: "team-a", userId: "actor", roles: [] },
+      "CONTACT",
+      "contact-a",
+      ["Berlin"],
+    );
+
+  await assert.rejects(update(), /Record not found/);
+  assert.equal(catalogWrites, 0);
+  assert.equal(contactWrites, 0);
+  contactVisible = true;
+  assert.deepEqual(await update(), ["berlin"]);
+  assert.equal(catalogWrites, 1);
+  assert.equal(contactWrites, 1);
+});
+
 test("public limiter expires old clients, bounds storage, and preserves active quotas", () => {
   let now = 0;
   let entries: Map<string, unknown> | undefined;

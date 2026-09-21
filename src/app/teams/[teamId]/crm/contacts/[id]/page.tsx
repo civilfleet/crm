@@ -21,6 +21,7 @@ import ContactEngagementHistory from "@/components/contact-engagement-history";
 import ContactResponsiveTabs from "@/components/contact-responsive-tabs";
 import DeleteContactButton from "@/components/forms/delete-contact-button";
 import DeleteContactFileButton from "@/components/forms/delete-contact-file-button";
+import { TagPicker } from "@/components/tags/tag-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -797,6 +798,14 @@ export default async function ContactDetailPage({
                       {contact.name}
                     </CardTitle>
                     <CardDescription>Contact Details</CardDescription>
+                    <TagPicker
+                      teamId={teamId}
+                      entityType="CONTACT"
+                      entityId={id}
+                      initialTags={contact.tags}
+                      className="mt-3"
+                      compact
+                    />
                   </div>
                   <div className="flex items-center gap-2">
                     <Button asChild variant="outline">

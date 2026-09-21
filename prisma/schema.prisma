@@ -36,6 +36,7 @@ model Organization {
   donationAgreements      DonationAgreement[]
   engagements             OrganizationEngagement[]
   fieldValues             OrganizationFieldValue[]
+  tags                    String[]             @default([])
   
 
   createdAt               DateTime    @default(now()) @db.Timestamptz(6) 
@@ -44,6 +45,8 @@ model Organization {
 
   Transaction Transaction[]
   fileDownloadAudits FileDownloadAudit[]
+
+  @@index([tags], type: Gin)
 }
 
 
@@ -127,6 +130,9 @@ model File {
 
   contactId String?  @db.VarChar(255)
   contact   Contact? @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tags      String[] @default([])
+
+  @@index([tags], type: Gin)
 }
 
 model PendingUpload {
@@ -249,6 +255,18 @@ model Teams {
   systemLogs SystemLog[]
   engagementInboxStates ContactEngagementInboxState[]
   engagementUserStates ContactEngagementUserState[]
+  tags         Tag[]
+}
+
+model Tag {
+  id        String   @id @default(uuid())
+  teamId    String
+  team      Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name      String   @db.VarChar(64)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@unique([teamId, name])
 }
 
 model OrganizationType {
@@ -277,10 +295,12 @@ model OrganizationEngagement {
   engagedAt   DateTime @db.Timestamptz(6)
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+  tags        String[] @default([])
 
   @@index([organizationId])
   @@index([teamId])
   @@index([engagedAt])
+  @@index([tags], type: Gin)
 }
 
 model OrganizationFieldValue {
@@ -543,10 +563,12 @@ model Contact {
   organizations     ContactOrganization[]
   files             File[]
   groups            ContactGroup[]
+  tags              String[]             @default([])
 
   @@index([groupId])
   @@index([teamId, groupId])
   @@index([teamId, deletedAt])
+  @@index([tags], type: Gin)
 }
 
 model ContactEmail {
@@ -848,8 +870,10 @@ model ContactList {
   updatedAt   DateTime            @updatedAt @db.Timestamptz(6)
   contacts    ContactListMember[]
   events      EventList[]
+  tags        String[]            @default([])
 
   @@index([teamId])
+  @@index([tags], type: Gin)
 }
 
 model ContactListMember {
@@ -1055,10 +1079,12 @@ model Event {
   contacts      EventContact[]
   lists         EventList[]
   registrations EventRegistration[]
+  tags          String[]            @default([])
 
   @@unique([teamId, slug])
   @@index([teamId])
   @@index([slug])
+  @@index([tags], type: Gin)
 }
 
 model EventList {
@@ -1202,6 +1228,7 @@ model ContactEngagement {
   updatedAt   DateTime             @updatedAt @db.Timestamptz(6)
   inboundEmailMessages InboundEmailMessage[]
   userStates ContactEngagementUserState[]
+  tags       String[] @default([])
 
   @@index([contactId])
   @@index([teamId])
@@ -1211,6 +1238,7 @@ model ContactEngagement {
   @@index([assignedToUserId])
   @@index([todoStatus])
   @@unique([teamId, externalId, externalSource])
+  @@index([tags], type: Gin)
 }
 
 model ContactEngagementInboxState {

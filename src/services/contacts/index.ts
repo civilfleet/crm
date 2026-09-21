@@ -928,6 +928,7 @@ const mapContact = (contact: ContactWithAttributes): ContactType => ({
     type: file.type,
     url: file.url,
   })),
+  tags: contact.tags,
   events: (() => {
     const eventMap = new Map<
       string,

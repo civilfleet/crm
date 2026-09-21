@@ -1,6 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import type { Session } from "next-auth";
 import { z } from "zod";
+import {
+  isTagAttributeUpdate,
+  updateTagAttribute,
+} from "@/app/api/tag-attribute-update";
 import { auth } from "@/auth";
 import { CONTACT_SUBMODULES } from "@/constants/contact-submodules";
 import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
@@ -12,6 +16,7 @@ import {
   getContactEngagements,
   updateEngagement,
 } from "@/services/contact-engagements";
+import { getContactVisibility } from "@/services/contacts/access";
 import { getAllowedContactSubmodules } from "@/services/contacts/submodule-access";
 import { sendTagMentionNotifications } from "@/services/mentions";
 import { getTeamAdminAccess } from "@/services/teams/access";
@@ -129,6 +134,18 @@ export async function GET(request: NextRequest) {
     const adminAccess = userId
       ? await getTeamAdminAccess(userId, teamId, roles)
       : { allowed: false };
+    const contactVisibility = await getContactVisibility({
+      teamId,
+      userId,
+      roles,
+    });
+    const visibleContact = await prisma.contact.findFirst({
+      where: { id: contactId, ...contactVisibility.where },
+      select: { id: true },
+    });
+    if (!visibleContact) {
+      return NextResponse.json({ error: "Contact not found" }, { status: 404 });
+    }
 
     const engagements = await getContactEngagements(
       contactId,
@@ -251,6 +268,10 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
+    if (isTagAttributeUpdate(body)) {
+      const tags = await updateTagAttribute(body, "CONTACT_ENGAGEMENT");
+      return NextResponse.json({ data: { tags } }, { status: 200 });
+    }
     const validatedData = updateEngagementSchema.parse(body);
     await verifyTeamAccess(validatedData.teamId, { requireModule: "CRM" });
 

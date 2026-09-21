@@ -7,9 +7,9 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { type Resolver, useForm } from "react-hook-form";
 import useSWR from "swr";
 import type { z } from "zod";
+import { TagPicker } from "@/components/tags/tag-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-
 import {
   Card,
   CardContent,
@@ -85,6 +85,7 @@ interface EventFormProps {
     startDate: Date;
     endDate?: Date;
     isPublic: boolean;
+    tags: string[];
     contacts: Array<{
       id: string;
       name: string;
@@ -598,6 +599,16 @@ export default function EventForm({
                 ? "Update event details and linked contacts."
                 : "Create a new event and link contacts."}
             </CardDescription>
+            {isEditMode && event?.id && (
+              <TagPicker
+                teamId={teamId}
+                entityType="EVENT"
+                entityId={event.id}
+                initialTags={event.tags}
+                className="mt-3"
+                compact
+              />
+            )}
           </CardHeader>
 
           <Form {...form}>

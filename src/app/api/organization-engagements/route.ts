@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { updateTagAttribute } from "@/app/api/tag-attribute-update";
 import { auth } from "@/auth";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
@@ -23,12 +25,16 @@ export async function GET(req: Request) {
       );
     }
 
+    await verifyTeamAccess(teamId, { requireModule: "CRM" });
+
     const engagements = await getOrganizationEngagements(
       organizationId,
       teamId,
     );
     return NextResponse.json({ data: engagements }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
@@ -41,6 +47,7 @@ export async function POST(req: Request) {
   try {
     const payload = await req.json();
     const validated = createOrganizationEngagementSchema.parse(payload);
+    await verifyTeamAccess(validated.teamId, { requireModule: "CRM" });
     const session = await auth();
 
     let actorUserId = session?.user?.userId ?? undefined;
@@ -92,10 +99,27 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ data: engagement }, { status: 201 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
       { status: 400, statusText: message },
     );
+  }
+}
+
+export async function PATCH(req: Request) {
+  try {
+    const tags = await updateTagAttribute(
+      await req.json(),
+      "ORGANIZATION_ENGAGEMENT",
+    );
+    return NextResponse.json({ data: { tags } }, { status: 200 });
+  } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
+    const { message } = handlePrismaError(e);
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }

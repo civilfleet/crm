@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  isTagAttributeUpdate,
+  updateTagAttribute,
+} from "@/app/api/tag-attribute-update";
 import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import {
@@ -126,6 +130,10 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const payload = await req.json();
+    if (isTagAttributeUpdate(payload)) {
+      const tags = await updateTagAttribute(payload, "CONTACT");
+      return NextResponse.json({ data: { tags } }, { status: 200 });
+    }
     const validated = updateContactSchema.parse(payload);
     const session = await verifyTeamAccess(validated.teamId, {
       requireModule: "CRM",

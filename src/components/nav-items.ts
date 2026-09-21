@@ -4,6 +4,7 @@ import {
   Building,
   Calendar,
   FolderOpen,
+  Hash,
   Inbox,
   List,
   type LucideIcon,
@@ -54,6 +55,12 @@ const navItems: {
     },
   ],
   team: [
+    {
+      title: "Tags",
+      url: "tags",
+      icon: Hash,
+      module: "CRM",
+    },
     {
       type: "separator",
       label: "Funding",

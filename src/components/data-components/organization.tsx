@@ -16,6 +16,7 @@ import OrganizationForm from "@/components/forms/organization";
 import { Loader } from "@/components/helper/loader";
 import OrganizationDetails from "@/components/organization-details";
 import OrganizationEngagements from "@/components/organization-engagements";
+import { TagPicker } from "@/components/tags/tag-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -503,6 +504,15 @@ export default function OrganizationData({
   return (
     <div className=" px-5 py-8 mx-auto">
       <div className=" p-6">
+        {allowManagement && organizationData?.data?.teamId && (
+          <TagPicker
+            teamId={organizationData.data.teamId}
+            entityType="ORGANIZATION"
+            entityId={organizationId}
+            initialTags={organizationData.data.tags}
+            className="mb-6"
+          />
+        )}
         {allowManagement && (
           <div className="flex justify-between items-center mb-6 bg-blue-50 p-4 rounded-lg border border-blue-200">
             <div className="flex flex-col">

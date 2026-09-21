@@ -1,5 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import {
+  isTagAttributeUpdate,
+  updateTagAttribute,
+} from "@/app/api/tag-attribute-update";
 import { auth } from "@/auth";
 import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
@@ -64,6 +68,10 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
+    if (isTagAttributeUpdate(body)) {
+      const tags = await updateTagAttribute(body, "CONTACT_LIST", id);
+      return NextResponse.json({ data: { tags } }, { status: 200 });
+    }
     const validated = updateContactListSchema.parse({ ...body, id });
     await verifyTeamAccess(validated.teamId, { requireModule: "CRM" });
 

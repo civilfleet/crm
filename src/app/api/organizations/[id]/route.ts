@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { updateTagAttribute } from "@/app/api/tag-attribute-update";
 import { handleApiError, verifyOrganizationAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import {
@@ -82,6 +83,26 @@ export async function DELETE(
       { message: "Organization deleted successfully" },
       { status: 200 },
     );
+  } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
+    const { message } = handlePrismaError(e);
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const organizationId = (await params).id;
+    const tags = await updateTagAttribute(
+      await req.json(),
+      "ORGANIZATION",
+      organizationId,
+    );
+    return NextResponse.json({ data: { tags } }, { status: 200 });
   } catch (e) {
     const apiError = handleApiError(e);
     if (apiError) return apiError;

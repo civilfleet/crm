@@ -139,6 +139,7 @@ const mapEngagement = (
   engagedAt: engagement.engagedAt,
   createdAt: engagement.createdAt,
   updatedAt: engagement.updatedAt,
+  tags: engagement.tags,
 });
 
 const getContactEngagements = async (

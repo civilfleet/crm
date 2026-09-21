@@ -119,6 +119,7 @@ type EventType = {
   startDate: Date;
   endDate?: Date;
   isPublic: boolean;
+  tags: string[];
   registrationCount: number;
   createdAt: Date;
   updatedAt: Date;
@@ -179,6 +180,7 @@ const mapEvent = (event: EventWithContacts): EventType => ({
   startDate: event.startDate,
   endDate: event.endDate ?? undefined,
   isPublic: event.isPublic,
+  tags: event.tags,
   registrationCount: event._count.registrations,
   createdAt: event.createdAt,
   updatedAt: event.updatedAt,

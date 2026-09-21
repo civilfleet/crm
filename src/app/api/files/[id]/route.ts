@@ -1,6 +1,8 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { NextResponse } from "next/server";
+import { updateTagAttribute } from "@/app/api/tag-attribute-update";
 import { auth } from "@/auth";
+import { handleApiError } from "@/lib/api-guard";
 import s3Client from "@/lib/s3-client";
 import { handlePrismaError } from "@/lib/utils";
 import {
@@ -89,6 +91,22 @@ export async function GET(
       },
     });
   } catch (e) {
+    const { message } = handlePrismaError(e);
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+    const tags = await updateTagAttribute(await req.json(), "FILE", id);
+    return NextResponse.json({ data: { tags } }, { status: 200 });
+  } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
     const { message } = handlePrismaError(e);
     return NextResponse.json({ error: message }, { status: 400 });
   }

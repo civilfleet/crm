@@ -16,6 +16,7 @@ export const getOrganizationEngagements = async (
     where: {
       organizationId,
       teamId,
+      organization: { teamId },
     },
     orderBy: {
       engagedAt: "desc",
@@ -30,6 +31,14 @@ export const createOrganizationEngagement = async (
   const engagedDate = new Date(engagedAt);
   if (Number.isNaN(engagedDate.getTime())) {
     throw new Error("Invalid engagement date");
+  }
+
+  const organization = await prisma.organization.findFirst({
+    where: { id: organizationId, teamId },
+    select: { id: true },
+  });
+  if (!organization) {
+    throw new Error("Organization does not belong to this team");
   }
 
   return prisma.organizationEngagement.create({
