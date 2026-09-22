@@ -16,6 +16,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -105,6 +106,7 @@ export function DataTable<TData, TValue>({
   >(resolvedInitialView);
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({});
   const [sorting, setSorting] = React.useState<SortingState>([]);
+  const pageInputId = React.useId();
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex: 0,
     pageSize: 10,
@@ -256,6 +258,8 @@ export function DataTable<TData, TValue>({
   const pageCount = isServerPagination
     ? (controlledPageCount ?? 1)
     : table.getPageCount();
+  const currentPage = paginationState.pageIndex + 1;
+  const [pageInput, setPageInput] = React.useState(String(currentPage));
   const canPaginate = pageCount > 1;
   const currentPageRows = isServerPagination
     ? tableData.length
@@ -265,6 +269,36 @@ export function DataTable<TData, TValue>({
   const totalItems = isServerPagination
     ? (serverPagination?.total ?? 0)
     : tableData.length;
+
+  React.useEffect(() => {
+    setPageInput(String(currentPage));
+  }, [currentPage]);
+
+  const goToPage = React.useCallback(
+    (requestedPage: number) => {
+      const nextPage = Math.min(
+        Math.max(Math.trunc(requestedPage), 1),
+        pageCount,
+      );
+
+      if (isServerPagination && serverPagination) {
+        serverPagination.onPageChange(nextPage);
+      } else {
+        table.setPageIndex(nextPage - 1);
+      }
+      setPageInput(String(nextPage));
+    },
+    [isServerPagination, pageCount, serverPagination, table],
+  );
+
+  const submitPageInput = () => {
+    const requestedPage = Number(pageInput);
+    if (!Number.isFinite(requestedPage)) {
+      setPageInput(String(currentPage));
+      return;
+    }
+    goToPage(requestedPage);
+  };
 
   return (
     <div className="w-full">
@@ -495,9 +529,29 @@ export function DataTable<TData, TValue>({
                 </SelectContent>
               </Select>
             </div>
-            <div className="text-sm text-muted-foreground">
-              Page {paginationState.pageIndex + 1} of {Math.max(pageCount, 1)}
-            </div>
+            <form
+              className="flex items-center gap-2 text-sm text-muted-foreground"
+              onSubmit={(event) => {
+                event.preventDefault();
+                submitPageInput();
+              }}
+            >
+              <label htmlFor={pageInputId}>Page</label>
+              <Input
+                id={pageInputId}
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={Math.max(pageCount, 1)}
+                step={1}
+                value={pageInput}
+                onChange={(event) => setPageInput(event.target.value)}
+                onBlur={submitPageInput}
+                className="h-8 w-16 px-2 text-center"
+                aria-label="Go to page"
+              />
+              <span>of {Math.max(pageCount, 1)}</span>
+            </form>
             <Button
               type="button"
               variant="outline"
