@@ -37,19 +37,35 @@ type IdRoute = {
     ctx: { params: Promise<{ userId: string }> },
   ) => Promise<Response>;
 };
+type UserRoute = IdRoute & {
+  GET: (
+    req: Request,
+    ctx: { params: Promise<{ userId: string }> },
+  ) => Promise<Response>;
+  PATCH: (
+    req: Request,
+    ctx: { params: Promise<{ userId: string }> },
+  ) => Promise<Response>;
+};
 type GetRoute = { GET: (req: Request) => Promise<Response> };
 
 test("user removal rejects mixed scopes; authorized single scope still works", async () => {
   const calls: string[] = [];
+  let ownerId = "owner";
   const route = loadModule<IdRoute>("src/app/api/users/[userId]/route.ts", {
     ...base,
-    "@/lib/prisma": {},
+    "@/lib/prisma": {
+      teams: { findFirst: async () => ({ ownerId }) },
+    },
     "@/lib/api-guard": {
       ...guards,
       verifyTeamAccess: async () => calls.push("team"),
       verifyOrganizationAccess: async () => calls.push("org"),
     },
     "@/services/users": { deleteUser: async () => calls.push("delete") },
+    "@/validations/users": {
+      updateTeamUserSchema: { parse: (body: object) => body },
+    },
   });
   const remove = (body: object) =>
     route.DELETE(
@@ -66,6 +82,163 @@ test("user removal rejects mixed scopes; authorized single scope still works", a
   assert.deepEqual(calls, []);
   assert.equal((await remove({ teamId: "team-a" })).status, 200);
   assert.deepEqual(calls, ["team", "delete"]);
+  ownerId = "victim";
+  assert.equal((await remove({ teamId: "team-a" })).status, 409);
+  assert.deepEqual(calls, ["team", "delete", "team"]);
+});
+
+test("team user profiles require an explicit admin scope for reads and writes", async () => {
+  const calls: string[] = [];
+  const route = loadModule<UserRoute>("src/app/api/users/[userId]/route.ts", {
+    ...base,
+    "@/lib/prisma": {},
+    "@/lib/api-guard": {
+      ...guards,
+      verifyTeamAccess: async (
+        teamId: string,
+        options: { requireAdmin?: boolean },
+      ) => {
+        calls.push(`guard:${teamId}:${String(options.requireAdmin)}`);
+      },
+      verifyOrganizationAccess: async () => undefined,
+    },
+    "@/services/users": {
+      getTeamUserById: async (userId: string, teamId: string) => {
+        calls.push(`read:${userId}:${teamId}`);
+        return teamId === "team-a" ? { id: userId } : null;
+      },
+      updateTeamUser: async (userId: string, body: { teamId: string }) => {
+        calls.push(`write:${userId}:${body.teamId}`);
+      },
+    },
+    "@/validations/users": {
+      updateTeamUserSchema: { parse: (body: object) => body },
+    },
+  });
+  const context = { params: Promise.resolve({ userId: "target" }) };
+
+  assert.equal(
+    (
+      await route.GET(
+        new Request("https://test.invalid/api/users/target"),
+        context,
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await route.GET(
+        new Request("https://test.invalid/api/users/target?teamId=team-a"),
+        context,
+      )
+    ).status,
+    200,
+  );
+  assert.deepEqual(calls, ["guard:team-a:true", "read:target:team-a"]);
+
+  calls.length = 0;
+  const patchResponse = await route.PATCH(
+    new Request("https://test.invalid/api/users/target", {
+      method: "PATCH",
+      body: JSON.stringify({ teamId: "team-a" }),
+    }),
+    context,
+  );
+  assert.equal(patchResponse.status, 200);
+  assert.deepEqual(calls, ["guard:team-a:true", "write:target:team-a"]);
+});
+
+test("group assignment rejects users outside the selected team", async () => {
+  let membershipWrites = 0;
+  const service = loadModule<{
+    addUsersToGroup: (input: {
+      groupId: string;
+      teamId: string;
+      userIds: string[];
+    }) => Promise<void>;
+  }>("src/services/groups/index.ts", {
+    "@/constants/contact-submodules": { CONTACT_SUBMODULE_FIELDS: {} },
+    "@/types": {
+      APP_MODULES: ["CRM", "FUNDING", "ADMIN"],
+      DEFAULT_TEAM_MODULES: ["CRM", "FUNDING"],
+    },
+    "@/lib/prisma": {
+      group: {
+        findFirst: async () => ({ id: "group-a", isDefaultGroup: false }),
+      },
+      user: {
+        findMany: async () => [{ id: "member" }],
+      },
+      userGroup: {
+        findMany: async () => [],
+        createMany: async () => {
+          membershipWrites++;
+        },
+      },
+    },
+  });
+
+  await assert.rejects(
+    service.addUsersToGroup({
+      groupId: "group-a",
+      teamId: "team-a",
+      userIds: ["member", "outsider"],
+    }),
+    /do not belong to this team/,
+  );
+  assert.equal(membershipWrites, 0);
+});
+
+test("team user updates reject group IDs from another team before writing", async () => {
+  let profileWrites = 0;
+  const transactionClient = {
+    teams: {
+      findUnique: async () => ({ ownerId: "owner" }),
+    },
+    user: {
+      findFirst: async () => ({ id: "target" }),
+      update: async () => {
+        profileWrites++;
+      },
+    },
+    group: {
+      findMany: async () => [
+        { id: "group-a", name: "Members", isDefaultGroup: false },
+      ],
+    },
+  };
+  const service = loadModule<{
+    updateTeamUser: (
+      userId: string,
+      input: {
+        teamId: string;
+        name: string;
+        email: string;
+        groupIds: string[];
+      },
+    ) => Promise<void>;
+  }>("src/services/users/index.ts", {
+    "@/lib/prisma": {
+      $transaction: async (
+        callback: (client: typeof transactionClient) => Promise<unknown>,
+      ) => callback(transactionClient),
+    },
+    "@/services/groups": { ensureDefaultGroup: async () => undefined },
+    "@/types": { DEFAULT_TEAM_MODULES: ["CRM", "FUNDING"] },
+    "@/validations/users": {},
+  });
+
+  await assert.rejects(
+    service.updateTeamUser("target", {
+      teamId: "team-a",
+      name: "Target User",
+      email: "target@example.org",
+      groupIds: ["group-a", "foreign-group"],
+    }),
+    /do not belong to this team/,
+  );
+  assert.equal(profileWrites, 0);
 });
 
 test("donation user lookup rejects a funding request from another team", async () => {

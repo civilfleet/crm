@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { ensureDefaultGroup } from "@/services/groups";
 import { type AppModule, DEFAULT_TEAM_MODULES, type Roles } from "@/types";
+import type { UpdateTeamUserInput } from "@/validations/users";
 
 export interface User {
   name?: string;
@@ -578,6 +579,183 @@ const getUserById = async (id: string) => {
   return user;
 };
 
+const getTeamUserById = async (id: string, teamId: string) => {
+  await ensureDefaultGroup(teamId);
+
+  const [team, user, availableGroups] = await Promise.all([
+    prisma.teams.findUnique({
+      where: { id: teamId },
+      select: { id: true, name: true, ownerId: true },
+    }),
+    prisma.user.findFirst({
+      where: {
+        id,
+        teams: { some: { id: teamId } },
+      },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        email: true,
+        phone: true,
+        postalCode: true,
+        city: true,
+        country: true,
+        roles: true,
+        emailVerified: true,
+        image: true,
+        createdAt: true,
+        updatedAt: true,
+        lastLoginAt: true,
+        accounts: {
+          select: { provider: true },
+        },
+        groups: {
+          where: { group: { teamId } },
+          select: {
+            createdAt: true,
+            group: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+                isDefaultGroup: true,
+                canAccessAllContacts: true,
+                modulePermissions: {
+                  select: { module: true },
+                },
+              },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    }),
+    prisma.group.findMany({
+      where: { teamId },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        isDefaultGroup: true,
+        canAccessAllContacts: true,
+        modulePermissions: {
+          select: { module: true },
+        },
+      },
+      orderBy: [{ isDefaultGroup: "desc" }, { name: "asc" }],
+    }),
+  ]);
+
+  if (!team || !user) {
+    return null;
+  }
+
+  return {
+    ...user,
+    isOwner: team.ownerId === user.id,
+    team: { id: team.id, name: team.name },
+    groups: user.groups.map((membership) => ({
+      joinedAt: membership.createdAt,
+      ...membership.group,
+      modules: membership.group.modulePermissions.map(
+        (permission) => permission.module as AppModule,
+      ),
+      modulePermissions: undefined,
+    })),
+    availableGroups: availableGroups.map((group) => ({
+      ...group,
+      modules: group.modulePermissions.map(
+        (permission) => permission.module as AppModule,
+      ),
+      modulePermissions: undefined,
+    })),
+  };
+};
+
+const updateTeamUser = async (userId: string, input: UpdateTeamUserInput) => {
+  const normalizeOptional = (value?: string) => value?.trim() || null;
+
+  return prisma.$transaction(async (tx) => {
+    const [team, targetUser, requestedGroups] = await Promise.all([
+      tx.teams.findUnique({
+        where: { id: input.teamId },
+        select: { ownerId: true },
+      }),
+      tx.user.findFirst({
+        where: {
+          id: userId,
+          teams: { some: { id: input.teamId } },
+        },
+        select: { id: true },
+      }),
+      tx.group.findMany({
+        where: {
+          teamId: input.teamId,
+          id: { in: input.groupIds },
+        },
+        select: { id: true, name: true, isDefaultGroup: true },
+      }),
+    ]);
+
+    if (!team || !targetUser) {
+      throw new Error("User not found in this team");
+    }
+
+    if (requestedGroups.length !== new Set(input.groupIds).size) {
+      throw new Error("One or more groups do not belong to this team");
+    }
+
+    if (requestedGroups.some((group) => group.isDefaultGroup)) {
+      throw new Error("Default group membership is managed automatically");
+    }
+
+    const selectedGroupIds = new Set(requestedGroups.map((group) => group.id));
+    if (team.ownerId === userId) {
+      const adminGroup = await tx.group.findFirst({
+        where: { teamId: input.teamId, name: "Admin" },
+        select: { id: true },
+      });
+      if (adminGroup) {
+        selectedGroupIds.add(adminGroup.id);
+      }
+    }
+
+    await tx.user.update({
+      where: { id: userId },
+      data: {
+        name: input.name.trim(),
+        email: input.email.trim().toLowerCase(),
+        phone: normalizeOptional(input.phone),
+        address: normalizeOptional(input.address),
+        postalCode: normalizeOptional(input.postalCode),
+        city: normalizeOptional(input.city),
+        country: normalizeOptional(input.country),
+      },
+    });
+
+    await tx.userGroup.deleteMany({
+      where: {
+        userId,
+        group: { teamId: input.teamId },
+      },
+    });
+
+    if (selectedGroupIds.size > 0) {
+      await tx.userGroup.createMany({
+        data: Array.from(selectedGroupIds, (groupId) => ({ userId, groupId })),
+      });
+    }
+
+    await ensureDefaultGroup(input.teamId, tx);
+
+    return tx.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+  });
+};
+
 const getTeamsUsers = async (teamId: string) => {
   const users = await prisma.user.findMany({
     where: {
@@ -642,8 +820,10 @@ export {
   getAdminUser,
   getCurrentUserProfile,
   getTeamsUsers,
+  getTeamUserById,
   getUserById,
   getUserCurrent,
   getUsers,
   getUsersForDonation,
+  updateTeamUser,
 };

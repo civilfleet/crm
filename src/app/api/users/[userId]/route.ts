@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import {
   ApiError,
-  getAuthenticatedSession,
   handleApiError,
   verifyOrganizationAccess,
   verifyTeamAccess,
@@ -9,45 +9,89 @@ import {
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
-import { deleteUser, getUserById } from "@/services/users";
-import { Roles } from "@/types";
+import {
+  deleteUser,
+  getTeamUserById,
+  getUserById,
+  updateTeamUser,
+} from "@/services/users";
+import { updateTeamUserSchema } from "@/validations/users";
+
+const getScope = (request: Request) => {
+  const { searchParams } = new URL(request.url);
+  const teamId = searchParams.get("teamId") || undefined;
+  const organizationId = searchParams.get("organizationId") || undefined;
+
+  if (Boolean(teamId) === Boolean(organizationId)) {
+    throw new ApiError(400, "Provide exactly one of teamId or organizationId");
+  }
+
+  return { teamId, organizationId };
+};
 
 export async function GET(
-  _req: Request,
+  request: Request,
   { params }: { params: Promise<{ userId: string }> },
 ) {
   try {
     const { userId } = await params;
-    const session = await getAuthenticatedSession();
-    if (session.user.userId !== userId) {
-      const sharedScope = await prisma.user.findFirst({
+    const { teamId, organizationId } = getScope(request);
+
+    if (teamId) {
+      await verifyTeamAccess(teamId, { requireAdmin: true });
+      const data = await getTeamUserById(userId, teamId);
+      if (!data) {
+        throw new ApiError(404, "User not found in this team");
+      }
+      return NextResponse.json({ data }, { status: 200 });
+    }
+
+    if (organizationId) {
+      await verifyOrganizationAccess(organizationId);
+      const target = await prisma.user.findFirst({
         where: {
           id: userId,
-          OR: [
-            {
-              teams: {
-                some: { users: { some: { id: session.user.userId } } },
-              },
-            },
-            {
-              organizations: {
-                some: { users: { some: { id: session.user.userId } } },
-              },
-            },
-          ],
+          organizations: { some: { id: organizationId } },
         },
         select: { id: true },
       });
-      if (!sharedScope && !session.user.roles?.includes(Roles.Admin)) {
-        throw new ApiError(403, "Forbidden - User access required");
+      if (!target) {
+        throw new ApiError(404, "User not found in this organization");
       }
+      const data = await getUserById(userId);
+      return NextResponse.json({ data }, { status: 200 });
     }
-    const data = await getUserById(userId);
-    return NextResponse.json({ data }, { status: 200 });
+
+    throw new ApiError(400, "A user scope is required");
   } catch (e) {
     const apiError = handleApiError(e);
     if (apiError) return apiError;
     const { message } = handlePrismaError(e);
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ userId: string }> },
+) {
+  try {
+    const { userId } = await params;
+    const validated = updateTeamUserSchema.parse(await request.json());
+    await verifyTeamAccess(validated.teamId, { requireAdmin: true });
+    await updateTeamUser(userId, validated);
+
+    return NextResponse.json({ data: "success" }, { status: 200 });
+  } catch (error) {
+    const apiError = handleApiError(error);
+    if (apiError) return apiError;
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "Validation failed", details: error.issues },
+        { status: 400 },
+      );
+    }
+    const { message } = handlePrismaError(error);
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }
@@ -69,14 +113,32 @@ export async function DELETE(
         "Provide exactly one of teamId or organizationId",
       );
     }
-    const session = await getAuthenticatedSession();
-    if (session.user.userId !== userId) {
-      if (teamId) {
-        await verifyTeamAccess(teamId, { requireAdmin: true });
-      } else if (organizationId) {
-        await verifyOrganizationAccess(organizationId);
-      } else {
-        throw new ApiError(400, "teamId or organizationId is required");
+    if (teamId) {
+      await verifyTeamAccess(teamId, { requireAdmin: true });
+      const team = await prisma.teams.findFirst({
+        where: { id: teamId, users: { some: { id: userId } } },
+        select: { ownerId: true },
+      });
+      if (!team) {
+        throw new ApiError(404, "User not found in this team");
+      }
+      if (team.ownerId === userId) {
+        throw new ApiError(
+          409,
+          "Transfer team ownership before removing this user",
+        );
+      }
+    } else if (organizationId) {
+      await verifyOrganizationAccess(organizationId);
+      const target = await prisma.user.findFirst({
+        where: {
+          id: userId,
+          organizations: { some: { id: organizationId } },
+        },
+        select: { id: true },
+      });
+      if (!target) {
+        throw new ApiError(404, "User not found in this organization");
       }
     }
     await deleteUser(userId, organizationId, teamId);

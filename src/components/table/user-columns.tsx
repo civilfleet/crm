@@ -3,8 +3,19 @@ import { format } from "date-fns";
 import { Crown, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { DataTableColumnHeader } from "@/components/table/data-table-column-header";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -249,12 +260,16 @@ const UserActions = ({ user }: { user: UserRow }) => {
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
+  const [open, setOpen] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
 
   const teamId = params?.teamId ? params?.teamId : "";
   const organizationId = params?.organizationId ? params.organizationId : "";
+  const scopeLabel = teamId ? "team" : "organization";
 
   const handleDelete = async () => {
     try {
+      setIsRemoving(true);
       const response = await fetch(`/api/users/${user.id}`, {
         method: "DELETE",
         headers: {
@@ -273,23 +288,69 @@ const UserActions = ({ user }: { user: UserRow }) => {
       });
 
       router.refresh();
+      setOpen(false);
     } catch (_error) {
       toast({
         title: "Error",
         description: "Failed to remove user",
         variant: "destructive",
       });
+    } finally {
+      setIsRemoving(false);
     }
   };
 
+  if (user.isOwner) {
+    return (
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        disabled
+        aria-label="Team owner cannot be removed"
+        title="Transfer ownership before removing this user"
+        className="h-8 w-8 p-0"
+      >
+        <Trash2 className="h-4 w-4" aria-hidden="true" />
+      </Button>
+    );
+  }
+
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={handleDelete}
-      className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
-    >
-      <Trash2 className="h-4 w-4" />
-    </Button>
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={`Remove ${user.name || user.email} from ${scopeLabel}`}
+          className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 hover:text-red-700"
+        >
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            Remove This User from the {teamId ? "Team" : "Organization"}?
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {user.name || user.email} will lose access to this {scopeLabel}
+            {teamId ? " and all of its groups" : ""}. Their account and other
+            memberships remain intact.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isRemoving}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDelete}
+            disabled={isRemoving}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {isRemoving ? "Removing…" : "Remove User"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 };

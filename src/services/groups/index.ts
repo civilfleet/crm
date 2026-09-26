@@ -628,7 +628,10 @@ const updateGroup = async (input: UpdateGroupInput) => {
         ? getAdminGroupModules(teamModules)
         : Array.from(
             new Set(
-              (requestedModules.length ? requestedModules : [...teamModules]).filter(
+              (requestedModules.length
+                ? requestedModules
+                : [...teamModules]
+              ).filter(
                 (module): module is AppModule =>
                   APP_MODULES.includes(module) && allowedModules.has(module),
               ),
@@ -719,6 +722,17 @@ const addUsersToGroup = async (input: AddUsersToGroupInput) => {
 
   if (group.isDefaultGroup) {
     throw new Error("Cannot manually assign users to the default group");
+  }
+
+  const teamUsers = await prisma.user.findMany({
+    where: {
+      id: { in: userIds },
+      teams: { some: { id: teamId } },
+    },
+    select: { id: true },
+  });
+  if (teamUsers.length !== new Set(userIds).size) {
+    throw new Error("One or more users do not belong to this team");
   }
 
   // Get existing user-group relationships
