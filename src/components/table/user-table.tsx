@@ -19,13 +19,18 @@ import { Form } from "../ui/form";
 interface UserTableProps {
   teamId: string;
   organizationId: string;
+  canManageUsers?: boolean;
 }
 
 const querySchema = z.object({
   query: z.string(),
 });
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
-export default function UserTable({ teamId, organizationId }: UserTableProps) {
+export default function UserTable({
+  teamId,
+  organizationId,
+  canManageUsers = true,
+}: UserTableProps) {
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [page, setPage] = useState(1);
@@ -170,6 +175,7 @@ export default function UserTable({ teamId, organizationId }: UserTableProps) {
             data={(data?.data || []).map((user: User) => ({
               ...user,
               isOwner: ownerId ? user.id === ownerId : false,
+              canManageUsers,
             }))}
             initialView="table"
             serverPagination={{
@@ -182,46 +188,52 @@ export default function UserTable({ teamId, organizationId }: UserTableProps) {
                 setPage(1);
               },
             }}
-            selectable
-            renderBatchActions={({ selectedRows, clearSelection }) => (
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm text-muted-foreground">
-                  {selectedRows.length} selected
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    disabled={isDeleting}
-                    onClick={() =>
-                      handleDeleteSelected(
-                        selectedRows as Array<User & { isOwner?: boolean }>,
-                        clearSelection,
-                      )
-                    }
-                  >
-                    {isDeleting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Removing...
-                      </>
-                    ) : (
-                      "Remove selected"
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={isDeleting || selectedRows.length === 0}
-                    onClick={clearSelection}
-                  >
-                    Clear
-                  </Button>
-                </div>
-              </div>
-            )}
+            selectable={canManageUsers}
+            renderBatchActions={
+              canManageUsers
+                ? ({ selectedRows, clearSelection }) => (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-sm text-muted-foreground">
+                        {selectedRows.length} selected
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          disabled={isDeleting}
+                          onClick={() =>
+                            handleDeleteSelected(
+                              selectedRows as Array<
+                                User & { isOwner?: boolean }
+                              >,
+                              clearSelection,
+                            )
+                          }
+                        >
+                          {isDeleting ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Removing...
+                            </>
+                          ) : (
+                            "Remove selected"
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          disabled={isDeleting || selectedRows.length === 0}
+                          onClick={clearSelection}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    </div>
+                  )
+                : undefined
+            }
           />
         )}
       </div>

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { updateTeamUserSchema } from "../src/validations/users";
 import { loadModule } from "./helpers/load-module";
 
 class ApiError extends Error {
@@ -56,11 +57,15 @@ test("user removal rejects mixed scopes; authorized single scope still works", a
     ...base,
     "@/lib/prisma": {
       teams: { findFirst: async () => ({ ownerId }) },
+      user: { findFirst: async () => ({ id: "victim" }) },
     },
     "@/lib/api-guard": {
       ...guards,
       verifyTeamAccess: async () => calls.push("team"),
-      verifyOrganizationAccess: async () => calls.push("org"),
+      verifyOrganizationAccess: async (
+        _organizationId: string,
+        options: { requireTeamAdmin?: boolean },
+      ) => calls.push(`org:${String(options.requireTeamAdmin)}`),
     },
     "@/services/users": { deleteUser: async () => calls.push("delete") },
     "@/validations/users": {
@@ -85,6 +90,8 @@ test("user removal rejects mixed scopes; authorized single scope still works", a
   ownerId = "victim";
   assert.equal((await remove({ teamId: "team-a" })).status, 409);
   assert.deepEqual(calls, ["team", "delete", "team"]);
+  assert.equal((await remove({ organizationId: "org-a" })).status, 200);
+  assert.deepEqual(calls, ["team", "delete", "team", "org:true", "delete"]);
 });
 
 test("team user profiles require an explicit admin scope for reads and writes", async () => {
@@ -99,6 +106,7 @@ test("team user profiles require an explicit admin scope for reads and writes", 
         options: { requireAdmin?: boolean },
       ) => {
         calls.push(`guard:${teamId}:${String(options.requireAdmin)}`);
+        return session;
       },
       verifyOrganizationAccess: async () => undefined,
     },
@@ -107,8 +115,13 @@ test("team user profiles require an explicit admin scope for reads and writes", 
         calls.push(`read:${userId}:${teamId}`);
         return teamId === "team-a" ? { id: userId } : null;
       },
-      updateTeamUser: async (userId: string, body: { teamId: string }) => {
+      updateTeamUser: async (
+        userId: string,
+        body: { teamId: string },
+        actor: { userId?: string },
+      ) => {
         calls.push(`write:${userId}:${body.teamId}`);
+        calls.push(`actor:${actor.userId}`);
       },
     },
     "@/validations/users": {
@@ -146,7 +159,20 @@ test("team user profiles require an explicit admin scope for reads and writes", 
     context,
   );
   assert.equal(patchResponse.status, 200);
-  assert.deepEqual(calls, ["guard:team-a:true", "write:target:team-a"]);
+  assert.deepEqual(calls, [
+    "guard:team-a:true",
+    "write:target:team-a",
+    "actor:actor",
+  ]);
+});
+
+test("team user updates reject sign-in email changes", () => {
+  const result = updateTeamUserSchema.safeParse({
+    teamId: "11111111-1111-4111-8111-111111111111",
+    groupIds: [],
+    email: "attacker@example.org",
+  });
+  assert.equal(result.success, false);
 });
 
 test("group assignment rejects users outside the selected team", async () => {
@@ -190,6 +216,52 @@ test("group assignment rejects users outside the selected team", async () => {
   assert.equal(membershipWrites, 0);
 });
 
+test("group creation rejects initial users outside the selected team", async () => {
+  let groupWrites = 0;
+  const transactionClient = {
+    user: {
+      findMany: async () => [{ id: "member" }],
+    },
+    group: {
+      create: async () => {
+        groupWrites++;
+        return {};
+      },
+    },
+  };
+  const service = loadModule<{
+    createGroup: (input: {
+      teamId: string;
+      name: string;
+      userIds: string[];
+    }) => Promise<void>;
+  }>("src/services/groups/index.ts", {
+    "@/constants/contact-submodules": { CONTACT_SUBMODULE_FIELDS: {} },
+    "@/types": {
+      APP_MODULES: ["CRM", "FUNDING", "ADMIN"],
+      DEFAULT_TEAM_MODULES: ["CRM", "FUNDING"],
+    },
+    "@/lib/prisma": {
+      teams: {
+        findUnique: async () => ({ modules: ["CRM", "FUNDING"] }),
+      },
+      $transaction: async (
+        callback: (client: typeof transactionClient) => Promise<unknown>,
+      ) => callback(transactionClient),
+    },
+  });
+
+  await assert.rejects(
+    service.createGroup({
+      teamId: "team-a",
+      name: "New group",
+      userIds: ["member", "outsider"],
+    }),
+    /do not belong to this team/,
+  );
+  assert.equal(groupWrites, 0);
+});
+
 test("team user updates reject group IDs from another team before writing", async () => {
   let profileWrites = 0;
   const transactionClient = {
@@ -213,10 +285,9 @@ test("team user updates reject group IDs from another team before writing", asyn
       userId: string,
       input: {
         teamId: string;
-        name: string;
-        email: string;
         groupIds: string[];
       },
+      actor: { userId?: string; roles?: string[] },
     ) => Promise<void>;
   }>("src/services/users/index.ts", {
     "@/lib/prisma": {
@@ -225,20 +296,93 @@ test("team user updates reject group IDs from another team before writing", asyn
       ) => callback(transactionClient),
     },
     "@/services/groups": { ensureDefaultGroup: async () => undefined },
-    "@/types": { DEFAULT_TEAM_MODULES: ["CRM", "FUNDING"] },
+    "@/types": {
+      DEFAULT_TEAM_MODULES: ["CRM", "FUNDING"],
+      Roles: { Admin: "Admin" },
+    },
     "@/validations/users": {},
   });
 
   await assert.rejects(
-    service.updateTeamUser("target", {
-      teamId: "team-a",
-      name: "Target User",
-      email: "target@example.org",
-      groupIds: ["group-a", "foreign-group"],
-    }),
+    service.updateTeamUser(
+      "target",
+      {
+        teamId: "team-a",
+        groupIds: ["group-a", "foreign-group"],
+      },
+      { userId: "actor", roles: [] },
+    ),
     /do not belong to this team/,
   );
   assert.equal(profileWrites, 0);
+});
+
+test("team admins cannot edit another user's global profile", async () => {
+  let transactions = 0;
+  const service = loadModule<{
+    updateTeamUser: (
+      userId: string,
+      input: { teamId: string; name?: string; groupIds: string[] },
+      actor: { userId?: string; roles?: string[] },
+    ) => Promise<void>;
+  }>("src/services/users/index.ts", {
+    "@/lib/prisma": {
+      $transaction: async () => {
+        transactions++;
+      },
+    },
+    "@/services/groups": { ensureDefaultGroup: async () => undefined },
+    "@/types": {
+      DEFAULT_TEAM_MODULES: ["CRM", "FUNDING"],
+      Roles: { Admin: "Admin" },
+    },
+    "@/validations/users": {},
+  });
+
+  await assert.rejects(
+    service.updateTeamUser(
+      "target",
+      { teamId: "team-a", name: "Changed Name", groupIds: [] },
+      { userId: "team-admin", roles: [] },
+    ),
+    /Only this user or a global administrator/,
+  );
+  assert.equal(transactions, 0);
+});
+
+test("group details require team admin access before loading users", async () => {
+  const calls: string[] = [];
+  const route = loadModule<{
+    GET: (
+      req: Request,
+      ctx: { params: Promise<{ id: string }> },
+    ) => Promise<Response>;
+  }>("src/app/api/groups/[id]/route.ts", {
+    ...base,
+    "@/lib/api-guard": {
+      ...guards,
+      verifyTeamAccess: async (
+        teamId: string,
+        options: { requireAdmin?: boolean },
+      ) => calls.push(`guard:${teamId}:${String(options.requireAdmin)}`),
+    },
+    "@/services/groups": {
+      getGroupWithUsers: async () => {
+        calls.push("read");
+        return { id: "group-a" };
+      },
+    },
+    "@/validations/groups": {},
+  });
+
+  const response = await route.GET(
+    new Request(
+      "https://test.invalid/api/groups/group-a?teamId=team-a&includeUsers=true",
+    ),
+    { params: Promise.resolve({ id: "group-a" }) },
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls, ["guard:team-a:true", "read"]);
 });
 
 test("donation user lookup rejects a funding request from another team", async () => {

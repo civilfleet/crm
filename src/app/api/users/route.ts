@@ -3,8 +3,8 @@ import { APP_NAME } from "@/constants/app";
 import {
   ApiError,
   handleApiError,
-  verifyFundingRequestAccess,
   requireGlobalAdmin,
+  verifyFundingRequestAccess,
   verifyOrganizationAccess,
   verifyTeamAccess,
 } from "@/lib/api-guard";
@@ -105,7 +105,9 @@ export async function POST(req: Request) {
       if (!organizationId) {
         await requireGlobalAdmin();
       } else {
-        await verifyOrganizationAccess(organizationId);
+        await verifyOrganizationAccess(organizationId, {
+          requireTeamAdmin: true,
+        });
       }
       await createUser({
         ...validatedData,

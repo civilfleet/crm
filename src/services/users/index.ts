@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { ensureDefaultGroup } from "@/services/groups";
-import { type AppModule, DEFAULT_TEAM_MODULES, type Roles } from "@/types";
+import { type AppModule, DEFAULT_TEAM_MODULES, Roles } from "@/types";
 import type { UpdateTeamUserInput } from "@/validations/users";
 
 export interface User {
@@ -673,8 +673,29 @@ const getTeamUserById = async (id: string, teamId: string) => {
   };
 };
 
-const updateTeamUser = async (userId: string, input: UpdateTeamUserInput) => {
+const updateTeamUser = async (
+  userId: string,
+  input: UpdateTeamUserInput,
+  actor: { userId?: string; roles?: Roles[] },
+) => {
   const normalizeOptional = (value?: string) => value?.trim() || null;
+  const profileFields = [
+    "name",
+    "phone",
+    "address",
+    "postalCode",
+    "city",
+    "country",
+  ] as const;
+  const hasProfileChanges = profileFields.some((field) => field in input);
+  const canEditProfile =
+    actor.userId === userId || actor.roles?.includes(Roles.Admin) === true;
+
+  if (hasProfileChanges && !canEditProfile) {
+    throw new Error(
+      "Only this user or a global administrator can edit this profile",
+    );
+  }
 
   return prisma.$transaction(async (tx) => {
     const [team, targetUser, requestedGroups] = await Promise.all([
@@ -721,18 +742,29 @@ const updateTeamUser = async (userId: string, input: UpdateTeamUserInput) => {
       }
     }
 
-    await tx.user.update({
-      where: { id: userId },
-      data: {
-        name: input.name.trim(),
-        email: input.email.trim().toLowerCase(),
-        phone: normalizeOptional(input.phone),
-        address: normalizeOptional(input.address),
-        postalCode: normalizeOptional(input.postalCode),
-        city: normalizeOptional(input.city),
-        country: normalizeOptional(input.country),
-      },
-    });
+    if (hasProfileChanges) {
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+          ...(input.phone !== undefined
+            ? { phone: normalizeOptional(input.phone) }
+            : {}),
+          ...(input.address !== undefined
+            ? { address: normalizeOptional(input.address) }
+            : {}),
+          ...(input.postalCode !== undefined
+            ? { postalCode: normalizeOptional(input.postalCode) }
+            : {}),
+          ...(input.city !== undefined
+            ? { city: normalizeOptional(input.city) }
+            : {}),
+          ...(input.country !== undefined
+            ? { country: normalizeOptional(input.country) }
+            : {}),
+        },
+      });
+    }
 
     await tx.userGroup.deleteMany({
       where: {

@@ -547,6 +547,19 @@ const createGroup = async (input: CreateGroupInput) => {
   );
 
   const group = await prisma.$transaction(async (tx) => {
+    if (userIds?.length) {
+      const teamUsers = await tx.user.findMany({
+        where: {
+          id: { in: userIds },
+          teams: { some: { id: teamId } },
+        },
+        select: { id: true },
+      });
+      if (teamUsers.length !== new Set(userIds).size) {
+        throw new Error("One or more users do not belong to this team");
+      }
+    }
+
     const created = await tx.group.create({
       data: {
         teamId,

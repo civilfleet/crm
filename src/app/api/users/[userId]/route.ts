@@ -15,6 +15,7 @@ import {
   getUserById,
   updateTeamUser,
 } from "@/services/users";
+import { Roles } from "@/types";
 import { updateTeamUserSchema } from "@/validations/users";
 
 const getScope = (request: Request) => {
@@ -38,12 +39,22 @@ export async function GET(
     const { teamId, organizationId } = getScope(request);
 
     if (teamId) {
-      await verifyTeamAccess(teamId, { requireAdmin: true });
+      const session = await verifyTeamAccess(teamId, { requireAdmin: true });
       const data = await getTeamUserById(userId, teamId);
       if (!data) {
         throw new ApiError(404, "User not found in this team");
       }
-      return NextResponse.json({ data }, { status: 200 });
+      return NextResponse.json(
+        {
+          data: {
+            ...data,
+            canEditProfile:
+              session.user.userId === userId ||
+              session.user.roles?.includes(Roles.Admin) === true,
+          },
+        },
+        { status: 200 },
+      );
     }
 
     if (organizationId) {
@@ -78,8 +89,13 @@ export async function PATCH(
   try {
     const { userId } = await params;
     const validated = updateTeamUserSchema.parse(await request.json());
-    await verifyTeamAccess(validated.teamId, { requireAdmin: true });
-    await updateTeamUser(userId, validated);
+    const session = await verifyTeamAccess(validated.teamId, {
+      requireAdmin: true,
+    });
+    await updateTeamUser(userId, validated, {
+      userId: session.user.userId,
+      roles: session.user.roles,
+    });
 
     return NextResponse.json({ data: "success" }, { status: 200 });
   } catch (error) {
@@ -129,7 +145,9 @@ export async function DELETE(
         );
       }
     } else if (organizationId) {
-      await verifyOrganizationAccess(organizationId);
+      await verifyOrganizationAccess(organizationId, {
+        requireTeamAdmin: true,
+      });
       const target = await prisma.user.findFirst({
         where: {
           id: userId,

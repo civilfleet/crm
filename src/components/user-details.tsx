@@ -21,7 +21,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import useSWR from "swr";
-import type { z } from "zod";
+import { z } from "zod";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,8 +56,19 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import type { AppModule, Roles } from "@/types";
-import { updateTeamUserSchema } from "@/validations/users";
 import { Loader } from "./helper/loader";
+
+const teamUserFormSchema = z.object({
+  teamId: z.uuid(),
+  name: z.string().trim().max(255),
+  email: z.string().max(255),
+  phone: z.string().trim().max(255),
+  address: z.string().trim().max(255),
+  postalCode: z.string().trim().max(255),
+  city: z.string().trim().max(255),
+  country: z.string().trim().max(255),
+  groupIds: z.array(z.uuid()),
+});
 
 type UserGroup = {
   id: string;
@@ -89,6 +100,7 @@ type TeamUserDetails = {
   team?: { id: string; name: string };
   groups?: UserGroup[];
   availableGroups?: UserGroup[];
+  canEditProfile?: boolean;
 };
 
 type UserDetailsProps = {
@@ -191,8 +203,8 @@ export default function UserDetails({
     fetcher,
   );
   const user = data?.data;
-  const form = useForm<z.infer<typeof updateTeamUserSchema>>({
-    resolver: zodResolver(updateTeamUserSchema),
+  const form = useForm<z.infer<typeof teamUserFormSchema>>({
+    resolver: zodResolver(teamUserFormSchema),
     defaultValues: {
       teamId: teamId ?? "",
       name: "",
@@ -261,11 +273,22 @@ export default function UserDetails({
     setIsEditing(false);
   };
 
-  const saveUser = async (values: z.infer<typeof updateTeamUserSchema>) => {
+  const saveUser = async (values: z.infer<typeof teamUserFormSchema>) => {
+    if (user?.canEditProfile && values.name.trim().length < 2) {
+      form.setError("name", {
+        message: "Name must be at least 2 characters",
+      });
+      return;
+    }
+
+    const { email: _email, ...editableValues } = values;
+    const payload = user?.canEditProfile
+      ? editableValues
+      : { teamId: values.teamId, groupIds: values.groupIds };
     const response = await fetch(`/api/users/${userId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(values),
+      body: JSON.stringify(payload),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -281,7 +304,9 @@ export default function UserDetails({
     setIsEditing(false);
     toast({
       title: "User updated",
-      description: "Profile details and group access are up to date.",
+      description: user?.canEditProfile
+        ? "Profile details and group access are up to date."
+        : "Group access is up to date.",
     });
   };
 
@@ -436,8 +461,8 @@ export default function UserDetails({
                 </>
               ) : (
                 <Button type="button" onClick={() => setIsEditing(true)}>
-                  <Pencil className="mr-2 size-4" aria-hidden="true" /> Edit
-                  User
+                  <Pencil className="mr-2 size-4" aria-hidden="true" />
+                  {user.canEditProfile ? "Edit User" : "Edit Access"}
                 </Button>
               )}
             </div>
@@ -456,7 +481,9 @@ export default function UserDetails({
                   Profile Details
                 </CardTitle>
                 <CardDescription>
-                  Contact information used across the CRM.
+                  {user.canEditProfile
+                    ? "Contact information used across the CRM. The sign-in email cannot be changed here."
+                    : "This profile is managed by the user. You can manage their team access below."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-5 sm:grid-cols-2">
@@ -471,7 +498,7 @@ export default function UserDetails({
                           {...field}
                           name="name"
                           autoComplete="name"
-                          disabled={!isEditing}
+                          disabled={!isEditing || !user.canEditProfile}
                         />
                       </FormControl>
                       <FormMessage />
@@ -491,9 +518,12 @@ export default function UserDetails({
                           type="email"
                           autoComplete="email"
                           spellCheck={false}
-                          disabled={!isEditing}
+                          disabled
                         />
                       </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        Sign-in email can’t be changed here.
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -510,7 +540,7 @@ export default function UserDetails({
                           name="phone"
                           type="tel"
                           autoComplete="tel"
-                          disabled={!isEditing}
+                          disabled={!isEditing || !user.canEditProfile}
                         />
                       </FormControl>
                       <FormMessage />
@@ -528,7 +558,7 @@ export default function UserDetails({
                           {...field}
                           name="address"
                           autoComplete="street-address"
-                          disabled={!isEditing}
+                          disabled={!isEditing || !user.canEditProfile}
                         />
                       </FormControl>
                       <FormMessage />
@@ -546,7 +576,7 @@ export default function UserDetails({
                           {...field}
                           name="postalCode"
                           autoComplete="postal-code"
-                          disabled={!isEditing}
+                          disabled={!isEditing || !user.canEditProfile}
                         />
                       </FormControl>
                       <FormMessage />
@@ -564,7 +594,7 @@ export default function UserDetails({
                           {...field}
                           name="city"
                           autoComplete="address-level2"
-                          disabled={!isEditing}
+                          disabled={!isEditing || !user.canEditProfile}
                         />
                       </FormControl>
                       <FormMessage />
@@ -582,7 +612,7 @@ export default function UserDetails({
                           {...field}
                           name="country"
                           autoComplete="country-name"
-                          disabled={!isEditing}
+                          disabled={!isEditing || !user.canEditProfile}
                         />
                       </FormControl>
                       <FormMessage />

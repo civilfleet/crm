@@ -32,6 +32,7 @@ type UserLoginAccount = {
 type UserRow = User & {
   isOwner?: boolean;
   accounts?: UserLoginAccount[];
+  canManageUsers?: boolean;
 };
 
 const NavigableCell = ({
@@ -251,7 +252,7 @@ export const columns: ColumnDef<UserRow>[] = [
     id: "actions",
     cell: ({ row }) => {
       const user = row.original;
-      return <UserActions user={user} />;
+      return user.canManageUsers ? <UserActions user={user} /> : null;
     },
   },
 ];

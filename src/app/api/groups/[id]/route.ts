@@ -26,6 +26,8 @@ export async function GET(
       );
     }
 
+    await verifyTeamAccess(teamId, { requireAdmin: true });
+
     const group = includeUsers
       ? await getGroupWithUsers(id, teamId)
       : await getGroupById(id, teamId);
@@ -36,6 +38,9 @@ export async function GET(
 
     return NextResponse.json({ data: group }, { status: 200 });
   } catch (e) {
+    const apiError = handleApiError(e);
+    if (apiError) return apiError;
+
     const { message } = handlePrismaError(e);
     return NextResponse.json(
       { error: message },
