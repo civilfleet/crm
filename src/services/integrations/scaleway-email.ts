@@ -9,6 +9,10 @@ import {
   INTERNAL_COPY_MODE_LABELS,
   type InternalCopyMode,
 } from "@/constants/email";
+import {
+  decryptIntegrationSecret,
+  encryptIntegrationSecret,
+} from "@/lib/integration-secrets";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import {
@@ -303,7 +307,7 @@ export const sendScalewayTransactionalEmail = async ({
   }
 
   const result = await sendScalewayEmail({
-    apiKey: integration.apiKey,
+    apiKey: decryptIntegrationSecret(integration.apiKey),
     region: integration.baseUrl ?? DEFAULT_REGION,
     projectId: integration.defaultListId,
     from,
@@ -489,7 +493,7 @@ const sendInternalCopyEmails = async ({
     let scalewayEmail: ScalewayEmailRecord;
     try {
       scalewayEmail = await sendScalewayEmail({
-        apiKey: integration.apiKey,
+        apiKey: decryptIntegrationSecret(integration.apiKey),
         region,
         projectId: integration.defaultListId,
         from,
@@ -581,7 +585,7 @@ export const getScalewayEmailIntegration = async (
     createdAt: integration.createdAt,
     updatedAt: integration.updatedAt,
     hasApiKey: Boolean(integration.apiKey),
-    apiKeyPreview: maskApiKey(integration.apiKey),
+    apiKeyPreview: maskApiKey(decryptIntegrationSecret(integration.apiKey)),
     connectionVerified:
       Boolean(integration.apiKey) &&
       Boolean(integration.defaultListId) &&
@@ -620,12 +624,14 @@ export const saveScalewayEmailIntegration = async ({
     },
   });
 
-  const apiKeyToPersist = apiKey?.trim() || existing?.apiKey;
+  const plaintextApiKey =
+    apiKey?.trim() ||
+    (existing?.apiKey ? decryptIntegrationSecret(existing.apiKey) : undefined);
   const projectIdToPersist = projectId?.trim() || existing?.defaultListId;
   const senderEmailToPersist =
     senderEmail?.trim().toLowerCase() || existing?.senderEmail;
 
-  if (!apiKeyToPersist) {
+  if (!plaintextApiKey) {
     throw new Error("Scaleway secret key is required.");
   }
   if (!projectIdToPersist) {
@@ -634,6 +640,7 @@ export const saveScalewayEmailIntegration = async ({
   if (!senderEmailToPersist) {
     throw new Error("Default sender email is required.");
   }
+  const apiKeyToPersist = encryptIntegrationSecret(plaintextApiKey);
 
   const record = await prisma.integrationConnection.upsert({
     where: {
@@ -676,7 +683,7 @@ export const saveScalewayEmailIntegration = async ({
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     hasApiKey: Boolean(record.apiKey),
-    apiKeyPreview: maskApiKey(record.apiKey),
+    apiKeyPreview: maskApiKey(decryptIntegrationSecret(record.apiKey)),
     connectionVerified: false,
     connectionMessage:
       "Scaleway Transactional Email settings saved. Verify the sender before sending.",
@@ -705,7 +712,7 @@ export const verifyScalewayEmailIntegration = async (teamId: string) => {
   }
 
   await verifyScalewaySenderConfiguration({
-    apiKey: integration.apiKey,
+    apiKey: decryptIntegrationSecret(integration.apiKey),
     region: integration.baseUrl ?? DEFAULT_REGION,
     projectId: integration.defaultListId,
     senderEmail: integration.senderEmail,
@@ -1143,7 +1150,7 @@ export const processEmailBatch = async (batch: EmailBatch) => {
     let scalewayEmail: ScalewayEmailRecord;
     try {
       scalewayEmail = await sendScalewayEmail({
-        apiKey: integration.apiKey,
+        apiKey: decryptIntegrationSecret(integration.apiKey),
         region,
         projectId: integration.defaultListId,
         from,
@@ -1277,7 +1284,7 @@ export const processEmailBatch = async (batch: EmailBatch) => {
     const allInternalCopiesSent = await sendInternalCopyEmails({
       batch,
       integration: {
-        apiKey: integration.apiKey,
+        apiKey: decryptIntegrationSecret(integration.apiKey),
         defaultListId: integration.defaultListId,
       },
       from,

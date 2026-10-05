@@ -29,7 +29,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
 | EMAIL-005 | P0 | READY FOR LIVE TEST | The production deployment definition pins one supplied tag across migration, web, and worker images; migration failure stops rollout and the worker has `unless-stopped`. The application now records heartbeat and eligible email queue depth/age in the shared database, with a failing health command for stale heartbeat or queue lag. | Schema validation, threshold tests, typecheck, focused Biome, and production build passed on 2026-10-05. Apply the heartbeat migration, wire the health command into production monitoring, deploy one pinned tag, and verify it live before marking `DONE`. |
 | EMAIL-006 | P1 | READY FOR LIVE TEST | Saving Scaleway settings invalidates prior verification. Sender verification now checks the exact project/domain through the Scaleway API and requires domain status `checked`; settings and inbox test actions submit a real test message to the signed-in administrator. | Provider-response and real-send-path regression tests, typecheck, focused Biome, and production build pass. Complete verification and controlled delivery with production credentials before marking `DONE`. |
 | EMAIL-007 | P1 | READY FOR LIVE TEST | A fail-closed Scaleway SNS receiver validates the allowed topic, rotating signing certificate against Scaleway's configured trust chain, and message signature. Delivery/hard-failure states are replay-safe; hard bounces and spam suppress future batches. Admins can record unsubscribe/manual suppressions. Marketing use is explicitly blocked pending consent and one-click unsubscribe support. | Signed-envelope, rejection, replay, bounce, suppression, typecheck, focused Biome, and production-build checks pass. Configure SNS/trust secrets, apply the migration, and run live delivery/bounce/spam/suppression tests before marking `DONE`. |
-| EMAIL-008 | P1 | BLOCKED | Integration API and webhook secrets are stored in plaintext. | Independently rotatable encryption plus migration/rotation test. |
+| EMAIL-008 | P1 | READY FOR LIVE TEST | Scaleway, Klaviyo, and Zammad API keys plus the Zammad webhook secret are encrypted at rest with an independent, versioned AES-256-GCM keyring. Legacy plaintext is migration-compatible and the rotation command rewraps all secrets atomically. | Encryption, tamper, plaintext-compatibility, and old-to-new-key rotation tests, typecheck, focused Biome, and production build passed. Configure the production keyring, run the transactional rotation, and smoke-test every integration before marking `DONE`. |
 | EMAIL-009 | P1 | BLOCKED | IMAP, inbox reply, queue, and access-review paths lack integration coverage. | Automated happy-path, mismatch, retry, UID reset, and access-boundary tests. |
 | EMAIL-010 | P1 | DECISION NEEDED | Attachments, `Reply-To`, and Sent-folder behavior are not implemented. | Product decision recorded; accepted behavior implemented and tested where required. |
 | EMAIL-011 | P1 | BLOCKED | Email/IMAP provider calls need bounded timeouts; unrelated worker loops need separate health and lag monitoring. | Timeout tests and production health/alert evidence. |
@@ -52,6 +52,9 @@ checklist has passed with a dedicated test mailbox and test recipients.
 
 - [ ] Apply and verify all email-related Prisma migrations.
 - [ ] Deploy the web image and matching tools/worker image from the same commit.
+- [ ] Configure `INTEGRATION_SECRET_ENCRYPTION_KEYS` in web and worker, run
+      `yarn secrets:rotate-integrations`, and complete the smoke tests in
+      `docs/INTEGRATION_SECRET_ROTATION.md`.
 - [ ] Set a dedicated, stable `INBOUND_EMAIL_ENCRYPTION_KEY` in both services.
 - [ ] Add `yarn worker:health` as the worker container health check, alert on
       unhealthy state, and confirm heartbeat and queue-lag thresholds live.
@@ -149,8 +152,16 @@ checklist has passed with a dedicated test mailbox and test recipients.
   `docs/EMAIL_SENDING_POLICY.md`. Promotional/marketing use is explicitly out of
   scope until explicit consent and a recipient-facing one-click unsubscribe flow
   exist. Live SNS subscription, delivery, bounce, and suppression proof remains.
-- Next implementation target: `EMAIL-008` encryption and rotation of integration
-  secrets.
+- Implemented the static portion of `EMAIL-008`. Integration API keys and the
+  Zammad webhook secret now use authenticated encryption with a dedicated,
+  ordered keyring. Reads remain compatible with legacy plaintext while all
+  settings writes use the active key.
+- Added `yarn secrets:rotate-integrations`, which validates every existing
+  secret before writing, detects concurrent edits, and rotates all records in a
+  single transaction. Added the production rotation runbook and encryption,
+  tamper, compatibility, and key-rewrap tests. Live key configuration, database
+  rotation, and provider smoke tests remain.
+- Next implementation target: `EMAIL-009` end-to-end integration coverage.
 
 ## Production worker deployment handoff
 

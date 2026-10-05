@@ -1,5 +1,9 @@
 import { IntegrationProvider as PrismaIntegrationProvider } from "@prisma/client";
 import {
+  decryptIntegrationSecret,
+  encryptIntegrationSecret,
+} from "@/lib/integration-secrets";
+import {
   fetchKlaviyoCampaignMessage,
   fetchKlaviyoEmailEvents,
   fetchKlaviyoEventDetails,
@@ -547,7 +551,9 @@ export const getKlaviyoIntegration = async (
     createdAt: integration.createdAt,
     updatedAt: integration.updatedAt,
     hasApiKey: Boolean(integration.apiKey),
-    apiKeyPreview: maskKlaviyoApiKey(integration.apiKey),
+    apiKeyPreview: maskKlaviyoApiKey(
+      decryptIntegrationSecret(integration.apiKey),
+    ),
     connectionVerified: Boolean(integration.apiKey) && integration.isEnabled,
   };
 };
@@ -574,15 +580,18 @@ export const saveKlaviyoIntegration = async ({
     },
   });
 
-  const apiKeyToPersist = apiKey?.trim() || existing?.apiKey;
+  const plaintextApiKey =
+    apiKey?.trim() ||
+    (existing?.apiKey ? decryptIntegrationSecret(existing.apiKey) : undefined);
 
-  if (!apiKeyToPersist) {
+  if (!plaintextApiKey) {
     throw new Error("API key is required to configure Klaviyo integration.");
   }
 
   if (shouldTestConnection) {
-    await testKlaviyoCredentials(apiKeyToPersist);
+    await testKlaviyoCredentials(plaintextApiKey);
   }
+  const apiKeyToPersist = encryptIntegrationSecret(plaintextApiKey);
 
   const record = await prisma.integrationConnection.upsert({
     where: {
@@ -615,7 +624,7 @@ export const saveKlaviyoIntegration = async ({
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     hasApiKey: Boolean(record.apiKey),
-    apiKeyPreview: maskKlaviyoApiKey(record.apiKey),
+    apiKeyPreview: maskKlaviyoApiKey(decryptIntegrationSecret(record.apiKey)),
     connectionVerified: true,
     connectionMessage: shouldTestConnection
       ? "Connection successful"
@@ -642,6 +651,7 @@ export const syncKlaviyoIntegration = async (
   if (!integration.isEnabled) {
     throw new Error("Klaviyo integration is currently disabled.");
   }
+  const apiKey = decryptIntegrationSecret(integration.apiKey);
 
   const profileIdToContactId = new Map<string, string>();
   const emailToContactId = new Map<string, string>();
@@ -693,7 +703,7 @@ export const syncKlaviyoIntegration = async (
   let profileCursor: string | undefined;
   do {
     const { profiles, nextCursor } = await fetchKlaviyoProfiles(
-      integration.apiKey,
+      apiKey,
       profileCursor,
     );
 
@@ -720,7 +730,7 @@ export const syncKlaviyoIntegration = async (
   let eventsCursor: string | undefined;
   do {
     const { events, nextCursor } = await fetchKlaviyoEmailEvents(
-      integration.apiKey,
+      apiKey,
       eventsCursor,
     );
 
@@ -749,7 +759,7 @@ export const syncKlaviyoIntegration = async (
         contactId,
         event,
         profileId,
-        apiKey: integration.apiKey,
+        apiKey,
       });
       engagementsUpserted += 1;
     }

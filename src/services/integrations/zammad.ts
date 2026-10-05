@@ -1,5 +1,9 @@
 import crypto from "node:crypto";
 import { IntegrationProvider as PrismaIntegrationProvider } from "@prisma/client";
+import {
+  decryptIntegrationSecret,
+  encryptIntegrationSecret,
+} from "@/lib/integration-secrets";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import {
@@ -441,7 +445,7 @@ export const getZammadIntegration = async (
     teamId: integration.teamId,
     isEnabled: integration.isEnabled,
     hasApiKey: Boolean(integration.apiKey),
-    apiKeyPreview: maskToken(integration.apiKey),
+    apiKeyPreview: maskToken(decryptIntegrationSecret(integration.apiKey)),
     baseUrl: integration.baseUrl ?? undefined,
     webhookSecretSet: Boolean(integration.webhookSecret),
     connectionVerified:
@@ -476,8 +480,16 @@ export const saveZammadIntegration = async ({
     },
   });
 
-  const nextApiKey = apiKey ?? existing?.apiKey ?? "";
+  const nextApiKey =
+    apiKey ??
+    (existing?.apiKey ? decryptIntegrationSecret(existing.apiKey) : "");
   const nextBaseUrl = baseUrl ?? existing?.baseUrl ?? "";
+  const nextWebhookSecret =
+    webhookSecret === undefined
+      ? existing?.webhookSecret
+        ? decryptIntegrationSecret(existing.webhookSecret)
+        : ""
+      : webhookSecret;
 
   if (!nextApiKey) {
     throw new Error("API token is required to configure Zammad.");
@@ -507,6 +519,11 @@ export const saveZammadIntegration = async ({
     }
   }
 
+  const encryptedApiKey = encryptIntegrationSecret(nextApiKey);
+  const encryptedWebhookSecret = nextWebhookSecret
+    ? encryptIntegrationSecret(nextWebhookSecret)
+    : null;
+
   const record = await prisma.integrationConnection.upsert({
     where: {
       teamId_provider: {
@@ -517,15 +534,15 @@ export const saveZammadIntegration = async ({
     create: {
       teamId,
       provider: PrismaIntegrationProvider.ZAMMAD,
-      apiKey: nextApiKey,
+      apiKey: encryptedApiKey,
       baseUrl: normalizeBaseUrl(nextBaseUrl),
-      webhookSecret: webhookSecret ?? null,
+      webhookSecret: encryptedWebhookSecret,
       isEnabled: isEnabled ?? true,
     },
     update: {
-      apiKey: nextApiKey,
+      apiKey: encryptedApiKey,
       baseUrl: normalizeBaseUrl(nextBaseUrl),
-      webhookSecret: webhookSecret ?? existing?.webhookSecret ?? null,
+      webhookSecret: encryptedWebhookSecret,
       isEnabled: isEnabled ?? existing?.isEnabled ?? true,
     },
   });
@@ -535,7 +552,7 @@ export const saveZammadIntegration = async ({
     teamId: record.teamId,
     isEnabled: record.isEnabled,
     hasApiKey: Boolean(record.apiKey),
-    apiKeyPreview: maskToken(record.apiKey),
+    apiKeyPreview: maskToken(decryptIntegrationSecret(record.apiKey)),
     baseUrl: record.baseUrl ?? undefined,
     webhookSecretSet: Boolean(record.webhookSecret),
     connectionVerified,
@@ -573,6 +590,7 @@ export const syncZammadIntegration = async (
     );
     throw new Error("Zammad integration is currently disabled.");
   }
+  const apiKey = decryptIntegrationSecret(integration.apiKey);
 
   logger.debug(
     {
@@ -595,7 +613,7 @@ export const syncZammadIntegration = async (
     const pageTickets = await fetchZammad<ZammadTicket[]>(
       integration.baseUrl,
       `/api/v1/tickets?per_page=${perPage}&page=${page}`,
-      integration.apiKey,
+      apiKey,
     );
 
     logger.debug(
@@ -646,7 +664,7 @@ export const syncZammadIntegration = async (
   for (const ticket of filtered) {
     const { ticket: fullTicket, articles } = await getTicketArticles(
       integration.baseUrl,
-      integration.apiKey,
+      apiKey,
       ticket.id,
     );
 
@@ -719,10 +737,11 @@ export const syncZammadTicket = async (teamId: string, ticketId: number) => {
     );
     throw new Error("Zammad integration is currently disabled.");
   }
+  const apiKey = decryptIntegrationSecret(integration.apiKey);
 
   const { ticket, articles } = await getTicketArticles(
     integration.baseUrl,
-    integration.apiKey,
+    apiKey,
     ticketId,
   );
 
@@ -801,7 +820,7 @@ export const handleZammadWebhook = async ({
 
   const isValid = verifyWebhookSignature(
     rawBody,
-    integration.webhookSecret,
+    decryptIntegrationSecret(integration.webhookSecret),
     signature,
   );
   if (!isValid) {
@@ -884,6 +903,7 @@ export const replyToZammadTicket = async ({
   if (!integration.isEnabled) {
     throw new Error("Zammad integration is currently disabled.");
   }
+  const apiKey = decryptIntegrationSecret(integration.apiKey);
 
   if (!contactId) {
     throw new Error("Contact email is required to send a reply.");
@@ -906,7 +926,7 @@ export const replyToZammadTicket = async ({
     `${normalizeBaseUrl(integration.baseUrl)}/api/v1/ticket_articles`,
     {
       method: "POST",
-      headers: buildZammadHeaders(integration.apiKey),
+      headers: buildZammadHeaders(apiKey),
       body: JSON.stringify({
         ticket_id: ticketId,
         body: message,
@@ -977,6 +997,7 @@ export const createZammadTicket = async ({
   if (!integration.isEnabled) {
     throw new Error("Zammad integration is currently disabled.");
   }
+  const apiKey = decryptIntegrationSecret(integration.apiKey);
 
   const contact = await prisma.contact.findFirst({
     where: { id: contactId, teamId, deletedAt: null },
@@ -995,7 +1016,7 @@ export const createZammadTicket = async ({
     `${normalizeBaseUrl(integration.baseUrl)}/api/v1/tickets`,
     {
       method: "POST",
-      headers: buildZammadHeaders(integration.apiKey),
+      headers: buildZammadHeaders(apiKey),
       body: JSON.stringify({
         title: subject,
         group_id: groupId,
@@ -1020,7 +1041,7 @@ export const createZammadTicket = async ({
   const created = (await response.json()) as ZammadTicketCreateResponse;
   const { ticket, articles } = await getTicketArticles(
     integration.baseUrl,
-    integration.apiKey,
+    apiKey,
     created.id,
   );
 
@@ -1060,16 +1081,17 @@ export const getZammadGroups = async (teamId: string) => {
   if (!integration?.apiKey || !integration.baseUrl) {
     throw new Error("Zammad integration is not configured for this team.");
   }
+  const apiKey = decryptIntegrationSecret(integration.apiKey);
 
   const tokenUser = await fetchZammad<ZammadUser>(
     integration.baseUrl,
     "/api/v1/users/me",
-    integration.apiKey,
+    apiKey,
   );
   const groups = await fetchZammad<ZammadGroup[]>(
     integration.baseUrl,
     "/api/v1/groups",
-    integration.apiKey,
+    apiKey,
   );
 
   const settings = await prisma.zammadGroupSetting.findMany({

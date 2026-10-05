@@ -24,6 +24,11 @@ const emailTypes = {
   IntegrationProvider: { SCALEWAY_TEM: "SCALEWAY_TEM" },
 };
 
+const integrationSecretMocks = {
+  decryptIntegrationSecret: (value: string) => value,
+  encryptIntegrationSecret: (value: string) => value,
+};
+
 test("bulk email rejects direct contact IDs outside the sender's visibility", async () => {
   let batchWrites = 0;
   let visibilityWhere: unknown;
@@ -41,6 +46,7 @@ test("bulk email rejects direct contact IDs outside the sender's visibility", as
       DEFAULT_INTERNAL_COPY_MODE: "summary",
       INTERNAL_COPY_MODE_LABELS: { summary: "Summary only" },
     },
+    "@/lib/integration-secrets": integrationSecretMocks,
     "@/lib/logger": {
       error: () => undefined,
       info: () => undefined,
@@ -118,6 +124,7 @@ test("bulk email restricts internal recipient reports to team administrators", a
       DEFAULT_INTERNAL_COPY_MODE: "summary",
       INTERNAL_COPY_MODE_LABELS: { summary: "Summary only" },
     },
+    "@/lib/integration-secrets": integrationSecretMocks,
     "@/lib/logger": {},
     "@/lib/prisma": {
       eventRegistration: {
@@ -200,6 +207,7 @@ test("bulk email publishes its batch and complete recipient set atomically", asy
       DEFAULT_INTERNAL_COPY_MODE: "summary",
       INTERNAL_COPY_MODE_LABELS: { summary: "Summary only" },
     },
+    "@/lib/integration-secrets": integrationSecretMocks,
     "@/lib/logger": {},
     "@/lib/prisma": {
       eventRegistration: { findMany: async () => [] },
@@ -403,6 +411,7 @@ test("bulk email does not resend after provider acceptance if persistence fails"
       DEFAULT_INTERNAL_COPY_MODE: "summary",
       INTERNAL_COPY_MODE_LABELS: { summary: "Summary only" },
     },
+    "@/lib/integration-secrets": integrationSecretMocks,
     "@/lib/logger": {
       error: () => undefined,
       info: () => undefined,
