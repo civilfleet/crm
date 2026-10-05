@@ -30,7 +30,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
 | EMAIL-006 | P1 | READY FOR LIVE TEST | Saving Scaleway settings invalidates prior verification. Sender verification now checks the exact project/domain through the Scaleway API and requires domain status `checked`; settings and inbox test actions submit a real test message to the signed-in administrator. | Provider-response and real-send-path regression tests, typecheck, focused Biome, and production build pass. Complete verification and controlled delivery with production credentials before marking `DONE`. |
 | EMAIL-007 | P1 | READY FOR LIVE TEST | A fail-closed Scaleway SNS receiver validates the allowed topic, rotating signing certificate against Scaleway's configured trust chain, and message signature. Delivery/hard-failure states are replay-safe; hard bounces and spam suppress future batches. Admins can record unsubscribe/manual suppressions. Marketing use is explicitly blocked pending consent and one-click unsubscribe support. | Signed-envelope, rejection, replay, bounce, suppression, typecheck, focused Biome, and production-build checks pass. Configure SNS/trust secrets, apply the migration, and run live delivery/bounce/spam/suppression tests before marking `DONE`. |
 | EMAIL-008 | P1 | READY FOR LIVE TEST | Scaleway, Klaviyo, and Zammad API keys plus the Zammad webhook secret are encrypted at rest with an independent, versioned AES-256-GCM keyring. Legacy plaintext is migration-compatible and the rotation command rewraps all secrets atomically. | Encryption, tamper, plaintext-compatibility, and old-to-new-key rotation tests, typecheck, focused Biome, and production build passed. Configure the production keyring, run the transactional rotation, and smoke-test every integration before marking `DONE`. |
-| EMAIL-009 | P1 | BLOCKED | IMAP, inbox reply, queue, and access-review paths lack integration coverage. | Automated happy-path, mismatch, retry, UID reset, and access-boundary tests. |
+| EMAIL-009 | P1 | DONE | IMAP import/checkpoint behavior, inbox reply ambiguity, batch retry ownership, real outbound test dispatch, and access-review scoping have automated integration coverage. | Happy-path import, team mismatch, retry/uncertain delivery, UID reset, and access-boundary tests plus typecheck, focused Biome, and production build passed on 2026-10-05. |
 | EMAIL-010 | P1 | DECISION NEEDED | Attachments, `Reply-To`, and Sent-folder behavior are not implemented. | Product decision recorded; accepted behavior implemented and tested where required. |
 | EMAIL-011 | P1 | BLOCKED | Email/IMAP provider calls need bounded timeouts; unrelated worker loops need separate health and lag monitoring. | Timeout tests and production health/alert evidence. |
 | EMAIL-012 | P1 | BLOCKED | Global SMTP configuration does not fail fast even though it powers magic-link login and application email. | Startup validation and live magic-link/application-email smoke tests. |
@@ -161,7 +161,14 @@ checklist has passed with a dedicated test mailbox and test recipients.
   single transaction. Added the production rotation runbook and encryption,
   tamper, compatibility, and key-rewrap tests. Live key configuration, database
   rotation, and provider smoke tests remain.
-- Next implementation target: `EMAIL-009` end-to-end integration coverage.
+- Completed `EMAIL-009` with an end-to-end authenticated IMAP import fixture,
+  cross-team inbox-claim rejection, access-review query scoping, and coverage of
+  the existing reply ambiguity, retry authorization, and real outbound test
+  paths. The tests exposed and fixed a UID reset defect: a changed IMAP
+  `UIDVALIDITY` now clears the old checkpoint even when the mailbox is empty, so
+  later low-numbered UIDs cannot be skipped.
+- Next implementation target: `EMAIL-011` bounded provider timeouts and worker
+  loop health. `EMAIL-010` remains a product decision.
 
 ## Production worker deployment handoff
 

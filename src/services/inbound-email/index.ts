@@ -1814,12 +1814,12 @@ export const syncEmailInbox = async (
       }
 
       const uidValidity = mailbox.uidValidity;
-      const startUid =
-        !options.resetCheckpoint &&
-        inbox.uidValidity === uidValidity &&
-        inbox.lastUid
-          ? inbox.lastUid + BigInt(1)
-          : BigInt(1);
+      const checkpointIsCurrent =
+        !options.resetCheckpoint && inbox.uidValidity === uidValidity;
+      if (!checkpointIsCurrent) {
+        lastUid = null;
+      }
+      const startUid = lastUid ? lastUid + BigInt(1) : BigInt(1);
       const uidNext = mailbox.uidNext ? BigInt(mailbox.uidNext) : null;
       const range = `${startUid.toString()}:*`;
 
