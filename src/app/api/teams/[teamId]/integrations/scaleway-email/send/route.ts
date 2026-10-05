@@ -3,6 +3,7 @@ import { z } from "zod";
 import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import { sendMassEmailToContacts } from "@/services/integrations/scaleway-email";
+import type { Roles } from "@/types";
 import { sendMassEmailSchema } from "@/validations/scaleway-email";
 
 export async function POST(
@@ -12,6 +13,10 @@ export async function POST(
   try {
     const { teamId } = await params;
     const session = await verifyTeamAccess(teamId, { requireModule: "CRM" });
+    const userId = session.user.userId;
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const payload = await request.json();
     const validated = sendMassEmailSchema.parse(payload);
 
@@ -23,8 +28,9 @@ export async function POST(
       html: validated.html,
       bccEmails: validated.bccEmails,
       internalCopyMode: validated.internalCopyMode,
-      userId: session.user.userId,
+      userId,
       userName: session.user.name ?? session.user.email ?? undefined,
+      roles: (session.user.roles ?? []) as Roles[],
       senderLabelMode: validated.senderLabelMode,
     });
 

@@ -1,37 +1,30 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
-import { hasModuleAccess } from "@/lib/permissions";
+import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import { retryEmailBatch } from "@/services/emails";
+import type { Roles } from "@/types";
 
 export async function POST(
   _request: Request,
   { params }: { params: Promise<{ teamId: string; batchId: string }> },
 ) {
   try {
-    const session = await auth();
-    if (!session?.user?.userId) {
+    const { teamId, batchId } = await params;
+    const session = await verifyTeamAccess(teamId, { requireModule: "CRM" });
+    const userId = session.user.userId;
+    if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    const { teamId, batchId } = await params;
-    const canAccessCrm = await hasModuleAccess(
-      {
-        teamId,
-        userId: session.user.userId,
-        roles: session.user.roles,
-      },
-      "CRM",
-    );
-
-    if (!canAccessCrm) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const result = await retryEmailBatch(teamId, batchId);
+    const result = await retryEmailBatch(teamId, batchId, {
+      userId,
+      roles: (session.user.roles ?? []) as Roles[],
+    });
 
     return NextResponse.json({ data: result }, { status: 202 });
   } catch (error) {
+    const apiError = handleApiError(error);
+    if (apiError) return apiError;
+
     const { message } = handlePrismaError(error);
     return NextResponse.json(
       { error: message },

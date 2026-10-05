@@ -8,6 +8,8 @@ import {
   getPrimaryEmail,
   primaryContactEmailSelect,
 } from "@/services/contact-emails";
+import { getTeamAdminAccess } from "@/services/teams/access";
+import type { Roles } from "@/types";
 
 const emailBatchInclude = {
   recipients: {
@@ -120,10 +122,19 @@ const mapEmailBatch = (batch: EmailBatchWithRecipients): EmailHistoryBatch => ({
 
 export const getEmailHistoryBatches = async (
   teamId: string,
+  access: { userId: string; roles?: Roles[] },
   limit = 50,
 ): Promise<EmailHistoryBatch[]> => {
+  const adminAccess = await getTeamAdminAccess(
+    access.userId,
+    teamId,
+    access.roles,
+  );
   const batches = await prisma.emailBatch.findMany({
-    where: { teamId },
+    where: {
+      teamId,
+      ...(adminAccess.allowed ? {} : { userId: access.userId }),
+    },
     orderBy: { createdAt: "desc" },
     take: limit,
     include: emailBatchInclude,
@@ -132,12 +143,23 @@ export const getEmailHistoryBatches = async (
   return batches.map(mapEmailBatch);
 };
 
-export const retryEmailBatch = async (teamId: string, batchId: string) =>
-  await prisma.$transaction(async (tx) => {
+export const retryEmailBatch = async (
+  teamId: string,
+  batchId: string,
+  access: { userId: string; roles?: Roles[] },
+) => {
+  const adminAccess = await getTeamAdminAccess(
+    access.userId,
+    teamId,
+    access.roles,
+  );
+
+  return await prisma.$transaction(async (tx) => {
     const batch = await tx.emailBatch.findFirst({
       where: {
         id: batchId,
         teamId,
+        ...(adminAccess.allowed ? {} : { userId: access.userId }),
       },
       select: {
         id: true,
@@ -230,3 +252,4 @@ export const retryEmailBatch = async (teamId: string, batchId: string) =>
       pendingRecipients,
     };
   });
+};

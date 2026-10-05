@@ -15,11 +15,14 @@ import {
   getPrimaryEmail,
   primaryContactEmailSelect,
 } from "@/services/contact-emails";
+import { getContactVisibility } from "@/services/contacts/access";
+import { getTeamAdminAccess } from "@/services/teams/access";
 import {
   EngagementDirection,
   EngagementSource,
   type IntegrationConnection,
   IntegrationProvider,
+  type Roles,
 } from "@/types";
 
 const DEFAULT_REGION = "fr-par";
@@ -53,8 +56,9 @@ export type SendMassEmailInput = {
   html: string;
   bccEmails?: string[];
   internalCopyMode?: InternalCopyMode;
-  userId?: string;
+  userId: string;
   userName?: string;
+  roles?: Roles[];
   senderLabelMode?: SenderLabelMode;
 };
 
@@ -591,6 +595,7 @@ export const sendMassEmailToContacts = async ({
   internalCopyMode = DEFAULT_INTERNAL_COPY_MODE,
   userId,
   userName,
+  roles = [],
   senderLabelMode = "default",
 }: SendMassEmailInput): Promise<SendMassEmailResult> => {
   const uniqueDirectContactIds = Array.from(new Set(contactIds));
@@ -600,6 +605,15 @@ export const sendMassEmailToContacts = async ({
       bccEmails.map((email) => email.trim().toLowerCase()).filter(Boolean),
     ),
   );
+
+  if (normalizedBccEmails.length > 0) {
+    const adminAccess = await getTeamAdminAccess(userId, teamId, roles);
+    if (!adminAccess.allowed) {
+      throw new Error(
+        "Only team administrators can send internal email reports.",
+      );
+    }
+  }
 
   if (uniqueDirectContactIds.length === 0 && uniqueEventIds.length === 0) {
     throw new Error("Select at least one recipient.");
@@ -617,7 +631,7 @@ export const sendMassEmailToContacts = async ({
           },
         })
       : [];
-  const uniqueContactIds = Array.from(
+  const candidateContactIds = Array.from(
     new Set([
       ...uniqueDirectContactIds,
       ...eventRegistrantContactIds.map(
@@ -626,8 +640,33 @@ export const sendMassEmailToContacts = async ({
     ]),
   );
 
-  if (uniqueContactIds.length === 0) {
+  if (candidateContactIds.length === 0) {
     throw new Error("No email recipients found for this selection.");
+  }
+
+  const visibility = await getContactVisibility({
+    teamId,
+    userId,
+    roles,
+  });
+  const contacts = await prisma.contact.findMany({
+    where: {
+      AND: [visibility.where, { id: { in: candidateContactIds } }],
+    },
+    select: {
+      id: true,
+      name: true,
+      emails: primaryContactEmailSelect,
+    },
+  });
+  const visibleContactIds = new Set(contacts.map(({ id }) => id));
+  if (uniqueDirectContactIds.some((id) => !visibleContactIds.has(id))) {
+    throw new Error("One or more selected recipients are unavailable.");
+  }
+
+  const uniqueContactIds = contacts.map(({ id }) => id);
+  if (uniqueContactIds.length === 0) {
+    throw new Error("No accessible email recipients found for this selection.");
   }
   if (uniqueContactIds.length > MAX_RECIPIENTS) {
     throw new Error(
@@ -650,19 +689,6 @@ export const sendMassEmailToContacts = async ({
   if (!integration.isEnabled) {
     throw new Error("Scaleway Transactional Email is disabled.");
   }
-
-  const contacts = await prisma.contact.findMany({
-    where: {
-      teamId,
-      id: { in: uniqueContactIds },
-      deletedAt: null,
-    },
-    select: {
-      id: true,
-      name: true,
-      emails: primaryContactEmailSelect,
-    },
-  });
 
   const from = buildSender({
     senderEmail: integration.senderEmail,
@@ -693,39 +719,34 @@ export const sendMassEmailToContacts = async ({
 
   for (const contact of contacts) {
     const email = getPrimaryEmail(contact)?.trim().toLowerCase();
-    if (!email) {
-      skipped += 1;
+    if (email) {
       await prisma.emailRecipient.create({
         data: {
           batchId: batch.id,
           contactId: contact.id,
-          email: "missing-email",
+          email,
           name: contact.name,
-          status: EmailRecipientStatus.SKIPPED,
-          errorMessage: "Contact has no email address.",
+          status: EmailRecipientStatus.PENDING,
         },
-      });
-      failures.push({
-        contactId: contact.id,
-        message: "Contact has no email address.",
       });
       continue;
     }
 
+    skipped += 1;
     await prisma.emailRecipient.create({
       data: {
         batchId: batch.id,
         contactId: contact.id,
-        email,
+        email: "missing-email",
         name: contact.name,
-        status: EmailRecipientStatus.PENDING,
+        status: EmailRecipientStatus.SKIPPED,
+        errorMessage: "Contact has no email address.",
       },
     });
-  }
-
-  const missingContacts = uniqueContactIds.length - contacts.length;
-  if (missingContacts > 0) {
-    skipped += missingContacts;
+    failures.push({
+      contactId: contact.id,
+      message: "Contact has no email address.",
+    });
   }
 
   if (skipped > 0) {
