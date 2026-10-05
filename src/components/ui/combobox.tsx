@@ -24,6 +24,7 @@ export type ComboboxOption = {
 };
 
 interface ComboboxProps {
+  id?: string;
   options: ComboboxOption[];
   value: string;
   onChange: (value: string) => void;
@@ -41,11 +42,12 @@ interface ComboboxProps {
 }
 
 export function Combobox({
+  id,
   options,
   value,
   onChange,
-  placeholder = "Select option...",
-  searchPlaceholder = "Search...",
+  placeholder = "Select option…",
+  searchPlaceholder = "Search…",
   emptyStateText = "No results found.",
   allowCustomValue = false,
   isLoading = false,
@@ -103,6 +105,7 @@ export function Combobox({
       <div className="relative w-full">
         <PopoverTrigger asChild>
           <Button
+            id={id}
             type="button"
             variant="outline"
             role="combobox"
@@ -120,7 +123,10 @@ export function Combobox({
                 selectedOption?.label ??
                 (value && allowCustomValue ? value : placeholder)}
             </span>
-            <ChevronsUpDown className="ml-1 h-4 w-4 opacity-50" />
+            <ChevronsUpDown
+              className="ml-1 h-4 w-4 opacity-50"
+              aria-hidden="true"
+            />
           </Button>
         </PopoverTrigger>
         {value && allowCustomValue && (
@@ -135,7 +141,7 @@ export function Combobox({
             }}
             disabled={disabled}
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
         )}
       </div>
@@ -143,6 +149,8 @@ export function Combobox({
         <Command>
           <CommandInput
             placeholder={searchPlaceholder}
+            aria-label={searchPlaceholder}
+            autoComplete="off"
             value={searchTerm}
             onValueChange={setSearchTerm}
             className="h-9"
@@ -160,7 +168,7 @@ export function Combobox({
           <CommandList>
             {isLoading ? (
               <CommandEmpty className="py-3 text-center text-sm text-muted-foreground">
-                Loading...
+                Loading…
               </CommandEmpty>
             ) : filteredOptions.length === 0 ? (
               <CommandEmpty className="py-3 text-center text-sm text-muted-foreground">
@@ -174,6 +182,7 @@ export function Combobox({
                   <CommandItem
                     key={option.value}
                     value={option.value}
+                    keywords={[option.label]}
                     onSelect={handleSelect}
                   >
                     {option.label}
@@ -182,6 +191,7 @@ export function Combobox({
                         "ml-auto h-4 w-4",
                         value === option.value ? "opacity-100" : "opacity-0",
                       )}
+                      aria-hidden="true"
                     />
                   </CommandItem>
                 ))}

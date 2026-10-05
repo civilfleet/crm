@@ -15,6 +15,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Combobox } from "@/components/ui/combobox";
 import { useToast } from "@/hooks/use-toast";
 import { persistTablePageSize } from "@/lib/table-page-size";
 import type { User } from "@/types";
@@ -95,7 +96,7 @@ export default function UserTable({
     requestUrl,
     fetcher,
   );
-  const { data: groupsResponse } = useSWR<{
+  const { data: groupsResponse, isLoading: groupsLoading } = useSWR<{
     data: Array<{ id: string; name: string }>;
   }>(
     teamId
@@ -103,11 +104,20 @@ export default function UserTable({
       : null,
     fetcher,
   );
-  const groups = groupsResponse?.data ?? [];
-  const selectedGroupLabel =
-    groupId === "none"
-      ? "No groups"
-      : groups.find((group) => group.id === groupId)?.name;
+  const groupOptions = useMemo(
+    () => [
+      { value: "all", label: "All groups" },
+      { value: "none", label: "No groups" },
+      ...(groupsResponse?.data ?? []).map((group) => ({
+        value: group.id,
+        label: group.name,
+      })),
+    ],
+    [groupsResponse?.data],
+  );
+  const selectedGroupLabel = groupOptions.find(
+    (option) => option.value === groupId,
+  )?.label;
   const loading = isLoading || !data;
   const ownerId = data?.ownerId as string | undefined;
   const totalUsers = Number(data?.total ?? data?.data?.length ?? 0);
@@ -292,26 +302,19 @@ export default function UserTable({
                     >
                       Group
                     </label>
-                    <Select
+                    <Combobox
+                      id="user-group-filter"
                       value={groupId}
-                      onValueChange={(value) => {
-                        setGroupId(value);
+                      onChange={(value) => {
+                        setGroupId(value || "all");
                         setPage(1);
                       }}
-                    >
-                      <SelectTrigger id="user-group-filter" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All groups</SelectItem>
-                        <SelectItem value="none">No groups</SelectItem>
-                        {groups.map((group) => (
-                          <SelectItem key={group.id} value={group.id}>
-                            {group.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      options={groupOptions}
+                      placeholder="Select a group"
+                      searchPlaceholder="Search groups…"
+                      emptyStateText="No groups found."
+                      isLoading={groupsLoading}
+                    />
                   </div>
                 ) : null}
               </div>
