@@ -496,6 +496,12 @@ enum EmailReplyDispatchStatus {
   UNKNOWN
 }
 
+enum InboundEmailAuthenticationStatus {
+  PASS
+  FAIL
+  UNKNOWN
+}
+
 enum ZammadSyncJobType {
   INCREMENTAL_SYNC
   FULL_SYNC
@@ -794,6 +800,8 @@ model InboundEmailMessage {
   accessReviews ContactAccessReview[]
   replyDispatches EmailReplyDispatch[]
   rawHeaders    Json?
+  authenticationStatus InboundEmailAuthenticationStatus @default(UNKNOWN)
+  authenticationDetails Json?
   createdAt     DateTime @default(now()) @db.Timestamptz(6)
 
   @@unique([emailInboxId, mailbox, uidValidity, uid])
@@ -802,6 +810,7 @@ model InboundEmailMessage {
   @@index([messageId])
   @@index([contactId])
   @@index([engagementId])
+  @@index([authenticationStatus])
 }
 
 model EmailReplyDispatch {

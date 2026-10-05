@@ -553,6 +553,12 @@ test("inbox reply retries cannot resend an uncertain dispatch", async () => {
       getStoredReferences: () => [],
       normalizeReplySubject: (value: string) => `Re: ${value}`,
     },
+    "./authentication": {
+      parseInboundAuthentication: () => ({
+        status: "PASS",
+        reason: "test",
+      }),
+    },
     "@prisma/client": {
       ContactAccessReviewStatus: {},
       EmailInboxOutboundMode: {
@@ -564,6 +570,11 @@ test("inbox reply retries cannot resend an uncertain dispatch", async () => {
       EngagementDirection: { OUTBOUND: "OUTBOUND" },
       EngagementSource: { EMAIL: "EMAIL" },
       IntegrationProvider: { SCALEWAY_TEM: "SCALEWAY_TEM" },
+      InboundEmailAuthenticationStatus: {
+        PASS: "PASS",
+        FAIL: "FAIL",
+        UNKNOWN: "UNKNOWN",
+      },
       SystemLogLevel: { ERROR: "ERROR" },
     },
   });

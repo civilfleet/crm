@@ -25,7 +25,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
 | EMAIL-001 | P0 | DONE | Bulk send, history, retry, and internal-copy operations enforce contact and actor visibility at the service boundary. | Authorization regression tests, typecheck, focused Biome check, and production build passed on 2026-10-05. Live role-matrix smoke testing remains part of rollout. |
 | EMAIL-002 | P0 | DONE | Batch and recipient creation is atomic so the worker cannot claim an incomplete batch. | Transaction-boundary test, typecheck, focused Biome check, and production build passed on 2026-10-05. |
 | EMAIL-003 | P0 | READY FOR LIVE TEST | Bulk recipients and internal reports are durably claimed before provider I/O; ambiguous outcomes become non-retryable `UNKNOWN`. Inbox replies use a persistent client request key and dispatch record. | Crash-window regression tests passed on 2026-10-05. Apply the migration, run controlled Scaleway/SMTP sends, and complete an `UNKNOWN` reconciliation drill before marking `DONE`. |
-| EMAIL-004 | P0 | BLOCKED | Inbound contact matching trusts the message `From` header without authentication-result policy. Quarantine or clearly isolate unauthenticated mail. | SPF/DKIM/DMARC fixture tests and a live spoof/failure test. |
+| EMAIL-004 | P0 | READY FOR LIVE TEST | Inbound mail is contact-matched only when a trusted `Authentication-Results` service reports DMARC pass. Failed, missing, or untrusted evidence is stored without contact linkage and logged as quarantined. | Parser fixtures pass. Configure `INBOUND_EMAIL_TRUSTED_AUTHSERV_IDS`, apply the migration, and complete live pass/fail/spoof tests before marking `DONE`. |
 | EMAIL-005 | P0 | BLOCKED | The production worker definition is external to this repository and has not been verified. | Deployed worker, migrations, shared database/key, restart policy, heartbeat, and queue-lag checks verified live. |
 | EMAIL-006 | P1 | BLOCKED | Scaleway settings and the inbox "Test sending" action report readiness without a real provider/sender verification. | Provider API validation and a controlled test delivery succeed. |
 | EMAIL-007 | P1 | BLOCKED | Delivery and bounce states are not ingested; suppression and unsubscribe/consent policy are absent. | Signed webhook tests, suppression behavior, and documented sending policy. |
@@ -42,7 +42,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
   Handlebars `require.extensions` warnings remain.
 - `yarn lint`: passed with one existing unused `toBigInt` warning in the inbound
   email service.
-- `yarn test`: 20/21 passed in the restricted sandbox; the isolated vCard test
+- `yarn test`: 21/22 passed in the restricted sandbox; the isolated vCard test
   passed outside the sandbox, confirming a subprocess restriction rather than a
   product failure.
 - No live IMAP, SMTP, Scaleway, DNS, bounce-webhook, migration, or deployed-worker
@@ -56,6 +56,9 @@ checklist has passed with a dedicated test mailbox and test recipients.
 - [ ] Confirm worker restart policy, heartbeat, queue lag, and error alerting.
 - [ ] Verify global SMTP with a magic-link login and one application email.
 - [ ] Configure a dedicated non-production IMAP/SMTP mailbox.
+- [ ] Set `INBOUND_EMAIL_TRUSTED_AUTHSERV_IDS` to the receiving mail system's
+      exact Authentication-Results service IDs and confirm it removes or safely
+      orders sender-injected Authentication-Results headers.
 - [ ] Test authenticated inbound mail, failed-authentication mail, UID replay,
       checkpoint reset, HTML sanitization, and access-review behavior.
 - [ ] Send controlled replies through each enabled outbound mode and verify
@@ -98,6 +101,13 @@ checklist has passed with a dedicated test mailbox and test recipients.
   window regression tests proving a second attempt does not call the provider.
 - `EMAIL-003` is ready for a controlled live provider/reconciliation test. The
   next code implementation target is `EMAIL-004` inbound sender authentication.
+- Implemented the static portion of `EMAIL-004`. Only DMARC pass results from an
+  explicitly trusted authentication service can trigger contact matching,
+  contact creation, access review, or engagement creation. Other messages remain
+  stored for audit, are not exposed as contact activity, and generate a
+  quarantine system log. Added pass, fail, forged-header, and missing-evidence
+  fixtures. Live mailbox-header verification is still required.
+- Next implementation target: `EMAIL-005` production worker verification.
 
 ## Delivery ambiguity policy
 

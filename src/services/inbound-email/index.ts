@@ -7,6 +7,7 @@ import {
   EmailReplyDispatchStatus,
   EngagementDirection,
   EngagementSource,
+  InboundEmailAuthenticationStatus,
   type Prisma,
   IntegrationProvider as PrismaIntegrationProvider,
   SystemLogLevel,
@@ -37,6 +38,7 @@ import {
 } from "@/services/integrations/scaleway-email";
 import { recordSystemLog } from "@/services/system-logs";
 import { ContactEmailKind } from "@/types";
+import { parseInboundAuthentication } from "./authentication";
 import {
   escapeEmailHtml,
   getStoredReferences,
@@ -47,6 +49,12 @@ const DEFAULT_INBOX_SYNC_LIMIT = 25;
 const DEFAULT_INBOX_LOCK_MS = 5 * 60 * 1000;
 const IMAP_EXTERNAL_SOURCE = "IMAP";
 const INBOUND_EMAIL_ACCESS_REVIEW_SOURCE = "INBOUND_EMAIL";
+
+const getTrustedAuthenticationServices = () =>
+  (process.env.INBOUND_EMAIL_TRUSTED_AUTHSERV_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
 
 type EmailReplyDispatchWithEngagement = EmailReplyDispatch & {
   engagement: ContactEngagement | null;
@@ -1033,7 +1041,9 @@ type ContactResolution = {
     | "existing-hidden-review"
     | "existing-hidden-auto-grant"
     | "contact-created"
-    | "unmatched-stored";
+    | "unmatched-stored"
+    | "authentication-failed"
+    | "authentication-unverified";
 };
 
 const resolveContactForInboundEmail = async ({
@@ -1162,24 +1172,41 @@ const importMessage = async ({
   const receivedAt = parsed.date ?? new Date();
   const externalId = buildExternalId(inbox.id, uidValidity, uid);
   const message = getMessageBody(parsed) || "(No message body)";
+  const authentication = parseInboundAuthentication(
+    parsed.headerLines,
+    getTrustedAuthenticationServices(),
+  );
+  const authenticationStatus =
+    authentication.status === "PASS"
+      ? InboundEmailAuthenticationStatus.PASS
+      : authentication.status === "FAIL"
+        ? InboundEmailAuthenticationStatus.FAIL
+        : InboundEmailAuthenticationStatus.UNKNOWN;
+  const authenticated =
+    authenticationStatus === InboundEmailAuthenticationStatus.PASS;
   const domainAllowed = isDomainAllowed(fromEmail, inbox.allowedDomains);
-  const contactResolution = domainAllowed
-    ? await resolveContactForInboundEmail({
-        teamId: inbox.teamId,
-        groupId: inbox.groupId,
-        fromEmail,
-        fromName: from?.name,
-        allowCreateContacts: inbox.allowCreateContacts,
-        autoApproveExistingVisible: inbox.autoApproveExistingVisible,
-        requireReviewForHiddenMatches: inbox.requireReviewForHiddenMatches,
-      })
-    : {
-        contactId: null,
-        canCreateEngagement: false,
-        needsAccessReview: false,
-        canAutoGrantAccess: false,
-        reason: "domain-blocked" as const,
-      };
+  const contactResolution =
+    authenticated && domainAllowed
+      ? await resolveContactForInboundEmail({
+          teamId: inbox.teamId,
+          groupId: inbox.groupId,
+          fromEmail,
+          fromName: from?.name,
+          allowCreateContacts: inbox.allowCreateContacts,
+          autoApproveExistingVisible: inbox.autoApproveExistingVisible,
+          requireReviewForHiddenMatches: inbox.requireReviewForHiddenMatches,
+        })
+      : {
+          contactId: null,
+          canCreateEngagement: false,
+          needsAccessReview: false,
+          canAutoGrantAccess: false,
+          reason: !authenticated
+            ? authenticationStatus === InboundEmailAuthenticationStatus.FAIL
+              ? ("authentication-failed" as const)
+              : ("authentication-unverified" as const)
+            : ("domain-blocked" as const),
+        };
 
   const result = await prisma.$transaction(async (tx) => {
     const inboundKey = {
@@ -1213,6 +1240,8 @@ const importMessage = async ({
           receivedAt,
           contactId: contactResolution.contactId,
           rawHeaders: parseHeaders(parsed),
+          authenticationStatus,
+          authenticationDetails: authentication,
         },
         select: { id: true, engagementId: true },
       });
@@ -1341,6 +1370,25 @@ const importMessage = async ({
       alreadyImported,
     };
   });
+
+  if (
+    !result.alreadyImported &&
+    authenticationStatus !== InboundEmailAuthenticationStatus.PASS
+  ) {
+    await recordSystemLog({
+      teamId: inbox.teamId,
+      level: SystemLogLevel.WARN,
+      source: "INBOUND_EMAIL",
+      event: "inbound_email_quarantined",
+      message: `Inbound email from ${fromEmail} was stored without contact matching because sender authentication was not verified.`,
+      entityType: "InboundEmailMessage",
+      entityId: result.inboundId,
+      metadata: {
+        emailInboxId: inbox.id,
+        authentication,
+      },
+    });
+  }
 
   if (result.alreadyImported) {
     return {
