@@ -80,6 +80,7 @@ test("inbox outbound test submits a real Scaleway delivery", async () => {
       recipientEmail: string,
     ) => Promise<{ recipientEmail: string; messageId: string }>;
   }>("src/services/inbound-email/index.ts", {
+    "@/lib/email-timeouts": { getEmailConnectionTimeouts: () => ({}) },
     "@/lib/logger": {},
     "@/lib/prisma": {
       emailInbox: {

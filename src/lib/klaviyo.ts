@@ -1,3 +1,5 @@
+import { createEmailProviderAbortSignal } from "@/lib/email-timeouts";
+
 const KLAVIYO_API_BASE = "https://a.klaviyo.com/api";
 const KLAVIYO_API_REVISION = "2024-06-15";
 
@@ -150,6 +152,7 @@ export const requestKlaviyo = async <TData, TIncluded = never>(
       Accept: "application/json",
       revision: KLAVIYO_API_REVISION,
     },
+    signal: createEmailProviderAbortSignal(),
   });
 
   if (!response.ok) {

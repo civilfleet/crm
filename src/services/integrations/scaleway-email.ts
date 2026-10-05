@@ -9,6 +9,7 @@ import {
   INTERNAL_COPY_MODE_LABELS,
   type InternalCopyMode,
 } from "@/constants/email";
+import { createEmailProviderAbortSignal } from "@/lib/email-timeouts";
 import {
   decryptIntegrationSecret,
   encryptIntegrationSecret,
@@ -247,6 +248,7 @@ const sendScalewayEmail = async ({
         project_id: projectId,
         additional_headers: additionalHeaders,
       }),
+      signal: createEmailProviderAbortSignal(),
     },
   );
 

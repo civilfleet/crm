@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { IntegrationProvider as PrismaIntegrationProvider } from "@prisma/client";
+import { createEmailProviderAbortSignal } from "@/lib/email-timeouts";
 import {
   decryptIntegrationSecret,
   encryptIntegrationSecret,
@@ -75,6 +76,7 @@ const fetchZammad = async <T>(
   const response = await fetch(`${normalizeBaseUrl(baseUrl)}${path}`, {
     headers: buildZammadHeaders(apiKey),
     cache: "no-store",
+    signal: createEmailProviderAbortSignal(),
   });
 
   if (!response.ok) {
@@ -927,6 +929,7 @@ export const replyToZammadTicket = async ({
     {
       method: "POST",
       headers: buildZammadHeaders(apiKey),
+      signal: createEmailProviderAbortSignal(),
       body: JSON.stringify({
         ticket_id: ticketId,
         body: message,
@@ -1017,6 +1020,7 @@ export const createZammadTicket = async ({
     {
       method: "POST",
       headers: buildZammadHeaders(apiKey),
+      signal: createEmailProviderAbortSignal(),
       body: JSON.stringify({
         title: subject,
         group_id: groupId,

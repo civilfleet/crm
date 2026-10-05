@@ -15,6 +15,7 @@ import { ImapFlow } from "imapflow";
 import { type ParsedMail, simpleParser } from "mailparser";
 import nodemailer from "nodemailer";
 import sanitizeHtml from "sanitize-html";
+import { getEmailConnectionTimeouts } from "@/lib/email-timeouts";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import {
@@ -586,6 +587,7 @@ const getClient = (inbox: {
       pass: decryptSecret(inbox.passwordEncrypted),
     },
     logger: false,
+    ...getEmailConnectionTimeouts(),
   });
 
 export const testEmailInboxConnection = async (teamId: string, id: string) => {
@@ -631,6 +633,7 @@ const getSmtpTransport = (inbox: {
       user: inbox.smtpUsername,
       pass: decryptSecret(inbox.smtpPasswordEncrypted),
     },
+    ...getEmailConnectionTimeouts(),
   });
 };
 

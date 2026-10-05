@@ -7,6 +7,8 @@ import {
 
 const DEFAULT_MAX_HEARTBEAT_AGE_MS = 2 * 60 * 1000;
 const DEFAULT_MAX_EMAIL_QUEUE_LAG_MS = 5 * 60 * 1000;
+const DEFAULT_MAX_ZAMMAD_QUEUE_LAG_MS = 5 * 60 * 1000;
+const DEFAULT_MAX_INBOX_SYNC_LAG_MS = 5 * 60 * 1000;
 
 const parsePositiveInteger = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
@@ -23,10 +25,20 @@ const main = async () => {
     DEFAULT_MAX_EMAIL_QUEUE_LAG_MS,
   );
   const snapshot = await getLatestBackgroundWorkerHeartbeat();
+  const maxZammadQueueLagMs = parsePositiveInteger(
+    process.env.BACKGROUND_WORKER_ZAMMAD_QUEUE_MAX_LAG_MS,
+    DEFAULT_MAX_ZAMMAD_QUEUE_LAG_MS,
+  );
+  const maxInboxSyncLagMs = parsePositiveInteger(
+    process.env.BACKGROUND_WORKER_INBOX_SYNC_MAX_LAG_MS,
+    DEFAULT_MAX_INBOX_SYNC_LAG_MS,
+  );
   const result = evaluateBackgroundWorkerHealth(snapshot, {
     now: new Date(),
     maxHeartbeatAgeMs,
     maxEmailQueueLagMs,
+    maxZammadQueueLagMs,
+    maxInboxSyncLagMs,
   });
 
   console.log(
@@ -36,6 +48,11 @@ const main = async () => {
       lastSeenAt: snapshot?.lastSeenAt.toISOString() ?? null,
       emailQueueDepth: snapshot?.emailQueueDepth ?? null,
       oldestEmailQueuedAt: snapshot?.oldestEmailQueuedAt?.toISOString() ?? null,
+      zammadQueueDepth: snapshot?.zammadQueueDepth ?? null,
+      oldestZammadQueuedAt:
+        snapshot?.oldestZammadQueuedAt?.toISOString() ?? null,
+      enabledInboxCount: snapshot?.enabledInboxCount ?? null,
+      oldestInboxSyncedAt: snapshot?.oldestInboxSyncedAt?.toISOString() ?? null,
     }),
   );
 

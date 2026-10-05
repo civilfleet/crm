@@ -6,12 +6,18 @@ export type BackgroundWorkerHealthSnapshot = {
   lastSeenAt: Date;
   emailQueueDepth: number;
   oldestEmailQueuedAt: Date | null;
+  zammadQueueDepth: number;
+  oldestZammadQueuedAt: Date | null;
+  enabledInboxCount: number;
+  oldestInboxSyncedAt: Date | null;
 };
 
 type BackgroundWorkerHealthLimits = {
   now: Date;
   maxHeartbeatAgeMs: number;
   maxEmailQueueLagMs: number;
+  maxZammadQueueLagMs: number;
+  maxInboxSyncLagMs: number;
 };
 
 export type BackgroundWorkerHealthResult = {
@@ -20,9 +26,13 @@ export type BackgroundWorkerHealthResult = {
     | "healthy"
     | "missing_heartbeat"
     | "stale_heartbeat"
-    | "email_queue_lag";
+    | "email_queue_lag"
+    | "zammad_queue_lag"
+    | "inbox_sync_lag";
   heartbeatAgeMs: number | null;
   emailQueueLagMs: number | null;
+  zammadQueueLagMs: number | null;
+  inboxSyncLagMs: number | null;
 };
 
 export const evaluateBackgroundWorkerHealth = (
@@ -35,6 +45,8 @@ export const evaluateBackgroundWorkerHealth = (
       reason: "missing_heartbeat",
       heartbeatAgeMs: null,
       emailQueueLagMs: null,
+      zammadQueueLagMs: null,
+      inboxSyncLagMs: null,
     };
   }
 
@@ -45,6 +57,15 @@ export const evaluateBackgroundWorkerHealth = (
   const emailQueueLagMs = snapshot.oldestEmailQueuedAt
     ? Math.max(0, limits.now.getTime() - snapshot.oldestEmailQueuedAt.getTime())
     : null;
+  const zammadQueueLagMs = snapshot.oldestZammadQueuedAt
+    ? Math.max(
+        0,
+        limits.now.getTime() - snapshot.oldestZammadQueuedAt.getTime(),
+      )
+    : null;
+  const inboxSyncLagMs = snapshot.oldestInboxSyncedAt
+    ? Math.max(0, limits.now.getTime() - snapshot.oldestInboxSyncedAt.getTime())
+    : null;
 
   if (heartbeatAgeMs > limits.maxHeartbeatAgeMs) {
     return {
@@ -52,6 +73,8 @@ export const evaluateBackgroundWorkerHealth = (
       reason: "stale_heartbeat",
       heartbeatAgeMs,
       emailQueueLagMs,
+      zammadQueueLagMs,
+      inboxSyncLagMs,
     };
   }
 
@@ -65,6 +88,37 @@ export const evaluateBackgroundWorkerHealth = (
       reason: "email_queue_lag",
       heartbeatAgeMs,
       emailQueueLagMs,
+      zammadQueueLagMs,
+      inboxSyncLagMs,
+    };
+  }
+
+  if (
+    snapshot.zammadQueueDepth > 0 &&
+    zammadQueueLagMs !== null &&
+    zammadQueueLagMs > limits.maxZammadQueueLagMs
+  ) {
+    return {
+      healthy: false,
+      reason: "zammad_queue_lag",
+      heartbeatAgeMs,
+      emailQueueLagMs,
+      zammadQueueLagMs,
+      inboxSyncLagMs,
+    };
+  }
+
+  if (
+    snapshot.enabledInboxCount > 0 &&
+    (inboxSyncLagMs === null || inboxSyncLagMs > limits.maxInboxSyncLagMs)
+  ) {
+    return {
+      healthy: false,
+      reason: "inbox_sync_lag",
+      heartbeatAgeMs,
+      emailQueueLagMs,
+      zammadQueueLagMs,
+      inboxSyncLagMs,
     };
   }
 
@@ -73,6 +127,8 @@ export const evaluateBackgroundWorkerHealth = (
     reason: "healthy",
     heartbeatAgeMs,
     emailQueueLagMs,
+    zammadQueueLagMs,
+    inboxSyncLagMs,
   };
 };
 
@@ -81,7 +137,13 @@ export const recordBackgroundWorkerHeartbeat = async (
   startedAt: Date,
   now = new Date(),
 ) => {
-  const [emailQueueDepth, oldestEmailBatch] = await prisma.$transaction([
+  const [
+    emailQueueDepth,
+    oldestEmailBatch,
+    zammadQueueDepth,
+    oldestZammadJob,
+    inboxes,
+  ] = await prisma.$transaction([
     prisma.emailBatch.count({
       where: {
         status: "SENDING",
@@ -98,7 +160,23 @@ export const recordBackgroundWorkerHeartbeat = async (
       orderBy: { createdAt: "asc" },
       select: { createdAt: true },
     }),
+    prisma.zammadSyncJob.count({
+      where: { status: "PENDING", runAfter: { lte: now } },
+    }),
+    prisma.zammadSyncJob.findFirst({
+      where: { status: "PENDING", runAfter: { lte: now } },
+      orderBy: { createdAt: "asc" },
+      select: { createdAt: true },
+    }),
+    prisma.emailInbox.findMany({
+      where: { isEnabled: true },
+      select: { lastSyncedAt: true, createdAt: true },
+    }),
   ]);
+  const oldestInboxSyncedAt = inboxes.reduce<Date | null>((oldest, inbox) => {
+    const value = inbox.lastSyncedAt ?? inbox.createdAt;
+    return !oldest || value < oldest ? value : oldest;
+  }, null);
 
   return await prisma.backgroundWorkerHeartbeat.upsert({
     where: { workerId },
@@ -108,12 +186,20 @@ export const recordBackgroundWorkerHeartbeat = async (
       lastSeenAt: now,
       emailQueueDepth,
       oldestEmailQueuedAt: oldestEmailBatch?.createdAt,
+      zammadQueueDepth,
+      oldestZammadQueuedAt: oldestZammadJob?.createdAt,
+      enabledInboxCount: inboxes.length,
+      oldestInboxSyncedAt,
     },
     update: {
       startedAt,
       lastSeenAt: now,
       emailQueueDepth,
       oldestEmailQueuedAt: oldestEmailBatch?.createdAt ?? null,
+      zammadQueueDepth,
+      oldestZammadQueuedAt: oldestZammadJob?.createdAt ?? null,
+      enabledInboxCount: inboxes.length,
+      oldestInboxSyncedAt,
     },
   });
 };

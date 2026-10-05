@@ -937,6 +937,10 @@ model BackgroundWorkerHeartbeat {
   lastSeenAt          DateTime  @db.Timestamptz(6)
   emailQueueDepth     Int       @default(0)
   oldestEmailQueuedAt DateTime? @db.Timestamptz(6)
+  zammadQueueDepth    Int       @default(0)
+  oldestZammadQueuedAt DateTime? @db.Timestamptz(6)
+  enabledInboxCount   Int       @default(0)
+  oldestInboxSyncedAt DateTime? @db.Timestamptz(6)
   createdAt           DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt           DateTime  @updatedAt @db.Timestamptz(6)
 

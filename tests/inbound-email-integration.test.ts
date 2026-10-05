@@ -70,6 +70,7 @@ const loadInboundService = ({
       options?: Record<string, unknown>,
     ) => Promise<Record<string, unknown>>;
   }>("src/services/inbound-email/index.ts", {
+    "@/lib/email-timeouts": { getEmailConnectionTimeouts: () => ({}) },
     "@/lib/logger": {
       debug: () => undefined,
       error: () => undefined,

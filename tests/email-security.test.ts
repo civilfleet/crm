@@ -29,6 +29,11 @@ const integrationSecretMocks = {
   encryptIntegrationSecret: (value: string) => value,
 };
 
+const emailTimeoutMocks = {
+  createEmailProviderAbortSignal: () => undefined,
+  getEmailConnectionTimeouts: () => ({}),
+};
+
 test("bulk email rejects direct contact IDs outside the sender's visibility", async () => {
   let batchWrites = 0;
   let visibilityWhere: unknown;
@@ -47,6 +52,7 @@ test("bulk email rejects direct contact IDs outside the sender's visibility", as
       INTERNAL_COPY_MODE_LABELS: { summary: "Summary only" },
     },
     "@/lib/integration-secrets": integrationSecretMocks,
+    "@/lib/email-timeouts": emailTimeoutMocks,
     "@/lib/logger": {
       error: () => undefined,
       info: () => undefined,
@@ -125,6 +131,7 @@ test("bulk email restricts internal recipient reports to team administrators", a
       INTERNAL_COPY_MODE_LABELS: { summary: "Summary only" },
     },
     "@/lib/integration-secrets": integrationSecretMocks,
+    "@/lib/email-timeouts": emailTimeoutMocks,
     "@/lib/logger": {},
     "@/lib/prisma": {
       eventRegistration: {
@@ -208,6 +215,7 @@ test("bulk email publishes its batch and complete recipient set atomically", asy
       INTERNAL_COPY_MODE_LABELS: { summary: "Summary only" },
     },
     "@/lib/integration-secrets": integrationSecretMocks,
+    "@/lib/email-timeouts": emailTimeoutMocks,
     "@/lib/logger": {},
     "@/lib/prisma": {
       eventRegistration: { findMany: async () => [] },
@@ -412,6 +420,7 @@ test("bulk email does not resend after provider acceptance if persistence fails"
       INTERNAL_COPY_MODE_LABELS: { summary: "Summary only" },
     },
     "@/lib/integration-secrets": integrationSecretMocks,
+    "@/lib/email-timeouts": emailTimeoutMocks,
     "@/lib/logger": {
       error: () => undefined,
       info: () => undefined,
@@ -582,6 +591,7 @@ test("inbox reply retries cannot resend an uncertain dispatch", async () => {
   const service = loadModule<{
     replyToInboundEmail: (input: Record<string, unknown>) => Promise<unknown>;
   }>("src/services/inbound-email/index.ts", {
+    "@/lib/email-timeouts": emailTimeoutMocks,
     "@/lib/logger": {},
     "@/lib/prisma": prisma,
     "@/services/contact-change-logs": {},

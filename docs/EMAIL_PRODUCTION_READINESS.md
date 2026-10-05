@@ -32,7 +32,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
 | EMAIL-008 | P1 | READY FOR LIVE TEST | Scaleway, Klaviyo, and Zammad API keys plus the Zammad webhook secret are encrypted at rest with an independent, versioned AES-256-GCM keyring. Legacy plaintext is migration-compatible and the rotation command rewraps all secrets atomically. | Encryption, tamper, plaintext-compatibility, and old-to-new-key rotation tests, typecheck, focused Biome, and production build passed. Configure the production keyring, run the transactional rotation, and smoke-test every integration before marking `DONE`. |
 | EMAIL-009 | P1 | DONE | IMAP import/checkpoint behavior, inbox reply ambiguity, batch retry ownership, real outbound test dispatch, and access-review scoping have automated integration coverage. | Happy-path import, team mismatch, retry/uncertain delivery, UID reset, and access-boundary tests plus typecheck, focused Biome, and production build passed on 2026-10-05. |
 | EMAIL-010 | P1 | DECISION NEEDED | Attachments, `Reply-To`, and Sent-folder behavior are not implemented. | Product decision recorded; accepted behavior implemented and tested where required. |
-| EMAIL-011 | P1 | BLOCKED | Email/IMAP provider calls need bounded timeouts; unrelated worker loops need separate health and lag monitoring. | Timeout tests and production health/alert evidence. |
+| EMAIL-011 | P1 | READY FOR LIVE TEST | Scaleway, Klaviyo, Zammad, IMAP, and inbox SMTP operations have configurable bounded deadlines. Worker health now fails on eligible Zammad queue lag and stale enabled-inbox syncs in addition to bulk-email queue lag. | Timeout configuration and health-threshold tests, schema validation, typecheck, focused Biome, and production build passed. Apply the heartbeat extension migration and verify timeout/lag alerts live before marking `DONE`. |
 | EMAIL-012 | P1 | BLOCKED | Global SMTP configuration does not fail fast even though it powers magic-link login and application email. | Startup validation and live magic-link/application-email smoke tests. |
 
 ## Baseline validation (2026-10-05)
@@ -57,7 +57,8 @@ checklist has passed with a dedicated test mailbox and test recipients.
       `docs/INTEGRATION_SECRET_ROTATION.md`.
 - [ ] Set a dedicated, stable `INBOUND_EMAIL_ENCRYPTION_KEY` in both services.
 - [ ] Add `yarn worker:health` as the worker container health check, alert on
-      unhealthy state, and confirm heartbeat and queue-lag thresholds live.
+      unhealthy state, and confirm bulk-email, Zammad, and inbox-sync lag
+      thresholds live.
 - [ ] Verify global SMTP with a magic-link login and one application email.
 - [ ] Configure a dedicated non-production IMAP/SMTP mailbox.
 - [ ] Set `INBOUND_EMAIL_TRUSTED_AUTHSERV_IDS` to the receiving mail system's
@@ -170,6 +171,17 @@ checklist has passed with a dedicated test mailbox and test recipients.
 - Next implementation target: `EMAIL-011` bounded provider timeouts and worker
   loop health. `EMAIL-010` remains a product decision.
 
+### 2026-10-06
+
+- Implemented the static portion of `EMAIL-011`. CRM-owned Scaleway, Klaviyo,
+  and Zammad HTTP calls now abort after a configurable deadline; inbox IMAP and
+  SMTP clients have explicit connection, greeting, and socket timeouts.
+- Extended the durable worker heartbeat with eligible Zammad queue depth/age and
+  enabled-inbox sync age. The health command now fails for either new lag class.
+  Live migration, deliberate timeout tests, and production alert proof remain.
+- Next implementation target: `EMAIL-012` global SMTP startup validation.
+  `EMAIL-010` remains a product decision.
+
 ## Production worker deployment handoff
 
 Static inspection of the production infrastructure repository on 2026-10-05
@@ -194,8 +206,12 @@ healthcheck:
 ```
 
 Set `BACKGROUND_WORKER_HEALTH_MAX_AGE_MS` and
-`BACKGROUND_WORKER_EMAIL_QUEUE_MAX_LAG_MS` in the worker environment if the
-defaults of two and five minutes are not appropriate. Alert on the Compose
+`BACKGROUND_WORKER_EMAIL_QUEUE_MAX_LAG_MS`,
+`BACKGROUND_WORKER_ZAMMAD_QUEUE_MAX_LAG_MS`, and
+`BACKGROUND_WORKER_INBOX_SYNC_MAX_LAG_MS` in the worker environment if the
+defaults of two and five minutes are not appropriate. Provider deadlines can be
+tuned with `EMAIL_PROVIDER_REQUEST_TIMEOUT_MS`, `EMAIL_CONNECTION_TIMEOUT_MS`,
+`EMAIL_GREETING_TIMEOUT_MS`, and `EMAIL_SOCKET_TIMEOUT_MS`. Alert on the Compose
 health state; a healthy result is emitted as one JSON line for operational
 evidence. The production template must also pass the dedicated
 `INBOUND_EMAIL_ENCRYPTION_KEY` and `INBOUND_EMAIL_TRUSTED_AUTHSERV_IDS` described
