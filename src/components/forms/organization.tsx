@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import useSWR from "swr";
 import type { z } from "zod";
+import { AddressAutocomplete } from "@/components/forms/address-autocomplete";
 import {
   Form,
   FormControl,
@@ -178,6 +179,7 @@ export default function OrganizationForm({ data }: { data: Organization }) {
   });
 
   const selectedOrgTypeId = form.watch("orgTypeId");
+  const selectedCountry = form.watch("country");
   const selectedType = useMemo(() => {
     if (!selectedOrgTypeId) {
       return null;
@@ -346,11 +348,55 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                   placeholder="Phone number"
                   isFilled={isFieldFilled(data?.phone)}
                 />
-                <FormInputControl
-                  form={form}
+                <FormField
+                  control={form.control}
                   name="address"
-                  placeholder="Street address"
-                  isFilled={isFieldFilled(data?.address)}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Street address</FormLabel>
+                      <FormControl>
+                        <AddressAutocomplete
+                          placeholder="Street address"
+                          value={field.value ?? ""}
+                          onValueChange={field.onChange}
+                          onBlur={field.onBlur}
+                          inputRef={field.ref}
+                          name={field.name}
+                          teamId={teamId}
+                          organizationId={isUpdate ? data.id : undefined}
+                          country={selectedCountry ?? undefined}
+                          onSuggestionSelect={(suggestion) => {
+                            const updates = {
+                              address: suggestion.address,
+                              postalCode: suggestion.postalCode,
+                              city: suggestion.city,
+                              country: suggestion.country,
+                            } as const;
+                            for (const [name, value] of Object.entries(
+                              updates,
+                            )) {
+                              if (value) {
+                                form.setValue(
+                                  name as
+                                    | "address"
+                                    | "postalCode"
+                                    | "city"
+                                    | "country",
+                                  value,
+                                  {
+                                    shouldDirty: true,
+                                    shouldTouch: true,
+                                    shouldValidate: true,
+                                  },
+                                );
+                              }
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
 
                 <FormInputControl
@@ -358,18 +404,21 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                   name="city"
                   placeholder="City"
                   isFilled={isFieldFilled(data?.city)}
+                  autoComplete="address-level2"
                 />
                 <FormInputControl
                   form={form}
                   name="country"
                   placeholder="Country"
                   isFilled={isFieldFilled(data?.country)}
+                  autoComplete="country-name"
                 />
                 <FormInputControl
                   form={form}
                   name="postalCode"
                   placeholder="Postal code"
                   isFilled={isFieldFilled(data?.postalCode)}
+                  autoComplete="postal-code"
                 />
                 <FormInputControl
                   form={form}

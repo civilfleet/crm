@@ -6,6 +6,8 @@ x-app-env: &app-env
   NEXT_PUBLIC_BASE_URL: http://localhost:3000
   NEXT_PUBLIC_APP_URL: http://localhost:3000
   NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Sea-Watch CRM}
+  CHIBIGEO_SECRET: ${CHIBIGEO_SECRET:-}
+  PHOTON_BASE_URL: ${PHOTON_BASE_URL:-https://app.chibigeo.com/v1/photon}
   LOG_LEVEL: debug
   SMTP_HOST: smtp.example.com
   SMTP_PORT: "587"

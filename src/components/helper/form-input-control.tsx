@@ -17,6 +17,7 @@ export default function FormInputControl<TFieldValues extends FieldValues>({
   placeholder,
   disabled = false,
   type,
+  autoComplete,
   isFilled = false,
   className,
 }: {
@@ -26,6 +27,7 @@ export default function FormInputControl<TFieldValues extends FieldValues>({
   placeholder: string;
   disabled?: boolean;
   type?: React.HTMLInputTypeAttribute | undefined;
+  autoComplete?: React.HTMLInputAutoCompleteAttribute;
   isFilled?: boolean;
   className?: string;
 }) {
@@ -44,6 +46,7 @@ export default function FormInputControl<TFieldValues extends FieldValues>({
                 id={fieldId}
                 label={actualLabel}
                 type={type}
+                autoComplete={autoComplete}
                 disabled={disabled}
                 className={cn(
                   isFilled && "border-green-500 !bg-green-50",

@@ -15,6 +15,7 @@ import { useFieldArray, useForm } from "react-hook-form";
 import useSWR from "swr";
 import type { z } from "zod";
 import FileUpload from "@/components/file-uploader";
+import { AddressAutocomplete } from "@/components/forms/address-autocomplete";
 import { ContactPasteDialog } from "@/components/forms/contact-paste-dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -323,6 +324,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
   );
 
   const attributes = watch("profileAttributes");
+  const selectedCountry = watch("country");
   const attributeKeyOptions = useMemo(() => {
     const keys = new Set<string>();
 
@@ -999,10 +1001,39 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                       <FormItem className="sm:col-span-2 lg:col-span-3">
                         <FormLabel>Street address</FormLabel>
                         <FormControl>
-                          <Input
+                          <AddressAutocomplete
                             placeholder="Street address"
-                            {...field}
                             value={field.value ?? ""}
+                            onValueChange={field.onChange}
+                            onBlur={field.onBlur}
+                            inputRef={field.ref}
+                            name={field.name}
+                            teamId={teamId}
+                            country={selectedCountry ?? undefined}
+                            onSuggestionSelect={(suggestion) => {
+                              const updates = {
+                                address: suggestion.address,
+                                postalCode: suggestion.postalCode,
+                                state: suggestion.state,
+                                city: suggestion.city,
+                                country: suggestion.country,
+                              } as const;
+                              for (const [name, value] of Object.entries(
+                                updates,
+                              )) {
+                                if (value) {
+                                  form.setValue(
+                                    name as keyof ContactFormValues,
+                                    value,
+                                    {
+                                      shouldDirty: true,
+                                      shouldTouch: true,
+                                      shouldValidate: true,
+                                    },
+                                  );
+                                }
+                              }
+                            }}
                           />
                         </FormControl>
                         <FormDescription>
@@ -1023,6 +1054,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                             placeholder="Postal code"
                             {...field}
                             value={field.value ?? ""}
+                            autoComplete="postal-code"
                           />
                         </FormControl>
                         <FormDescription>
@@ -1044,6 +1076,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                             placeholder="State"
                             {...field}
                             value={field.value ?? ""}
+                            autoComplete="address-level1"
                           />
                         </FormControl>
                         <FormDescription>
@@ -1064,6 +1097,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                             placeholder="City"
                             {...field}
                             value={field.value ?? ""}
+                            autoComplete="address-level2"
                           />
                         </FormControl>
                         <FormDescription>e.g., Berlin</FormDescription>
