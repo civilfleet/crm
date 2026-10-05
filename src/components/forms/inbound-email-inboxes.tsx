@@ -471,14 +471,16 @@ export default function InboundEmailInboxes({
           action === "test"
             ? "Connection works"
             : action === "test-outbound"
-              ? "Sending configuration works"
+              ? "Test email sent"
               : action === "sync" || action === "resync"
                 ? "Sync finished"
                 : "Inbox deleted",
         description:
-          (action === "sync" || action === "resync") && json?.data
-            ? `Imported ${json.data.imported ?? 0} messages.`
-            : undefined,
+          action === "test-outbound" && json?.data?.recipientEmail
+            ? `Submitted through the configured provider to ${json.data.recipientEmail}.`
+            : (action === "sync" || action === "resync") && json?.data
+              ? `Imported ${json.data.imported ?? 0} messages.`
+              : undefined,
       });
     } catch (error) {
       toast({

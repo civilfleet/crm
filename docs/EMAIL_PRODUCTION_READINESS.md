@@ -27,7 +27,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
 | EMAIL-003 | P0 | READY FOR LIVE TEST | Bulk recipients and internal reports are durably claimed before provider I/O; ambiguous outcomes become non-retryable `UNKNOWN`. Inbox replies use a persistent client request key and dispatch record. | Crash-window regression tests passed on 2026-10-05. Apply the migration, run controlled Scaleway/SMTP sends, and complete an `UNKNOWN` reconciliation drill before marking `DONE`. |
 | EMAIL-004 | P0 | READY FOR LIVE TEST | Inbound mail is contact-matched only when a trusted `Authentication-Results` service reports DMARC pass. Failed, missing, or untrusted evidence is stored without contact linkage and logged as quarantined. | Parser fixtures pass. Configure `INBOUND_EMAIL_TRUSTED_AUTHSERV_IDS`, apply the migration, and complete live pass/fail/spoof tests before marking `DONE`. |
 | EMAIL-005 | P0 | READY FOR LIVE TEST | The production deployment definition pins one supplied tag across migration, web, and worker images; migration failure stops rollout and the worker has `unless-stopped`. The application now records heartbeat and eligible email queue depth/age in the shared database, with a failing health command for stale heartbeat or queue lag. | Schema validation, threshold tests, typecheck, focused Biome, and production build passed on 2026-10-05. Apply the heartbeat migration, wire the health command into production monitoring, deploy one pinned tag, and verify it live before marking `DONE`. |
-| EMAIL-006 | P1 | BLOCKED | Scaleway settings and the inbox "Test sending" action report readiness without a real provider/sender verification. | Provider API validation and a controlled test delivery succeed. |
+| EMAIL-006 | P1 | READY FOR LIVE TEST | Saving Scaleway settings invalidates prior verification. Sender verification now checks the exact project/domain through the Scaleway API and requires domain status `checked`; settings and inbox test actions submit a real test message to the signed-in administrator. | Provider-response and real-send-path regression tests, typecheck, focused Biome, and production build pass. Complete verification and controlled delivery with production credentials before marking `DONE`. |
 | EMAIL-007 | P1 | BLOCKED | Delivery and bounce states are not ingested; suppression and unsubscribe/consent policy are absent. | Signed webhook tests, suppression behavior, and documented sending policy. |
 | EMAIL-008 | P1 | BLOCKED | Integration API and webhook secrets are stored in plaintext. | Independently rotatable encryption plus migration/rotation test. |
 | EMAIL-009 | P1 | BLOCKED | IMAP, inbox reply, queue, and access-review paths lack integration coverage. | Automated happy-path, mismatch, retry, UID reset, and access-boundary tests. |
@@ -42,7 +42,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
   Handlebars `require.extensions` warnings remain.
 - `yarn lint`: passed with one existing unused `toBigInt` warning in the inbound
   email service.
-- `yarn test`: 22/23 passed in the restricted sandbox; the isolated vCard test
+- `yarn test`: 23/24 passed in the restricted sandbox; the isolated vCard test
   passed outside the sandbox, confirming a subprocess restriction rather than a
   product failure.
 - No live IMAP, SMTP, Scaleway, DNS, bounce-webhook, migration, or deployed-worker
@@ -120,6 +120,17 @@ checklist has passed with a dedicated test mailbox and test recipients.
   `20261005020000_add_background_worker_heartbeat` migration and threshold tests.
   Live deployment, health-check wiring, and alert evidence remain required.
 - Next implementation target: `EMAIL-006` real provider and sender verification.
+- Implemented the static portion of `EMAIL-006`. Saving Scaleway settings no
+  longer reports readiness and clears any earlier verification timestamp. A
+  dedicated admin action queries Scaleway for the exact configured project and
+  sender domain and accepts only `checked` status. Separate test actions submit
+  real messages to the signed-in administrator through the saved Scaleway
+  integration or the inbox's configured SMTP/Scaleway outbound path.
+- Added provider response, credential-error redaction, unverified-domain, and
+  real inbox-send-path regressions. Production credentials and mailbox receipt
+  still need live proof.
+- Next implementation target: `EMAIL-007` delivery/bounce ingestion and sending
+  policy.
 
 ## Production worker deployment handoff
 

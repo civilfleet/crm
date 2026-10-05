@@ -57,6 +57,8 @@ export default function ScalewayEmailIntegration({
 }: ScalewayEmailIntegrationProps) {
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [region, setRegion] = useState("fr-par");
   const [projectId, setProjectId] = useState("");
@@ -102,6 +104,11 @@ export default function ScalewayEmailIntegration({
       variant: "destructive",
     });
   }, [integrationError, toast]);
+
+  const markSettingsChanged = () => {
+    setConnectionVerified(false);
+    setConnectionMessage("Save and verify these settings before sending.");
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -150,6 +157,49 @@ export default function ScalewayEmailIntegration({
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const runProviderAction = async (action: "verify" | "test") => {
+    const setBusy = action === "verify" ? setIsVerifying : setIsSendingTest;
+    setBusy(true);
+    try {
+      const response = await fetch(
+        `/api/teams/${teamId}/integrations/scaleway-email/${action}`,
+        { method: "POST" },
+      );
+      const json = await response.json();
+      if (!response.ok) {
+        throw new Error(json?.error || response.statusText);
+      }
+
+      if (action === "verify") {
+        const data = json.data as ScalewayEmailIntegrationResponse;
+        await mutate(data, { revalidate: false });
+        setConnectionMessage(data.connectionMessage);
+        setConnectionVerified(Boolean(data.connectionVerified));
+        toast({
+          title: "Scaleway sender verified",
+          description: data.connectionMessage,
+        });
+      } else {
+        toast({
+          title: "Test email sent",
+          description: `Scaleway accepted a test delivery to ${json.data.recipientEmail}.`,
+        });
+        await mutate();
+      }
+    } catch (error) {
+      toast({
+        title:
+          action === "verify"
+            ? "Sender verification failed"
+            : "Test delivery failed",
+        description: (error as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -232,7 +282,10 @@ export default function ScalewayEmailIntegration({
           </div>
           <Switch
             checked={isEnabled}
-            onCheckedChange={(checked) => setIsEnabled(checked)}
+            onCheckedChange={(checked) => {
+              setIsEnabled(checked);
+              markSettingsChanged();
+            }}
             disabled={isLoading || isSaving}
           />
         </div>
@@ -249,7 +302,10 @@ export default function ScalewayEmailIntegration({
                   : "Scaleway secret key"
               }
               value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
+              onChange={(event) => {
+                setApiKey(event.target.value);
+                markSettingsChanged();
+              }}
               disabled={isLoading || isSaving}
             />
           </div>
@@ -260,7 +316,10 @@ export default function ScalewayEmailIntegration({
               id="scaleway-region"
               placeholder="fr-par"
               value={region}
-              onChange={(event) => setRegion(event.target.value)}
+              onChange={(event) => {
+                setRegion(event.target.value);
+                markSettingsChanged();
+              }}
               disabled={isLoading || isSaving}
             />
           </div>
@@ -271,7 +330,10 @@ export default function ScalewayEmailIntegration({
               id="scaleway-project-id"
               placeholder="Scaleway project ID"
               value={projectId}
-              onChange={(event) => setProjectId(event.target.value)}
+              onChange={(event) => {
+                setProjectId(event.target.value);
+                markSettingsChanged();
+              }}
               disabled={isLoading || isSaving}
             />
           </div>
@@ -283,7 +345,10 @@ export default function ScalewayEmailIntegration({
               type="email"
               placeholder="crm@example.org"
               value={senderEmail}
-              onChange={(event) => setSenderEmail(event.target.value)}
+              onChange={(event) => {
+                setSenderEmail(event.target.value);
+                markSettingsChanged();
+              }}
               disabled={isLoading || isSaving}
             />
           </div>
@@ -296,16 +361,58 @@ export default function ScalewayEmailIntegration({
               id="scaleway-sender-name"
               placeholder="CRM"
               value={senderName}
-              onChange={(event) => setSenderName(event.target.value)}
+              onChange={(event) => {
+                setSenderName(event.target.value);
+                markSettingsChanged();
+              }}
               disabled={isLoading || isSaving}
             />
           </div>
         </div>
 
-        <Button onClick={handleSave} disabled={isLoading || isSaving}>
-          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Save connection
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={handleSave}
+            disabled={isLoading || isSaving || isVerifying || isSendingTest}
+          >
+            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Save connection
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => runProviderAction("verify")}
+            disabled={
+              isLoading ||
+              isSaving ||
+              isVerifying ||
+              isSendingTest ||
+              !hasApiKey ||
+              !projectId ||
+              !senderEmail ||
+              !isEnabled
+            }
+          >
+            {isVerifying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Verify sender
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => runProviderAction("test")}
+            disabled={
+              isLoading ||
+              isSaving ||
+              isVerifying ||
+              isSendingTest ||
+              !connectionVerified ||
+              !isEnabled
+            }
+          >
+            {isSendingTest && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Send test email
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

@@ -9,9 +9,18 @@ export async function POST(
 ) {
   try {
     const { teamId, inboxId } = await params;
-    await verifyTeamAccess(teamId, { requireAdmin: true });
-    await testEmailInboxOutboundConnection(teamId, inboxId);
-    return NextResponse.json({ data: "success" });
+    const session = await verifyTeamAccess(teamId, { requireAdmin: true });
+    if (!session.user.email) {
+      throw new Error(
+        "Your account has no email address for the test delivery.",
+      );
+    }
+    const result = await testEmailInboxOutboundConnection(
+      teamId,
+      inboxId,
+      session.user.email,
+    );
+    return NextResponse.json({ data: result });
   } catch (error) {
     const apiError = handleApiError(error);
     if (apiError) return apiError;

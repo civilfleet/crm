@@ -75,6 +75,12 @@ test("bulk email rejects direct contact IDs outside the sender's visibility", as
       getTeamAdminAccess: async () => ({ allowed: false }),
     },
     "@/types": emailTypes,
+    "./scaleway-email-verification": {
+      verifyScalewaySenderConfiguration: async () => ({
+        domain: "example.org",
+        status: "checked",
+      }),
+    },
   });
 
   await assert.rejects(
@@ -132,6 +138,12 @@ test("bulk email restricts internal recipient reports to team administrators", a
       getTeamAdminAccess: async () => ({ allowed: false }),
     },
     "@/types": emailTypes,
+    "./scaleway-email-verification": {
+      verifyScalewaySenderConfiguration: async () => ({
+        domain: "example.org",
+        status: "checked",
+      }),
+    },
   });
 
   await assert.rejects(
@@ -228,6 +240,12 @@ test("bulk email publishes its batch and complete recipient set atomically", asy
       getTeamAdminAccess: async () => ({ allowed: true }),
     },
     "@/types": emailTypes,
+    "./scaleway-email-verification": {
+      verifyScalewaySenderConfiguration: async () => ({
+        domain: "example.org",
+        status: "checked",
+      }),
+    },
   });
 
   const result = await service.sendMassEmailToContacts({
@@ -424,6 +442,12 @@ test("bulk email does not resend after provider acceptance if persistence fails"
     "@/services/contacts/access": {},
     "@/services/teams/access": {},
     "@/types": emailTypes,
+    "./scaleway-email-verification": {
+      verifyScalewaySenderConfiguration: async () => ({
+        domain: "example.org",
+        status: "checked",
+      }),
+    },
   });
 
   const batch = {

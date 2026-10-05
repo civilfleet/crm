@@ -24,6 +24,7 @@ import {
   IntegrationProvider,
   type Roles,
 } from "@/types";
+import { verifyScalewaySenderConfiguration } from "./scaleway-email-verification";
 
 const DEFAULT_REGION = "fr-par";
 const EXTERNAL_SOURCE = "SCALEWAY_TEM";
@@ -585,7 +586,11 @@ export const getScalewayEmailIntegration = async (
       Boolean(integration.apiKey) &&
       Boolean(integration.defaultListId) &&
       Boolean(integration.senderEmail) &&
-      integration.isEnabled,
+      integration.isEnabled &&
+      Boolean(integration.lastSyncedAt),
+    connectionMessage: integration.lastSyncedAt
+      ? `Sender verified with Scaleway at ${integration.lastSyncedAt.toISOString()}.`
+      : "Settings saved. Verify the sender before enabling production sending.",
   };
 };
 
@@ -644,6 +649,7 @@ export const saveScalewayEmailIntegration = async ({
       senderEmail: senderEmailToPersist,
       senderName: senderName?.trim() || null,
       isEnabled: isEnabled ?? existing?.isEnabled ?? true,
+      lastSyncedAt: null,
     },
     create: {
       teamId,
@@ -671,9 +677,70 @@ export const saveScalewayEmailIntegration = async ({
     updatedAt: record.updatedAt,
     hasApiKey: Boolean(record.apiKey),
     apiKeyPreview: maskApiKey(record.apiKey),
-    connectionVerified: true,
-    connectionMessage: "Scaleway Transactional Email settings saved.",
+    connectionVerified: false,
+    connectionMessage:
+      "Scaleway Transactional Email settings saved. Verify the sender before sending.",
   };
+};
+
+export const verifyScalewayEmailIntegration = async (teamId: string) => {
+  const integration = await prisma.integrationConnection.findUnique({
+    where: {
+      teamId_provider: {
+        teamId,
+        provider: PrismaIntegrationProvider.SCALEWAY_TEM,
+      },
+    },
+  });
+
+  if (
+    !integration?.isEnabled ||
+    !integration.apiKey ||
+    !integration.defaultListId ||
+    !integration.senderEmail
+  ) {
+    throw new Error(
+      "Scaleway Transactional Email is not fully configured and enabled.",
+    );
+  }
+
+  await verifyScalewaySenderConfiguration({
+    apiKey: integration.apiKey,
+    region: integration.baseUrl ?? DEFAULT_REGION,
+    projectId: integration.defaultListId,
+    senderEmail: integration.senderEmail,
+  });
+
+  await prisma.integrationConnection.update({
+    where: { id: integration.id },
+    data: { lastSyncedAt: new Date() },
+  });
+
+  return await getScalewayEmailIntegration(teamId);
+};
+
+export const sendScalewayEmailIntegrationTest = async (
+  teamId: string,
+  recipientEmail: string,
+) => {
+  const integration = await verifyScalewayEmailIntegration(teamId);
+  if (!integration?.senderEmail) {
+    throw new Error("Default sender email is required.");
+  }
+
+  const result = await sendScalewayTransactionalEmail({
+    teamId,
+    from: {
+      email: integration.senderEmail,
+      name: integration.senderName,
+    },
+    to: { email: recipientEmail },
+    subject: "CRM Scaleway test email",
+    text: "This test confirms that the CRM can submit email through the configured Scaleway Transactional Email sender.",
+    html: "<p>This test confirms that the CRM can submit email through the configured Scaleway Transactional Email sender.</p>",
+  });
+
+  return { ...result, recipientEmail };
 };
 
 export const sendMassEmailToContacts = async ({

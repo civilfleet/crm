@@ -9,7 +9,6 @@ import {
   EngagementSource,
   InboundEmailAuthenticationStatus,
   type Prisma,
-  IntegrationProvider as PrismaIntegrationProvider,
   SystemLogLevel,
 } from "@prisma/client";
 import { ImapFlow } from "imapflow";
@@ -638,6 +637,7 @@ const getSmtpTransport = (inbox: {
 export const testEmailInboxOutboundConnection = async (
   teamId: string,
   id: string,
+  recipientEmail: string,
 ) => {
   const inbox = await prisma.emailInbox.findFirst({ where: { id, teamId } });
   if (!inbox) throw new Error("Email inbox not found.");
@@ -656,28 +656,31 @@ export const testEmailInboxOutboundConnection = async (
   }
 
   if (inbox.outboundMode === EmailInboxOutboundMode.SMTP) {
-    await getSmtpTransport(inbox).verify();
-    return;
+    const result = await getSmtpTransport(inbox).sendMail({
+      from: {
+        address: inbox.replyFromEmail as string,
+        name: inbox.replyFromName ?? inbox.name,
+      },
+      to: recipientEmail,
+      subject: `CRM outbound test: ${inbox.name}`,
+      text: "This test confirms that the CRM can send replies through this inbox's SMTP configuration.",
+      html: "<p>This test confirms that the CRM can send replies through this inbox's SMTP configuration.</p>",
+    });
+    return { recipientEmail, messageId: result.messageId };
   }
 
-  const integration = await prisma.integrationConnection.findUnique({
-    where: {
-      teamId_provider: {
-        teamId,
-        provider: PrismaIntegrationProvider.SCALEWAY_TEM,
-      },
+  const result = await sendScalewayTransactionalEmail({
+    teamId,
+    from: {
+      email: inbox.replyFromEmail as string,
+      name: inbox.replyFromName ?? undefined,
     },
-    select: { apiKey: true, defaultListId: true, isEnabled: true },
+    to: { email: recipientEmail },
+    subject: `CRM outbound test: ${inbox.name}`,
+    text: "This test confirms that the CRM can send replies through this inbox's Scaleway configuration.",
+    html: "<p>This test confirms that the CRM can send replies through this inbox's Scaleway configuration.</p>",
   });
-  if (
-    !integration?.isEnabled ||
-    !integration.apiKey ||
-    !integration.defaultListId
-  ) {
-    throw new Error(
-      "The Scaleway Transactional Email integration is not configured or enabled.",
-    );
-  }
+  return { recipientEmail, messageId: result.messageId ?? result.id };
 };
 
 export const recoverStaleEmailReplyDispatches = async (
