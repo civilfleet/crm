@@ -1,7 +1,12 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import UserTable from "@/components/table/user-table";
 import { Button } from "@/components/ui/button";
 import { verifyOrganizationAccess } from "@/lib/api-guard";
+import {
+  parseTablePageSize,
+  TABLE_PAGE_SIZE_COOKIE,
+} from "@/lib/table-page-size";
 
 interface PageProps {
   params: Promise<{
@@ -10,7 +15,13 @@ interface PageProps {
 }
 
 export default async function Organization({ params }: PageProps) {
-  const { organizationId } = await params;
+  const [{ organizationId }, cookieStore] = await Promise.all([
+    params,
+    cookies(),
+  ]);
+  const initialPageSize = parseTablePageSize(
+    cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+  );
   const access = await verifyOrganizationAccess(organizationId);
   const canManageUsers = access.isGlobalAdmin || access.isTeamAdmin;
 
@@ -28,6 +39,7 @@ export default async function Organization({ params }: PageProps) {
         teamId=""
         organizationId={organizationId}
         canManageUsers={canManageUsers}
+        initialPageSize={initialPageSize}
       />
     </div>
   );

@@ -453,6 +453,16 @@ const getTeamGroups = async (teamId: string) => {
   });
 };
 
+const getTeamGroupOptions = async (teamId: string) => {
+  await ensureDefaultGroup(teamId);
+
+  return prisma.group.findMany({
+    where: { teamId },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+};
+
 const getGroupById = async (groupId: string, teamId: string) => {
   const group = await prisma.group.findFirst({
     where: {
@@ -877,6 +887,7 @@ export {
   ensureDefaultGroup,
   getGroupById,
   getGroupWithUsers,
+  getTeamGroupOptions,
   getTeamGroups,
   getUserGroups,
   getUserModuleAccess,

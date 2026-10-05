@@ -339,8 +339,12 @@ const getUsers = async (
     page: number;
     pageSize: number;
   },
+  filters?: {
+    field?: string;
+    groupId?: string;
+  },
 ) => {
-  const whereConditions = [];
+  const whereConditions: Prisma.UserWhereInput[] = [];
 
   if (fundingRequestId) {
     const fundingRequest = await prisma.fundingRequest.findUnique({
@@ -379,15 +383,59 @@ const getUsers = async (
     whereConditions.push({ organizations: { some: { id: organizationId } } });
   }
 
+  if (teamId && filters?.groupId) {
+    whereConditions.push(
+      filters.groupId === "none"
+        ? {
+            groups: {
+              none: {
+                group: { teamId },
+              },
+            },
+          }
+        : {
+            groups: {
+              some: {
+                groupId: filters.groupId,
+                group: { teamId },
+              },
+            },
+          },
+    );
+  }
+
+  const searchableFields = [
+    "name",
+    "email",
+    "phone",
+    "address",
+    "postalCode",
+    "city",
+    "country",
+  ] as const;
+  const selectedField = searchableFields.find(
+    (field) => field === filters?.field,
+  );
+  const trimmedQuery = searchQuery.trim();
+  if (trimmedQuery) {
+    whereConditions.push(
+      selectedField
+        ? {
+            [selectedField]: {
+              contains: trimmedQuery,
+              mode: "insensitive",
+            },
+          }
+        : {
+            OR: searchableFields.map((field) => ({
+              [field]: { contains: trimmedQuery, mode: "insensitive" },
+            })),
+          },
+    );
+  }
+
   const where = {
-    AND: [
-      {
-        OR: ["name", "email", "address", "city", "country"].map((field) => ({
-          [field]: { contains: searchQuery, mode: "insensitive" },
-        })),
-      },
-      ...whereConditions,
-    ],
+    AND: whereConditions,
   } as Prisma.UserWhereInput;
 
   const include = {

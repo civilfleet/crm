@@ -2,13 +2,19 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
-import { createGroup, deleteGroups, getTeamGroups } from "@/services/groups";
+import {
+  createGroup,
+  deleteGroups,
+  getTeamGroupOptions,
+  getTeamGroups,
+} from "@/services/groups";
 import { createGroupSchema, deleteGroupsSchema } from "@/validations/groups";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const teamId = searchParams.get("teamId");
+    const optionsOnly = searchParams.get("optionsOnly") === "true";
 
     if (!teamId) {
       return NextResponse.json(
@@ -19,7 +25,9 @@ export async function GET(request: NextRequest) {
 
     await verifyTeamAccess(teamId);
 
-    const groups = await getTeamGroups(teamId);
+    const groups = optionsOnly
+      ? await getTeamGroupOptions(teamId)
+      : await getTeamGroups(teamId);
 
     return NextResponse.json({ data: groups }, { status: 200 });
   } catch (e) {

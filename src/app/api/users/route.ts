@@ -19,6 +19,8 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const searchQuery = searchParams.get("query") || "";
+    const searchField = searchParams.get("field") || "all";
+    const groupId = searchParams.get("groupId") || undefined;
     const teamId = searchParams.get("teamId") || "";
     const fundingRequestId = searchParams.get("fundingRequestId") || "";
     const organizationId = searchParams.get("organizationId") || "";
@@ -65,6 +67,7 @@ export async function GET(req: Request) {
             },
             searchQuery,
             hasPagination ? { page, pageSize } : undefined,
+            { field: searchField, groupId },
           );
 
     const ownerPromise = teamId ? ensureTeamOwner(teamId) : undefined;

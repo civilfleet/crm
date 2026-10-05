@@ -1,9 +1,14 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { BulkInviteUsersDialog } from "@/components/forms/bulk-invite-users";
 import UserTable from "@/components/table/user-table";
 import { Button } from "@/components/ui/button";
+import {
+  parseTablePageSize,
+  TABLE_PAGE_SIZE_COOKIE,
+} from "@/lib/table-page-size";
 import { getTeamAdminAccess } from "@/services/teams/access";
 
 interface PageProps {
@@ -13,7 +18,10 @@ interface PageProps {
 }
 
 export default async function Page({ params }: PageProps) {
-  const { teamId } = await params;
+  const [{ teamId }, cookieStore] = await Promise.all([params, cookies()]);
+  const initialPageSize = parseTablePageSize(
+    cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+  );
   const session = await auth();
   if (!session?.user?.userId) {
     return redirect("/");
@@ -39,7 +47,11 @@ export default async function Page({ params }: PageProps) {
           <BulkInviteUsersDialog teamId={teamId} />
         </div>
       </div>
-      <UserTable teamId={teamId} organizationId="" />
+      <UserTable
+        teamId={teamId}
+        organizationId=""
+        initialPageSize={initialPageSize}
+      />
     </div>
   );
 }
