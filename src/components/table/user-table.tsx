@@ -1,6 +1,6 @@
 "use client";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Filter, Loader2, Search, X } from "lucide-react";
+import { ChevronDown, Filter, Loader2, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useForm } from "react-hook-form";
@@ -10,6 +10,11 @@ import { DataTable } from "@/components/data-table";
 import TableLoadingState from "@/components/loading/table-loading-state";
 import { columns } from "@/components/table/user-columns";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { persistTablePageSize } from "@/lib/table-page-size";
 import type { User } from "@/types";
@@ -33,6 +38,17 @@ interface UserTableProps {
 const querySchema = z.object({
   query: z.string(),
 });
+
+const SEARCH_FIELD_LABELS: Record<string, string> = {
+  name: "Name",
+  email: "Email",
+  phone: "Phone",
+  address: "Address",
+  postalCode: "Postal code",
+  city: "City",
+  country: "Country",
+};
+
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 export default function UserTable({
   teamId,
@@ -47,6 +63,7 @@ export default function UserTable({
   const [searchQuery, setSearchQuery] = useState("");
   const [searchField, setSearchField] = useState("all");
   const [groupId, setGroupId] = useState("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const form = useForm<z.infer<typeof querySchema>>({
     resolver: zodResolver(querySchema),
@@ -87,6 +104,10 @@ export default function UserTable({
     fetcher,
   );
   const groups = groupsResponse?.data ?? [];
+  const selectedGroupLabel =
+    groupId === "none"
+      ? "No groups"
+      : groups.find((group) => group.id === groupId)?.name;
   const loading = isLoading || !data;
   const ownerId = data?.ownerId as string | undefined;
   const totalUsers = Number(data?.total ?? data?.data?.length ?? 0);
@@ -98,12 +119,20 @@ export default function UserTable({
   const hasFilters = Boolean(
     searchQuery || searchField !== "all" || groupId !== "all",
   );
+  const hiddenFilterCount =
+    Number(searchField !== "all") + Number(groupId !== "all");
 
   const clearFilters = () => {
     form.reset({ query: "" });
     setSearchQuery("");
     setSearchField("all");
     setGroupId("all");
+    setPage(1);
+  };
+
+  const clearSearch = () => {
+    form.reset({ query: "" });
+    setSearchQuery("");
     setPage(1);
   };
 
@@ -185,110 +214,180 @@ export default function UserTable({
 
   return (
     <div className="flex flex-col my-2 gap-2">
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="flex w-full flex-col gap-2 rounded-lg border bg-muted/20 p-3 lg:flex-row lg:items-end"
-        >
-          <div className="min-w-0 flex-1 lg:max-w-md">
-            <FormInputControl
-              form={form}
-              name="query"
-              label="Search users"
-              placeholder="Enter a value..."
-            />
-          </div>
-          <div className="grid gap-1.5 sm:grid-cols-2 lg:flex lg:items-end">
-            <div className="space-y-1.5">
-              <label
-                className="text-sm font-medium"
-                htmlFor="user-search-field"
-              >
-                Field
-              </label>
-              <Select
-                value={searchField}
-                onValueChange={(value) => {
-                  setSearchField(value);
-                  setPage(1);
-                }}
-              >
-                <SelectTrigger
-                  id="user-search-field"
-                  className="w-full sm:w-40"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All fields</SelectItem>
-                  <SelectItem value="name">Name</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
-                  <SelectItem value="phone">Phone</SelectItem>
-                  <SelectItem value="address">Address</SelectItem>
-                  <SelectItem value="postalCode">Postal code</SelectItem>
-                  <SelectItem value="city">City</SelectItem>
-                  <SelectItem value="country">Country</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {teamId ? (
-              <div className="space-y-1.5">
-                <label
-                  className="text-sm font-medium"
-                  htmlFor="user-group-filter"
-                >
-                  Group
-                </label>
-                <Select
-                  value={groupId}
-                  onValueChange={(value) => {
-                    setGroupId(value);
-                    setPage(1);
-                  }}
-                >
-                  <SelectTrigger
-                    id="user-group-filter"
-                    className="w-full sm:w-52"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All groups</SelectItem>
-                    <SelectItem value="none">No groups</SelectItem>
-                    {groups.map((group) => (
-                      <SelectItem key={group.id} value={group.id}>
-                        {group.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+      <Collapsible open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="flex w-full flex-col gap-3"
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="min-w-0 flex-1 sm:max-w-md">
+                <FormInputControl
+                  form={form}
+                  name="query"
+                  label="Search Users"
+                  placeholder="Enter a value…"
+                  autoComplete="off"
+                />
               </div>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-2 lg:pb-px">
-            <Button type="submit" className="shrink-0">
-              <Search className="mr-2 h-4 w-4" />
-              Search
-            </Button>
-            {hasFilters ? (
-              <Button type="button" variant="ghost" onClick={clearFilters}>
-                <X className="mr-2 h-4 w-4" />
-                Clear
-              </Button>
-            ) : null}
-          </div>
-        </form>
-      </Form>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button type="submit" className="shrink-0">
+                  <Search className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Search
+                </Button>
+                <CollapsibleTrigger asChild>
+                  <Button type="button" variant="outline" className="group">
+                    <Filter className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Filters
+                    {hiddenFilterCount > 0 ? (
+                      <span className="ml-2 rounded-full bg-primary px-1.5 py-0.5 text-xs leading-none text-primary-foreground tabular-nums">
+                        {hiddenFilterCount}
+                      </span>
+                    ) : null}
+                    <ChevronDown
+                      className="ml-2 h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+                      aria-hidden="true"
+                    />
+                  </Button>
+                </CollapsibleTrigger>
+              </div>
+            </div>
+
+            <CollapsibleContent>
+              <div className="grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-2 lg:max-w-2xl">
+                <div className="space-y-1.5">
+                  <label
+                    className="text-sm font-medium"
+                    htmlFor="user-search-field"
+                  >
+                    Search Field
+                  </label>
+                  <Select
+                    value={searchField}
+                    onValueChange={(value) => {
+                      setSearchField(value);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger id="user-search-field" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All fields</SelectItem>
+                      {Object.entries(SEARCH_FIELD_LABELS).map(
+                        ([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {teamId ? (
+                  <div className="space-y-1.5">
+                    <label
+                      className="text-sm font-medium"
+                      htmlFor="user-group-filter"
+                    >
+                      Group
+                    </label>
+                    <Select
+                      value={groupId}
+                      onValueChange={(value) => {
+                        setGroupId(value);
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger id="user-group-filter" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All groups</SelectItem>
+                        <SelectItem value="none">No groups</SelectItem>
+                        {groups.map((group) => (
+                          <SelectItem key={group.id} value={group.id}>
+                            {group.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+              </div>
+            </CollapsibleContent>
+          </form>
+        </Form>
+      </Collapsible>
       {hasFilters ? (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Filter className="h-4 w-4" />
-          Showing users that match the active filters
-        </div>
+        <fieldset className="flex min-w-0 flex-wrap items-center gap-2">
+          <legend className="sr-only">Active filters</legend>
+          <span className="text-sm text-muted-foreground">Active:</span>
+          {searchQuery ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-7 rounded-full px-2.5"
+              onClick={clearSearch}
+              aria-label={`Remove search filter: ${searchQuery}`}
+            >
+              <span className="max-w-56 truncate">Search: {searchQuery}</span>
+              <X className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          ) : null}
+          {searchField !== "all" ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-7 rounded-full px-2.5"
+              onClick={() => {
+                setSearchField("all");
+                setPage(1);
+              }}
+              aria-label={`Remove search field filter: ${SEARCH_FIELD_LABELS[searchField]}`}
+            >
+              Field: {SEARCH_FIELD_LABELS[searchField]}
+              <X className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          ) : null}
+          {groupId !== "all" ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="h-7 rounded-full px-2.5"
+              onClick={() => {
+                setGroupId("all");
+                setPage(1);
+              }}
+              aria-label={`Remove group filter: ${selectedGroupLabel ?? "Selected group"}`}
+            >
+              <span className="max-w-56 truncate">
+                Group: {selectedGroupLabel ?? "Selected group"}
+              </span>
+              <X className="ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-muted-foreground"
+            onClick={clearFilters}
+          >
+            Clear All
+          </Button>
+        </fieldset>
       ) : null}
       <div className="relative rounded-md border my-2 flex justify-center items-center grow h-full">
         {isValidating && !loading ? (
-          <p className="absolute right-4 top-4 text-xs text-muted-foreground">
-            Refreshing...
+          <p
+            className="absolute right-4 top-4 text-xs text-muted-foreground"
+            role="status"
+          >
+            Refreshing…
           </p>
         ) : null}
         {loading ? (
@@ -339,7 +438,7 @@ export default function UserTable({
                           {isDeleting ? (
                             <>
                               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Removing...
+                              Removing…
                             </>
                           ) : (
                             "Remove selected"
