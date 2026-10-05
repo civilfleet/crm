@@ -35,9 +35,27 @@ const SENDER_LABEL_MODES = ["default", "user"] as const;
 export type SenderLabelMode = (typeof SENDER_LABEL_MODES)[number];
 
 type ScalewayEmailRecord = {
-  id?: string;
+  id: string;
+  message_id?: string;
   status?: string;
 };
+
+export class ScalewayEmailRejectedError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "ScalewayEmailRejectedError";
+  }
+}
+
+export class ScalewayEmailConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ScalewayEmailConfigurationError";
+  }
+}
 
 export type ScalewayEmailIntegrationSettings = IntegrationConnection & {
   hasApiKey: boolean;
@@ -170,7 +188,7 @@ const assertOkResponse = async (response: Response, fallback: string) => {
     (typeof body.message === "string" && body.message) ||
     (typeof body.error === "string" && body.error) ||
     fallback;
-  throw new Error(message);
+  throw new ScalewayEmailRejectedError(message, response.status);
 };
 
 const buildSender = (settings: {
@@ -233,6 +251,17 @@ const sendScalewayEmail = async ({
     body.email ??
     (Array.isArray(body.emails) ? body.emails[0] : undefined) ??
     body;
+  if (
+    typeof record !== "object" ||
+    record === null ||
+    !("id" in record) ||
+    typeof record.id !== "string" ||
+    !record.id
+  ) {
+    throw new Error(
+      "Scaleway accepted the request but returned no email identifier.",
+    );
+  }
   return record as ScalewayEmailRecord;
 };
 
@@ -267,7 +296,7 @@ export const sendScalewayTransactionalEmail = async ({
     !integration.apiKey ||
     !integration.defaultListId
   ) {
-    throw new Error(
+    throw new ScalewayEmailConfigurationError(
       "The Scaleway Transactional Email integration is not configured or enabled.",
     );
   }
@@ -434,30 +463,92 @@ const sendInternalCopyEmails = async ({
 }) => {
   const html = buildInternalCopyHtml({ batch, recipients, stats });
   const subject = `Internal copy: ${batch.subject}`;
+  const pendingCopies = await prisma.emailInternalCopyRecipient.findMany({
+    where: {
+      batchId: batch.id,
+      status: EmailRecipientStatus.PENDING,
+    },
+    orderBy: { createdAt: "asc" },
+  });
 
-  for (const internalCopyEmail of batch.bccEmails) {
+  for (const internalCopy of pendingCopies) {
+    const claimed = await prisma.emailInternalCopyRecipient.updateMany({
+      where: {
+        id: internalCopy.id,
+        status: EmailRecipientStatus.PENDING,
+      },
+      data: {
+        status: EmailRecipientStatus.DISPATCHING,
+        dispatchStartedAt: new Date(),
+        errorMessage: null,
+      },
+    });
+    if (claimed.count !== 1) continue;
+
+    let scalewayEmail: ScalewayEmailRecord;
     try {
-      await sendScalewayEmail({
+      scalewayEmail = await sendScalewayEmail({
         apiKey: integration.apiKey,
         region,
         projectId: integration.defaultListId,
         from,
-        to: { email: internalCopyEmail },
+        to: { email: internalCopy.email },
         subject,
         html,
       });
     } catch (error) {
+      const status =
+        error instanceof ScalewayEmailRejectedError
+          ? EmailRecipientStatus.FAILED
+          : EmailRecipientStatus.UNKNOWN;
+      await prisma.emailInternalCopyRecipient.updateMany({
+        where: {
+          id: internalCopy.id,
+          status: EmailRecipientStatus.DISPATCHING,
+        },
+        data: {
+          status,
+          errorMessage:
+            status === EmailRecipientStatus.UNKNOWN
+              ? `Delivery outcome is unknown: ${error instanceof Error ? error.message : "Unknown provider error"}`
+              : error instanceof Error
+                ? error.message
+                : "Email delivery failed.",
+        },
+      });
       logger.error(
         {
           teamId: batch.teamId,
           batchId: batch.id,
-          internalCopyEmail,
+          internalCopyEmail: internalCopy.email,
           error,
         },
         "Scaleway internal copy failed",
       );
+      continue;
     }
+
+    await prisma.emailInternalCopyRecipient.updateMany({
+      where: {
+        id: internalCopy.id,
+        status: EmailRecipientStatus.DISPATCHING,
+      },
+      data: {
+        status: EmailRecipientStatus.SENT,
+        providerMessageId: scalewayEmail.id,
+        sentAt: new Date(),
+        errorMessage: null,
+      },
+    });
   }
+
+  const sentCopies = await prisma.emailInternalCopyRecipient.count({
+    where: {
+      batchId: batch.id,
+      status: EmailRecipientStatus.SENT,
+    },
+  });
+  return sentCopies === batch.bccEmails.length;
 };
 
 export const getScalewayEmailIntegration = async (
@@ -749,6 +840,15 @@ export const sendMassEmailToContacts = async ({
       })),
     });
 
+    if (normalizedBccEmails.length > 0) {
+      await tx.emailInternalCopyRecipient.createMany({
+        data: normalizedBccEmails.map((email) => ({
+          batchId: created.id,
+          email,
+        })),
+      });
+    }
+
     return created;
   });
 
@@ -795,17 +895,48 @@ export const claimNextEmailBatch = async (workerId: string) =>
 export const recoverStaleEmailBatches = async (staleAfterMs: number) => {
   const cutoff = new Date(Date.now() - staleAfterMs);
 
-  return await prisma.emailBatch.updateMany({
-    where: {
-      status: EmailBatchStatus.SENDING,
-      lockedAt: { lt: cutoff },
-    },
-    data: {
-      lockedAt: null,
-      lockedBy: null,
-      runAfter: new Date(),
-      lastError: "Recovered stale worker lock.",
-    },
+  return await prisma.$transaction(async (tx) => {
+    await tx.emailRecipient.updateMany({
+      where: {
+        status: EmailRecipientStatus.DISPATCHING,
+        batch: {
+          status: EmailBatchStatus.SENDING,
+          lockedAt: { lt: cutoff },
+        },
+      },
+      data: {
+        status: EmailRecipientStatus.UNKNOWN,
+        errorMessage:
+          "Delivery outcome is unknown after the worker stopped during provider dispatch. Verify it before any manual resend.",
+      },
+    });
+    await tx.emailInternalCopyRecipient.updateMany({
+      where: {
+        status: EmailRecipientStatus.DISPATCHING,
+        batch: {
+          status: EmailBatchStatus.SENDING,
+          lockedAt: { lt: cutoff },
+        },
+      },
+      data: {
+        status: EmailRecipientStatus.UNKNOWN,
+        errorMessage:
+          "Delivery outcome is unknown after the worker stopped during provider dispatch. Verify it before any manual resend.",
+      },
+    });
+
+    return await tx.emailBatch.updateMany({
+      where: {
+        status: EmailBatchStatus.SENDING,
+        lockedAt: { lt: cutoff },
+      },
+      data: {
+        lockedAt: null,
+        lockedBy: null,
+        runAfter: new Date(),
+        lastError: "Recovered stale worker lock.",
+      },
+    });
   });
 };
 
@@ -853,6 +984,28 @@ export const processEmailBatch = async (batch: EmailBatch) => {
     senderName: batch.senderName ?? integration.senderName,
   });
   const region = integration.baseUrl || DEFAULT_REGION;
+  await prisma.emailRecipient.updateMany({
+    where: {
+      batchId: batch.id,
+      status: EmailRecipientStatus.DISPATCHING,
+    },
+    data: {
+      status: EmailRecipientStatus.UNKNOWN,
+      errorMessage:
+        "Delivery outcome is unknown after an interrupted provider dispatch. Verify it before any manual resend.",
+    },
+  });
+  await prisma.emailInternalCopyRecipient.updateMany({
+    where: {
+      batchId: batch.id,
+      status: EmailRecipientStatus.DISPATCHING,
+    },
+    data: {
+      status: EmailRecipientStatus.UNKNOWN,
+      errorMessage:
+        "Delivery outcome is unknown after an interrupted provider dispatch. Verify it before any manual resend.",
+    },
+  });
   const pendingRecipients = await prisma.emailRecipient.findMany({
     where: {
       batchId: batch.id,
@@ -873,24 +1026,41 @@ export const processEmailBatch = async (batch: EmailBatch) => {
   });
 
   for (const recipient of pendingRecipients) {
+    const claimed = await prisma.emailRecipient.updateMany({
+      where: {
+        id: recipient.id,
+        status: EmailRecipientStatus.PENDING,
+      },
+      data: {
+        status: EmailRecipientStatus.DISPATCHING,
+        dispatchStartedAt: new Date(),
+        errorMessage: null,
+      },
+    });
+    if (claimed.count !== 1) {
+      continue;
+    }
+
+    const placeholderContact = {
+      name: recipient.name ?? recipient.contact?.name,
+      email: recipient.email ?? getPrimaryEmail(recipient.contact),
+      city: recipient.contact?.city,
+      country: recipient.contact?.country,
+      phone: recipient.contact?.phone,
+    };
+    const renderedSubject = renderEmailPlaceholders(
+      batch.subject,
+      placeholderContact,
+      { escape: false },
+    );
+    const renderedHtml = renderEmailPlaceholders(
+      batch.html,
+      placeholderContact,
+    );
+
+    let scalewayEmail: ScalewayEmailRecord;
     try {
-      const placeholderContact = {
-        name: recipient.name ?? recipient.contact?.name,
-        email: recipient.email ?? getPrimaryEmail(recipient.contact),
-        city: recipient.contact?.city,
-        country: recipient.contact?.country,
-        phone: recipient.contact?.phone,
-      };
-      const renderedSubject = renderEmailPlaceholders(
-        batch.subject,
-        placeholderContact,
-        { escape: false },
-      );
-      const renderedHtml = renderEmailPlaceholders(
-        batch.html,
-        placeholderContact,
-      );
-      const scalewayEmail = await sendScalewayEmail({
+      scalewayEmail = await sendScalewayEmail({
         apiKey: integration.apiKey,
         region,
         projectId: integration.defaultListId,
@@ -899,10 +1069,43 @@ export const processEmailBatch = async (batch: EmailBatch) => {
         subject: renderedSubject,
         html: renderedHtml,
       });
-
-      const sentAt = new Date();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Email delivery failed.";
+      const status =
+        error instanceof ScalewayEmailRejectedError
+          ? EmailRecipientStatus.FAILED
+          : EmailRecipientStatus.UNKNOWN;
+      logger.error(
+        {
+          teamId: batch.teamId,
+          batchId: batch.id,
+          recipientId: recipient.id,
+          email: recipient.email,
+          error,
+        },
+        "Scaleway email recipient failed",
+      );
       await prisma.emailRecipient.update({
         where: { id: recipient.id },
+        data: {
+          status,
+          errorMessage:
+            status === EmailRecipientStatus.UNKNOWN
+              ? `Delivery outcome is unknown: ${message}`
+              : message,
+        },
+      });
+      continue;
+    }
+
+    const sentAt = new Date();
+    await prisma.$transaction(async (tx) => {
+      const updated = await tx.emailRecipient.updateMany({
+        where: {
+          id: recipient.id,
+          status: EmailRecipientStatus.DISPATCHING,
+        },
         data: {
           status: EmailRecipientStatus.SENT,
           providerMessageId: scalewayEmail.id,
@@ -910,9 +1113,14 @@ export const processEmailBatch = async (batch: EmailBatch) => {
           errorMessage: null,
         },
       });
+      if (updated.count !== 1) {
+        throw new Error(
+          `Email recipient ${recipient.id} lost its dispatch claim.`,
+        );
+      }
 
       if (recipient.contactId) {
-        await prisma.contactEngagement.create({
+        await tx.contactEngagement.create({
           data: {
             contactId: recipient.contactId,
             teamId: batch.teamId,
@@ -928,27 +1136,7 @@ export const processEmailBatch = async (batch: EmailBatch) => {
           },
         });
       }
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Email delivery failed.";
-      logger.error(
-        {
-          teamId: batch.teamId,
-          batchId: batch.id,
-          recipientId: recipient.id,
-          email: recipient.email,
-          error,
-        },
-        "Scaleway email recipient failed",
-      );
-      await prisma.emailRecipient.update({
-        where: { id: recipient.id },
-        data: {
-          status: EmailRecipientStatus.FAILED,
-          errorMessage: message,
-        },
-      });
-    }
+    });
   }
 
   const grouped = await prisma.emailRecipient.groupBy({
@@ -964,7 +1152,8 @@ export const processEmailBatch = async (batch: EmailBatch) => {
     countFor(EmailRecipientStatus.DELIVERED);
   const failedCount =
     countFor(EmailRecipientStatus.FAILED) +
-    countFor(EmailRecipientStatus.BOUNCED);
+    countFor(EmailRecipientStatus.BOUNCED) +
+    countFor(EmailRecipientStatus.UNKNOWN);
   const skippedCount = countFor(EmailRecipientStatus.SKIPPED);
   const pendingCount = countFor(EmailRecipientStatus.PENDING);
 
@@ -976,15 +1165,15 @@ export const processEmailBatch = async (batch: EmailBatch) => {
         : sentCount > 0
           ? EmailBatchStatus.PARTIAL
           : EmailBatchStatus.FAILED;
-  const internalCopySentAt =
+  let internalCopySentAt: Date | null | undefined =
     pendingCount === 0 &&
     sentCount > 0 &&
     batch.bccEmails.length > 0 &&
     !batch.internalCopySentAt
-      ? new Date()
+      ? null
       : undefined;
 
-  if (internalCopySentAt) {
+  if (internalCopySentAt === null) {
     const recipients = await prisma.emailRecipient.findMany({
       where: { batchId: batch.id },
       orderBy: { createdAt: "asc" },
@@ -1003,7 +1192,7 @@ export const processEmailBatch = async (batch: EmailBatch) => {
       },
     });
 
-    await sendInternalCopyEmails({
+    const allInternalCopiesSent = await sendInternalCopyEmails({
       batch,
       integration: {
         apiKey: integration.apiKey,
@@ -1027,6 +1216,7 @@ export const processEmailBatch = async (batch: EmailBatch) => {
         skippedCount,
       },
     });
+    internalCopySentAt = allInternalCopiesSent ? new Date() : undefined;
   }
 
   const updated = await prisma.emailBatch.update({

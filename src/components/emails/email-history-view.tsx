@@ -48,6 +48,8 @@ const statusClasses: Record<string, string> = {
   DELIVERED: "bg-emerald-100 text-emerald-900 border-emerald-200",
   BOUNCED: "bg-red-100 text-red-900 border-red-200",
   PENDING: "bg-blue-100 text-blue-900 border-blue-200",
+  DISPATCHING: "bg-blue-100 text-blue-900 border-blue-200",
+  UNKNOWN: "bg-amber-100 text-amber-900 border-amber-200",
 };
 
 const formatDateTime = (value?: string) => {

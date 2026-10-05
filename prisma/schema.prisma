@@ -239,6 +239,7 @@ model Teams {
   contactLists ContactList[]
   emailBatches EmailBatch[]
   emailInboxes EmailInbox[]
+  emailReplyDispatches EmailReplyDispatch[]
   inboundEmailMessages InboundEmailMessage[]
   contactAccessReviews ContactAccessReview[]
   events       Event[]
@@ -478,11 +479,21 @@ enum EmailBatchStatus {
 
 enum EmailRecipientStatus {
   PENDING
+  DISPATCHING
   SENT
   SKIPPED
   FAILED
   DELIVERED
   BOUNCED
+  UNKNOWN
+}
+
+enum EmailReplyDispatchStatus {
+  PENDING
+  DISPATCHING
+  SENT
+  FAILED
+  UNKNOWN
 }
 
 enum ZammadSyncJobType {
@@ -640,6 +651,7 @@ model EmailBatch {
   userId      String?
   userName    String?             @db.VarChar(255)
   recipients  EmailRecipient[]
+  internalCopyRecipients EmailInternalCopyRecipient[]
   createdAt   DateTime            @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime            @updatedAt @db.Timestamptz(6)
   completedAt DateTime?           @db.Timestamptz(6)
@@ -661,6 +673,7 @@ model EmailRecipient {
   status      EmailRecipientStatus  @default(PENDING)
   providerMessageId String?         @db.VarChar(255)
   errorMessage String?              @db.Text
+  dispatchStartedAt DateTime?       @db.Timestamptz(6)
   sentAt      DateTime?             @db.Timestamptz(6)
   createdAt   DateTime              @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime              @updatedAt @db.Timestamptz(6)
@@ -669,6 +682,23 @@ model EmailRecipient {
   @@index([contactId])
   @@index([email])
   @@index([status])
+}
+
+model EmailInternalCopyRecipient {
+  id                String               @id @default(uuid()) @unique
+  batchId           String
+  batch             EmailBatch           @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  email             String               @db.VarChar(255)
+  status            EmailRecipientStatus @default(PENDING)
+  providerMessageId String?              @db.VarChar(255)
+  errorMessage      String?              @db.Text
+  dispatchStartedAt DateTime?            @db.Timestamptz(6)
+  sentAt            DateTime?            @db.Timestamptz(6)
+  createdAt         DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime             @updatedAt @db.Timestamptz(6)
+
+  @@unique([batchId, email])
+  @@index([batchId, status])
 }
 
 enum ContactAccessReviewStatus {
@@ -721,6 +751,7 @@ model EmailInbox {
 
   messages     InboundEmailMessage[]
   sentEngagements ContactEngagement[]
+  replyDispatches EmailReplyDispatch[]
   createdAt    DateTime @default(now()) @db.Timestamptz(6)
   updatedAt    DateTime @updatedAt @db.Timestamptz(6)
 
@@ -761,6 +792,7 @@ model InboundEmailMessage {
   engagementId  String?
   engagement    ContactEngagement? @relation(fields: [engagementId], references: [id], onDelete: SetNull)
   accessReviews ContactAccessReview[]
+  replyDispatches EmailReplyDispatch[]
   rawHeaders    Json?
   createdAt     DateTime @default(now()) @db.Timestamptz(6)
 
@@ -770,6 +802,35 @@ model InboundEmailMessage {
   @@index([messageId])
   @@index([contactId])
   @@index([engagementId])
+}
+
+model EmailReplyDispatch {
+  id                    String                   @id @default(uuid()) @unique
+  teamId                String
+  team                  Teams                    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  emailInboxId          String
+  emailInbox            EmailInbox               @relation(fields: [emailInboxId], references: [id], onDelete: Cascade)
+  inboundEmailMessageId String
+  inboundEmailMessage   InboundEmailMessage      @relation(fields: [inboundEmailMessageId], references: [id], onDelete: Cascade)
+  idempotencyKey        String                   @db.VarChar(64)
+  requestHash           String                   @db.Char(64)
+  transport             EmailInboxOutboundMode
+  status                EmailReplyDispatchStatus @default(PENDING)
+  providerMessageId     String?                  @db.VarChar(255)
+  engagementId          String?                  @unique
+  engagement            ContactEngagement?       @relation(fields: [engagementId], references: [id], onDelete: SetNull)
+  dispatchStartedAt     DateTime?                @db.Timestamptz(6)
+  sentAt                DateTime?                @db.Timestamptz(6)
+  errorMessage          String?                  @db.Text
+  userId                String
+  userName              String?                  @db.VarChar(255)
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                 @updatedAt @db.Timestamptz(6)
+
+  @@unique([teamId, idempotencyKey])
+  @@index([emailInboxId])
+  @@index([inboundEmailMessageId])
+  @@index([status, dispatchStartedAt])
 }
 
 model ContactAccessReview {
@@ -1227,6 +1288,7 @@ model ContactEngagement {
   createdAt   DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime             @updatedAt @db.Timestamptz(6)
   inboundEmailMessages InboundEmailMessage[]
+  replyDispatch EmailReplyDispatch?
   userStates ContactEngagementUserState[]
   tags       String[] @default([])
 

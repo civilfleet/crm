@@ -1,7 +1,10 @@
 import crypto from "node:crypto";
 import {
   ContactAccessReviewStatus,
+  type ContactEngagement,
   EmailInboxOutboundMode,
+  type EmailReplyDispatch,
+  EmailReplyDispatchStatus,
   EngagementDirection,
   EngagementSource,
   type Prisma,
@@ -26,7 +29,12 @@ import {
   findContactByIdentityEmail,
   getContactById,
 } from "@/services/contacts";
-import { sendScalewayTransactionalEmail } from "@/services/integrations/scaleway-email";
+import { EmailDeliveryUncertainError } from "@/services/email-delivery-errors";
+import {
+  ScalewayEmailConfigurationError,
+  ScalewayEmailRejectedError,
+  sendScalewayTransactionalEmail,
+} from "@/services/integrations/scaleway-email";
 import { recordSystemLog } from "@/services/system-logs";
 import { ContactEmailKind } from "@/types";
 import {
@@ -39,6 +47,10 @@ const DEFAULT_INBOX_SYNC_LIMIT = 25;
 const DEFAULT_INBOX_LOCK_MS = 5 * 60 * 1000;
 const IMAP_EXTERNAL_SOURCE = "IMAP";
 const INBOUND_EMAIL_ACCESS_REVIEW_SOURCE = "INBOUND_EMAIL";
+
+type EmailReplyDispatchWithEngagement = EmailReplyDispatch & {
+  engagement: ContactEngagement | null;
+};
 
 const getEncryptionKey = () => {
   const secret =
@@ -660,12 +672,30 @@ export const testEmailInboxOutboundConnection = async (
   }
 };
 
+export const recoverStaleEmailReplyDispatches = async (
+  staleAfterMs: number,
+) => {
+  const cutoff = new Date(Date.now() - staleAfterMs);
+  return await prisma.emailReplyDispatch.updateMany({
+    where: {
+      status: EmailReplyDispatchStatus.DISPATCHING,
+      dispatchStartedAt: { lt: cutoff },
+    },
+    data: {
+      status: EmailReplyDispatchStatus.UNKNOWN,
+      errorMessage:
+        "Delivery outcome is unknown after reply processing was interrupted. Verify it before any resend.",
+    },
+  });
+};
+
 export const replyToInboundEmail = async ({
   teamId,
   inboxId,
   inboundEmailMessageId,
   subject,
   message,
+  idempotencyKey,
   userId,
   userName,
   roles,
@@ -676,6 +706,7 @@ export const replyToInboundEmail = async ({
   inboundEmailMessageId: string;
   subject?: string;
   message: string;
+  idempotencyKey: string;
   userId: string;
   userName?: string;
   roles: import("@/types").Roles[];
@@ -690,13 +721,10 @@ export const replyToInboundEmail = async ({
       "The inbound email is not linked to an accessible contact engagement.",
     );
   }
+  const contactId = inbound.contactId;
+  const replyToEngagementId = inbound.engagementId;
 
-  const contact = await getContactById(
-    inbound.contactId,
-    teamId,
-    userId,
-    roles,
-  );
+  const contact = await getContactById(contactId, teamId, userId, roles);
   if (!contact) throw new Error("You do not have access to this contact.");
 
   if (!isTeamAdmin) {
@@ -729,6 +757,84 @@ export const replyToInboundEmail = async ({
 
   const normalizedSubject = normalizeReplySubject(subject ?? inbound.subject);
   const normalizedMessage = message.trim();
+  const requestHash = crypto
+    .createHash("sha256")
+    .update(
+      JSON.stringify({
+        inboundEmailMessageId: inbound.id,
+        subject: normalizedSubject,
+        message: normalizedMessage,
+        from: inbox.replyFromEmail,
+        to: inbound.fromEmail,
+        transport: inbox.outboundMode,
+      }),
+    )
+    .digest("hex");
+
+  let dispatch: EmailReplyDispatchWithEngagement;
+  try {
+    dispatch = await prisma.emailReplyDispatch.create({
+      data: {
+        teamId,
+        emailInboxId: inbox.id,
+        inboundEmailMessageId: inbound.id,
+        idempotencyKey,
+        requestHash,
+        transport: inbox.outboundMode,
+        userId,
+        userName,
+      },
+      include: { engagement: true },
+    });
+  } catch (error) {
+    const existingDispatch = await prisma.emailReplyDispatch.findUnique({
+      where: { teamId_idempotencyKey: { teamId, idempotencyKey } },
+      include: { engagement: true },
+    });
+    if (!existingDispatch) throw error;
+    dispatch = existingDispatch;
+  }
+
+  if (dispatch.requestHash !== requestHash) {
+    throw new Error(
+      "This reply request key was already used for other content.",
+    );
+  }
+  if (
+    dispatch.status === EmailReplyDispatchStatus.SENT &&
+    dispatch.engagement
+  ) {
+    return dispatch.engagement;
+  }
+  if (
+    dispatch.status === EmailReplyDispatchStatus.DISPATCHING ||
+    dispatch.status === EmailReplyDispatchStatus.UNKNOWN ||
+    dispatch.status === EmailReplyDispatchStatus.SENT
+  ) {
+    throw new EmailDeliveryUncertainError(
+      "This reply may already have been accepted by the mail provider. Verify delivery before sending it again.",
+    );
+  }
+
+  const claimed = await prisma.emailReplyDispatch.updateMany({
+    where: {
+      id: dispatch.id,
+      status: {
+        in: [EmailReplyDispatchStatus.PENDING, EmailReplyDispatchStatus.FAILED],
+      },
+    },
+    data: {
+      status: EmailReplyDispatchStatus.DISPATCHING,
+      dispatchStartedAt: new Date(),
+      errorMessage: null,
+    },
+  });
+  if (claimed.count !== 1) {
+    throw new EmailDeliveryUncertainError(
+      "This reply is already being processed. Wait and refresh before trying again.",
+    );
+  }
+
   const references = getStoredReferences(inbound.rawHeaders, inbound.messageId);
   const threadHeaders = [
     ...(inbound.messageId
@@ -739,6 +845,7 @@ export const replyToInboundEmail = async ({
       : []),
   ];
 
+  let providerAccepted = false;
   try {
     let providerMessageId: string | undefined;
     let externalSource: string;
@@ -773,24 +880,44 @@ export const replyToInboundEmail = async ({
       providerMessageId = result.messageId ?? result.id;
       externalSource = "INBOX_SCALEWAY";
     }
+    providerAccepted = true;
 
     const sentAt = new Date();
-    const engagement = await prisma.contactEngagement.create({
-      data: {
-        contactId: inbound.contactId,
-        teamId,
-        direction: EngagementDirection.OUTBOUND,
-        source: EngagementSource.EMAIL,
-        subject: normalizedSubject,
-        message: normalizedMessage,
-        userId,
-        userName,
-        externalId: providerMessageId,
-        externalSource,
-        emailInboxId: inbox.id,
-        replyToEngagementId: inbound.engagementId,
-        engagedAt: sentAt,
-      },
+    const engagement = await prisma.$transaction(async (tx) => {
+      const created = await tx.contactEngagement.create({
+        data: {
+          contactId,
+          teamId,
+          direction: EngagementDirection.OUTBOUND,
+          source: EngagementSource.EMAIL,
+          subject: normalizedSubject,
+          message: normalizedMessage,
+          userId,
+          userName,
+          externalId: providerMessageId,
+          externalSource,
+          emailInboxId: inbox.id,
+          replyToEngagementId,
+          engagedAt: sentAt,
+        },
+      });
+      const updated = await tx.emailReplyDispatch.updateMany({
+        where: {
+          id: dispatch.id,
+          status: EmailReplyDispatchStatus.DISPATCHING,
+        },
+        data: {
+          status: EmailReplyDispatchStatus.SENT,
+          providerMessageId,
+          engagementId: created.id,
+          sentAt,
+          errorMessage: null,
+        },
+      });
+      if (updated.count !== 1) {
+        throw new Error(`Reply dispatch ${dispatch.id} lost its claim.`);
+      }
+      return created;
     });
 
     await recordSystemLog({
@@ -811,6 +938,25 @@ export const replyToInboundEmail = async ({
     });
     return engagement;
   } catch (error) {
+    if (!providerAccepted) {
+      const definitiveFailure =
+        error instanceof ScalewayEmailRejectedError ||
+        error instanceof ScalewayEmailConfigurationError;
+      await prisma.emailReplyDispatch.updateMany({
+        where: {
+          id: dispatch.id,
+          status: EmailReplyDispatchStatus.DISPATCHING,
+        },
+        data: {
+          status: definitiveFailure
+            ? EmailReplyDispatchStatus.FAILED
+            : EmailReplyDispatchStatus.UNKNOWN,
+          errorMessage: definitiveFailure
+            ? error.message
+            : `Delivery outcome is unknown: ${error instanceof Error ? error.message : "Unknown provider error"}`,
+        },
+      });
+    }
     await recordSystemLog({
       teamId,
       level: SystemLogLevel.ERROR,
@@ -820,6 +966,8 @@ export const replyToInboundEmail = async ({
       entityType: "EmailInbox",
       entityId: inbox.id,
       metadata: {
+        dispatchId: dispatch.id,
+        idempotencyKey,
         inboundEmailMessageId: inbound.id,
         contactId: inbound.contactId,
         transport: inbox.outboundMode,

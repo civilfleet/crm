@@ -3,6 +3,22 @@ import test from "node:test";
 import { loadModule } from "./helpers/load-module";
 
 const emailTypes = {
+  EmailBatchStatus: {
+    SENDING: "SENDING",
+    SENT: "SENT",
+    PARTIAL: "PARTIAL",
+    FAILED: "FAILED",
+  },
+  EmailRecipientStatus: {
+    PENDING: "PENDING",
+    DISPATCHING: "DISPATCHING",
+    SENT: "SENT",
+    SKIPPED: "SKIPPED",
+    FAILED: "FAILED",
+    DELIVERED: "DELIVERED",
+    BOUNCED: "BOUNCED",
+    UNKNOWN: "UNKNOWN",
+  },
   EngagementDirection: { OUTBOUND: "OUTBOUND" },
   EngagementSource: { EMAIL: "EMAIL" },
   IntegrationProvider: { SCALEWAY_TEM: "SCALEWAY_TEM" },
@@ -17,6 +33,7 @@ test("bulk email rejects direct contact IDs outside the sender's visibility", as
       contactIds: string[];
       subject: string;
       html: string;
+      bccEmails?: string[];
       userId: string;
     }) => Promise<unknown>;
   }>("src/services/integrations/scaleway-email.ts", {
@@ -134,6 +151,7 @@ test("bulk email restricts internal recipient reports to team administrators", a
 test("bulk email publishes its batch and complete recipient set atomically", async () => {
   const writes: string[] = [];
   let recipientData: Array<Record<string, unknown>> = [];
+  let internalCopyData: Array<Record<string, unknown>> = [];
   const transactionClient = {
     emailBatch: {
       create: async () => {
@@ -148,6 +166,13 @@ test("bulk email publishes its batch and complete recipient set atomically", asy
         return { count: args.data.length };
       },
     },
+    emailInternalCopyRecipient: {
+      createMany: async (args: { data: Array<Record<string, unknown>> }) => {
+        writes.push("internal-copies");
+        internalCopyData = args.data;
+        return { count: args.data.length };
+      },
+    },
   };
   const service = loadModule<{
     sendMassEmailToContacts: (input: {
@@ -155,6 +180,7 @@ test("bulk email publishes its batch and complete recipient set atomically", asy
       contactIds: string[];
       subject: string;
       html: string;
+      bccEmails?: string[];
       userId: string;
     }) => Promise<{ batchId: string; requested: number }>;
   }>("src/services/integrations/scaleway-email.ts", {
@@ -199,7 +225,7 @@ test("bulk email publishes its batch and complete recipient set atomically", asy
       }),
     },
     "@/services/teams/access": {
-      getTeamAdminAccess: async () => ({ allowed: false }),
+      getTeamAdminAccess: async () => ({ allowed: true }),
     },
     "@/types": emailTypes,
   });
@@ -209,10 +235,11 @@ test("bulk email publishes its batch and complete recipient set atomically", asy
     contactIds: ["contact-a"],
     subject: "Update",
     html: "<p>Hello</p>",
+    bccEmails: ["audit@example.org"],
     userId: "actor",
   });
 
-  assert.deepEqual(writes, ["batch", "recipients"]);
+  assert.deepEqual(writes, ["batch", "recipients", "internal-copies"]);
   assert.deepEqual(recipientData, [
     {
       batchId: "batch-a",
@@ -221,6 +248,9 @@ test("bulk email publishes its batch and complete recipient set atomically", asy
       name: "Ada",
       status: "PENDING",
     },
+  ]);
+  assert.deepEqual(internalCopyData, [
+    { batchId: "batch-a", email: "audit@example.org" },
   ]);
   assert.deepEqual(result, {
     batchId: "batch-a",
@@ -308,4 +338,252 @@ test("email retry hides batches created by other non-admin users", async () => {
     teamId: "team-a",
     userId: "actor",
   });
+});
+
+test("bulk email does not resend after provider acceptance if persistence fails", async () => {
+  let recipientStatus = "PENDING";
+  let providerCalls = 0;
+  let transactionCalls = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    providerCalls += 1;
+    return new Response(JSON.stringify({ emails: [{ id: "provider-a" }] }), {
+      status: 200,
+    });
+  };
+
+  const service = loadModule<{
+    processEmailBatch: (batch: Record<string, unknown>) => Promise<{
+      failed: number;
+    }>;
+  }>("src/services/integrations/scaleway-email.ts", {
+    "@/constants/email": {
+      DEFAULT_INTERNAL_COPY_MODE: "summary",
+      INTERNAL_COPY_MODE_LABELS: { summary: "Summary only" },
+    },
+    "@/lib/logger": {
+      error: () => undefined,
+      info: () => undefined,
+      warn: () => undefined,
+    },
+    "@/lib/prisma": {
+      integrationConnection: {
+        findUnique: async () => ({
+          apiKey: "secret",
+          defaultListId: "project",
+          senderEmail: "crm@example.org",
+          senderName: "CRM",
+          isEnabled: true,
+        }),
+      },
+      emailRecipient: {
+        updateMany: async (args: {
+          where: { status: string };
+          data: { status: string };
+        }) => {
+          if (args.where.status !== recipientStatus) return { count: 0 };
+          recipientStatus = args.data.status;
+          return { count: 1 };
+        },
+        findMany: async () =>
+          recipientStatus === "PENDING"
+            ? [
+                {
+                  id: "recipient-a",
+                  contactId: "contact-a",
+                  email: "ada@example.org",
+                  name: "Ada",
+                  contact: {
+                    name: "Ada",
+                    emails: [{ email: "ada@example.org" }],
+                    city: null,
+                    country: null,
+                    phone: null,
+                  },
+                },
+              ]
+            : [],
+        groupBy: async () => [{ status: recipientStatus, _count: { _all: 1 } }],
+      },
+      emailBatch: {
+        update: async () => ({ id: "batch-a", status: "FAILED" }),
+      },
+      emailInternalCopyRecipient: {
+        updateMany: async () => ({ count: 0 }),
+      },
+      $transaction: async () => {
+        transactionCalls += 1;
+        throw new Error("database unavailable after provider acceptance");
+      },
+    },
+    "@/services/contact-emails": {
+      getPrimaryEmail: (contact: { emails: Array<{ email: string }> }) =>
+        contact.emails[0]?.email ?? null,
+      primaryContactEmailSelect: {},
+    },
+    "@/services/contacts/access": {},
+    "@/services/teams/access": {},
+    "@/types": emailTypes,
+  });
+
+  const batch = {
+    id: "batch-a",
+    teamId: "team-a",
+    subject: "Update",
+    html: "<p>Hello</p>",
+    senderEmail: "crm@example.org",
+    senderName: "CRM",
+    bccEmails: [],
+    internalCopySentAt: null,
+    userId: "actor",
+    userName: "Ada",
+  };
+
+  try {
+    await assert.rejects(
+      service.processEmailBatch(batch),
+      /database unavailable/,
+    );
+    assert.equal(recipientStatus, "DISPATCHING");
+
+    const recovered = await service.processEmailBatch(batch);
+    assert.equal(recipientStatus, "UNKNOWN");
+    assert.equal(recovered.failed, 1);
+    assert.equal(providerCalls, 1);
+    assert.equal(transactionCalls, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("inbox reply retries cannot resend an uncertain dispatch", async () => {
+  const replyStatuses = {
+    PENDING: "PENDING",
+    DISPATCHING: "DISPATCHING",
+    SENT: "SENT",
+    FAILED: "FAILED",
+    UNKNOWN: "UNKNOWN",
+  };
+  let dispatch = {
+    id: "dispatch-a",
+    requestHash: "",
+    status: replyStatuses.PENDING,
+    engagement: null,
+  };
+  let providerCalls = 0;
+  class MockUncertainError extends Error {}
+  class MockRejectedError extends Error {}
+  class MockConfigurationError extends Error {}
+
+  const prisma = {
+    inboundEmailMessage: {
+      findFirst: async () => ({
+        id: "inbound-a",
+        teamId: "team-a",
+        contactId: "contact-a",
+        engagementId: "engagement-inbound",
+        fromEmail: "sender@example.org",
+        fromName: "Sender",
+        subject: "Question",
+        messageId: "<message@example.org>",
+        rawHeaders: {},
+        emailInbox: {
+          id: "inbox-a",
+          groupId: "group-a",
+          outboundMode: "SCALEWAY",
+          replyFromEmail: "crm@example.org",
+          replyFromName: "CRM",
+        },
+      }),
+    },
+    userGroup: { findUnique: async () => ({ userId: "actor" }) },
+    emailReplyDispatch: {
+      create: async (args: { data: { requestHash: string } }) => {
+        dispatch = { ...dispatch, requestHash: args.data.requestHash };
+        return dispatch;
+      },
+      findUnique: async () => dispatch,
+      updateMany: async (args: {
+        where: { status: string | { in: string[] } };
+        data: { status: string };
+      }) => {
+        const expected = args.where.status;
+        const matches =
+          typeof expected === "string"
+            ? dispatch.status === expected
+            : expected.in.includes(dispatch.status);
+        if (!matches) return { count: 0 };
+        dispatch = { ...dispatch, status: args.data.status };
+        return { count: 1 };
+      },
+    },
+    $transaction: async () => {
+      throw new Error("database unavailable after provider acceptance");
+    },
+  };
+
+  const service = loadModule<{
+    replyToInboundEmail: (input: Record<string, unknown>) => Promise<unknown>;
+  }>("src/services/inbound-email/index.ts", {
+    "@/lib/logger": {},
+    "@/lib/prisma": prisma,
+    "@/services/contact-change-logs": {},
+    "@/services/contact-emails": {
+      getPrimaryEmail: () => null,
+      primaryContactEmailSelect: {},
+    },
+    "@/services/contacts": {
+      getContactById: async () => ({ id: "contact-a" }),
+    },
+    "@/services/email-delivery-errors": {
+      EmailDeliveryUncertainError: MockUncertainError,
+    },
+    "@/services/integrations/scaleway-email": {
+      ScalewayEmailConfigurationError: MockConfigurationError,
+      ScalewayEmailRejectedError: MockRejectedError,
+      sendScalewayTransactionalEmail: async () => {
+        providerCalls += 1;
+        return { id: "provider-a" };
+      },
+    },
+    "@/services/system-logs": { recordSystemLog: async () => undefined },
+    "@/types": { ContactEmailKind: {} },
+    "./reply-helpers": {
+      escapeEmailHtml: (value: string) => value,
+      getStoredReferences: () => [],
+      normalizeReplySubject: (value: string) => `Re: ${value}`,
+    },
+    "@prisma/client": {
+      ContactAccessReviewStatus: {},
+      EmailInboxOutboundMode: {
+        DISABLED: "DISABLED",
+        SMTP: "SMTP",
+        SCALEWAY: "SCALEWAY",
+      },
+      EmailReplyDispatchStatus: replyStatuses,
+      EngagementDirection: { OUTBOUND: "OUTBOUND" },
+      EngagementSource: { EMAIL: "EMAIL" },
+      IntegrationProvider: { SCALEWAY_TEM: "SCALEWAY_TEM" },
+      SystemLogLevel: { ERROR: "ERROR" },
+    },
+  });
+
+  const input = {
+    teamId: "team-a",
+    inboxId: "inbox-a",
+    inboundEmailMessageId: "inbound-a",
+    message: "Hello",
+    idempotencyKey: "11111111-1111-4111-8111-111111111111",
+    userId: "actor",
+    roles: [],
+    isTeamAdmin: true,
+  };
+
+  await assert.rejects(
+    service.replyToInboundEmail(input),
+    /database unavailable/,
+  );
+  assert.equal(dispatch.status, replyStatuses.DISPATCHING);
+  await assert.rejects(service.replyToInboundEmail(input), MockUncertainError);
+  assert.equal(providerCalls, 1);
 });

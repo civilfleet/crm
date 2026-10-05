@@ -4,12 +4,15 @@ import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import { cleanupExpiredPendingUploads } from "@/services/file/pending-uploads";
 import {
+  recoverStaleEmailReplyDispatches,
+  syncDueEmailInboxes,
+} from "@/services/inbound-email";
+import {
   claimNextEmailBatch,
   markEmailBatchFailed,
   processEmailBatch,
   recoverStaleEmailBatches,
 } from "@/services/integrations/scaleway-email";
-import { syncDueEmailInboxes } from "@/services/inbound-email";
 import {
   syncZammadIntegration,
   syncZammadTicket,
@@ -135,6 +138,23 @@ export const runBackgroundWorker = async () => {
       workerId,
       source: "EMAIL_BATCH",
       metadata: { recovered: recoveredEmailBatches.count },
+    });
+  }
+
+  const recoveredEmailReplies =
+    await recoverStaleEmailReplyDispatches(staleLockMs);
+  if (recoveredEmailReplies.count > 0) {
+    logger.warn(
+      { workerId, recovered: recoveredEmailReplies.count },
+      "[BackgroundWorker] Marked stale email replies as uncertain",
+    );
+    await logWorkerEvent({
+      level: "WARN",
+      event: "email_reply_dispatches_uncertain",
+      message: `Marked ${recoveredEmailReplies.count} stale email reply dispatches as uncertain.`,
+      workerId,
+      source: "INBOUND_EMAIL",
+      metadata: { recovered: recoveredEmailReplies.count },
     });
   }
 

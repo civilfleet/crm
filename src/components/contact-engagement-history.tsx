@@ -912,6 +912,7 @@ export default function ContactEngagementHistory({
     ticketId?: string;
     inboxId?: string;
     inboundEmailMessageId?: string;
+    idempotencyKey?: string;
     from?: string;
     to?: string;
     subject: string;
@@ -969,6 +970,7 @@ export default function ContactEngagementHistory({
         kind: "inbox",
         inboxId: engagement.inboundEmail.emailInboxId,
         inboundEmailMessageId: engagement.inboundEmail.id,
+        idempotencyKey: crypto.randomUUID(),
         from: engagement.inboundEmail.replyFromEmail,
         to: engagement.inboundEmail.fromEmail,
         subject: replySubject,
@@ -1019,6 +1021,9 @@ export default function ContactEngagementHistory({
             message: replyMessage,
             subject: replySubject || undefined,
             contactId,
+            ...(isInboxReply
+              ? { idempotencyKey: replyTarget.idempotencyKey }
+              : {}),
           }),
         },
       );

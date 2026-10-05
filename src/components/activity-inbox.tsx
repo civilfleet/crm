@@ -172,6 +172,7 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
   const [replyOpen, setReplyOpen] = useState(false);
   const [replySubject, setReplySubject] = useState("");
   const [replyMessage, setReplyMessage] = useState("");
+  const [replyIdempotencyKey, setReplyIdempotencyKey] = useState("");
   const [isReplying, setIsReplying] = useState(false);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -355,6 +356,7 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
         : `Re: ${selected.subject ?? ""}`.trim(),
     );
     setReplyMessage("");
+    setReplyIdempotencyKey(crypto.randomUUID());
     setReplyOpen(true);
   };
 
@@ -372,6 +374,7 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
             contactId: selected.contactId,
             subject: replySubject || undefined,
             message: replyMessage,
+            idempotencyKey: replyIdempotencyKey,
           }),
         },
       );

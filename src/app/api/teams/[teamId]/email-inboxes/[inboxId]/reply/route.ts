@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
+import { EmailDeliveryUncertainError } from "@/services/email-delivery-errors";
 import { replyToInboundEmail } from "@/services/inbound-email";
 import { getTeamAdminAccess } from "@/services/teams/access";
 import type { Roles } from "@/types";
@@ -10,6 +11,7 @@ const replySchema = z.object({
   inboundEmailMessageId: z.uuid(),
   subject: z.string().trim().max(500).optional(),
   message: z.string().trim().min(1, "Message is required").max(100_000),
+  idempotencyKey: z.uuid(),
 });
 
 export async function POST(
@@ -32,6 +34,7 @@ export async function POST(
       inboundEmailMessageId: validated.inboundEmailMessageId,
       subject: validated.subject,
       message: validated.message,
+      idempotencyKey: validated.idempotencyKey,
       userId,
       userName: session.user.name ?? session.user.email ?? undefined,
       roles,
@@ -41,6 +44,9 @@ export async function POST(
   } catch (error) {
     const apiError = handleApiError(error);
     if (apiError) return apiError;
+    if (error instanceof EmailDeliveryUncertainError) {
+      return NextResponse.json({ error: error.message }, { status: 409 });
+    }
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { error: "Validation failed", details: error.issues },

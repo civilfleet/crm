@@ -24,7 +24,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
 | --- | --- | --- | --- | --- |
 | EMAIL-001 | P0 | DONE | Bulk send, history, retry, and internal-copy operations enforce contact and actor visibility at the service boundary. | Authorization regression tests, typecheck, focused Biome check, and production build passed on 2026-10-05. Live role-matrix smoke testing remains part of rollout. |
 | EMAIL-002 | P0 | DONE | Batch and recipient creation is atomic so the worker cannot claim an incomplete batch. | Transaction-boundary test, typecheck, focused Biome check, and production build passed on 2026-10-05. |
-| EMAIL-003 | P0 | BLOCKED | Provider acceptance followed by a database failure can cause duplicate bulk emails or replies. Add an outbox/idempotency and reconciliation design. | Crash-window tests plus provider-level idempotency/reconciliation evidence. |
+| EMAIL-003 | P0 | READY FOR LIVE TEST | Bulk recipients and internal reports are durably claimed before provider I/O; ambiguous outcomes become non-retryable `UNKNOWN`. Inbox replies use a persistent client request key and dispatch record. | Crash-window regression tests passed on 2026-10-05. Apply the migration, run controlled Scaleway/SMTP sends, and complete an `UNKNOWN` reconciliation drill before marking `DONE`. |
 | EMAIL-004 | P0 | BLOCKED | Inbound contact matching trusts the message `From` header without authentication-result policy. Quarantine or clearly isolate unauthenticated mail. | SPF/DKIM/DMARC fixture tests and a live spoof/failure test. |
 | EMAIL-005 | P0 | BLOCKED | The production worker definition is external to this repository and has not been verified. | Deployed worker, migrations, shared database/key, restart policy, heartbeat, and queue-lag checks verified live. |
 | EMAIL-006 | P1 | BLOCKED | Scaleway settings and the inbox "Test sending" action report readiness without a real provider/sender verification. | Provider API validation and a controlled test delivery succeed. |
@@ -42,7 +42,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
   Handlebars `require.extensions` warnings remain.
 - `yarn lint`: passed with one existing unused `toBigInt` warning in the inbound
   email service.
-- `yarn test`: 19/20 passed in the restricted sandbox; the isolated vCard test
+- `yarn test`: 20/21 passed in the restricted sandbox; the isolated vCard test
   passed outside the sandbox, confirming a subprocess restriction rather than a
   product failure.
 - No live IMAP, SMTP, Scaleway, DNS, bounce-webhook, migration, or deployed-worker
@@ -86,3 +86,28 @@ checklist has passed with a dedicated test mailbox and test recipients.
   to the documented vCard sandbox limitation), and the production build passed.
 - Next implementation target: `EMAIL-003` provider-send idempotency and crash
   recovery.
+- Implemented the static portion of `EMAIL-003`. Bulk recipients and internal
+  report recipients now move from `PENDING` to `DISPATCHING` before provider
+  I/O. A transport ambiguity, interrupted dispatch, or provider-acceptance/DB-
+  persistence crash becomes `UNKNOWN` and is never automatically retried.
+- Inbox replies now require a client-generated idempotency key. A durable reply
+  dispatch record deduplicates concurrent/repeated requests, and stale dispatches
+  are moved to `UNKNOWN` by the worker recovery pass. The engagement and final
+  dispatch state are committed together after provider acceptance.
+- Added the `20261005000000_add_email_dispatch_idempotency` migration and crash-
+  window regression tests proving a second attempt does not call the provider.
+- `EMAIL-003` is ready for a controlled live provider/reconciliation test. The
+  next code implementation target is `EMAIL-004` inbound sender authentication.
+
+## Delivery ambiguity policy
+
+Scaleway's documented send endpoint does not expose an idempotency key. The CRM
+therefore favors preventing duplicate mail over automatic retry when it cannot
+prove whether a provider accepted a request:
+
+- `FAILED` means the provider definitively rejected the request and is retryable.
+- `UNKNOWN` means acceptance is possible. It is not retryable until an operator
+  verifies the provider/mailbox outcome and deliberately reconciles it.
+- A repeated inbox-reply request with the same idempotency key returns the
+  already-created engagement when the original send completed, or HTTP `409`
+  when the outcome is still uncertain.

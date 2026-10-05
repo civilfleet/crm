@@ -195,6 +195,7 @@ export const retryEmailBatch = async (
         status: EmailRecipientStatus.PENDING,
         providerMessageId: null,
         errorMessage: null,
+        dispatchStartedAt: null,
         sentAt: null,
       },
     });
