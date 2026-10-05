@@ -2,6 +2,7 @@ import os from "node:os";
 import { type ZammadSyncJob, ZammadSyncJobType } from "@prisma/client";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
+import { recordBackgroundWorkerHeartbeat } from "@/services/background-worker-health";
 import { cleanupExpiredPendingUploads } from "@/services/file/pending-uploads";
 import {
   recoverStaleEmailReplyDispatches,
@@ -31,6 +32,7 @@ const DEFAULT_PENDING_UPLOAD_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const DEFAULT_PENDING_UPLOAD_CLEANUP_LIMIT = 100;
 const DEFAULT_INBOUND_EMAIL_SYNC_INTERVAL_MS = 60 * 1000;
 const DEFAULT_INBOUND_EMAIL_SYNC_LIMIT = 25;
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 30 * 1000;
 
 const parsePositiveInteger = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
@@ -94,6 +96,10 @@ export const runBackgroundWorker = async () => {
     process.env.INBOUND_EMAIL_SYNC_LIMIT,
     DEFAULT_INBOUND_EMAIL_SYNC_LIMIT,
   );
+  const heartbeatIntervalMs = parsePositiveInteger(
+    process.env.BACKGROUND_WORKER_HEARTBEAT_INTERVAL_MS,
+    DEFAULT_HEARTBEAT_INTERVAL_MS,
+  );
   const workerId =
     process.env.BACKGROUND_WORKER_ID ??
     process.env.ZAMMAD_WORKER_ID ??
@@ -101,6 +107,8 @@ export const runBackgroundWorker = async () => {
   let shouldStop = false;
   let nextPendingUploadCleanupAt = 0;
   let nextInboundEmailSyncAt = 0;
+  const startedAt = new Date();
+  let heartbeatInFlight = false;
 
   const stop = () => {
     shouldStop = true;
@@ -108,6 +116,27 @@ export const runBackgroundWorker = async () => {
 
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
+
+  const writeHeartbeat = async () => {
+    if (heartbeatInFlight) return;
+    heartbeatInFlight = true;
+
+    try {
+      await recordBackgroundWorkerHeartbeat(workerId, startedAt);
+    } catch (error) {
+      logger.error(
+        { workerId, error },
+        "[BackgroundWorker] Failed to record heartbeat",
+      );
+    } finally {
+      heartbeatInFlight = false;
+    }
+  };
+
+  await writeHeartbeat();
+  const heartbeatTimer = setInterval(() => {
+    void writeHeartbeat();
+  }, heartbeatIntervalMs);
 
   const recovered = await recoverStaleZammadSyncJobs(staleLockMs);
   if (recovered.count > 0) {
@@ -166,6 +195,7 @@ export const runBackgroundWorker = async () => {
       pendingUploadCleanupLimit,
       inboundEmailSyncIntervalMs,
       inboundEmailSyncLimit,
+      heartbeatIntervalMs,
     },
     "[BackgroundWorker] Started",
   );
@@ -179,6 +209,7 @@ export const runBackgroundWorker = async () => {
       pendingUploadCleanupLimit,
       inboundEmailSyncIntervalMs,
       inboundEmailSyncLimit,
+      heartbeatIntervalMs,
     },
   });
 
@@ -434,6 +465,7 @@ export const runBackgroundWorker = async () => {
     }
   }
 
+  clearInterval(heartbeatTimer);
   await logWorkerEvent({
     event: "worker_stopped",
     message: "Background worker stopped.",

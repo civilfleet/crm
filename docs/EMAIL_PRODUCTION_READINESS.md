@@ -26,7 +26,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
 | EMAIL-002 | P0 | DONE | Batch and recipient creation is atomic so the worker cannot claim an incomplete batch. | Transaction-boundary test, typecheck, focused Biome check, and production build passed on 2026-10-05. |
 | EMAIL-003 | P0 | READY FOR LIVE TEST | Bulk recipients and internal reports are durably claimed before provider I/O; ambiguous outcomes become non-retryable `UNKNOWN`. Inbox replies use a persistent client request key and dispatch record. | Crash-window regression tests passed on 2026-10-05. Apply the migration, run controlled Scaleway/SMTP sends, and complete an `UNKNOWN` reconciliation drill before marking `DONE`. |
 | EMAIL-004 | P0 | READY FOR LIVE TEST | Inbound mail is contact-matched only when a trusted `Authentication-Results` service reports DMARC pass. Failed, missing, or untrusted evidence is stored without contact linkage and logged as quarantined. | Parser fixtures pass. Configure `INBOUND_EMAIL_TRUSTED_AUTHSERV_IDS`, apply the migration, and complete live pass/fail/spoof tests before marking `DONE`. |
-| EMAIL-005 | P0 | BLOCKED | The production worker definition is external to this repository and has not been verified. | Deployed worker, migrations, shared database/key, restart policy, heartbeat, and queue-lag checks verified live. |
+| EMAIL-005 | P0 | READY FOR LIVE TEST | The production deployment definition pins one supplied tag across migration, web, and worker images; migration failure stops rollout and the worker has `unless-stopped`. The application now records heartbeat and eligible email queue depth/age in the shared database, with a failing health command for stale heartbeat or queue lag. | Schema validation, threshold tests, typecheck, focused Biome, and production build passed on 2026-10-05. Apply the heartbeat migration, wire the health command into production monitoring, deploy one pinned tag, and verify it live before marking `DONE`. |
 | EMAIL-006 | P1 | BLOCKED | Scaleway settings and the inbox "Test sending" action report readiness without a real provider/sender verification. | Provider API validation and a controlled test delivery succeed. |
 | EMAIL-007 | P1 | BLOCKED | Delivery and bounce states are not ingested; suppression and unsubscribe/consent policy are absent. | Signed webhook tests, suppression behavior, and documented sending policy. |
 | EMAIL-008 | P1 | BLOCKED | Integration API and webhook secrets are stored in plaintext. | Independently rotatable encryption plus migration/rotation test. |
@@ -42,7 +42,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
   Handlebars `require.extensions` warnings remain.
 - `yarn lint`: passed with one existing unused `toBigInt` warning in the inbound
   email service.
-- `yarn test`: 21/22 passed in the restricted sandbox; the isolated vCard test
+- `yarn test`: 22/23 passed in the restricted sandbox; the isolated vCard test
   passed outside the sandbox, confirming a subprocess restriction rather than a
   product failure.
 - No live IMAP, SMTP, Scaleway, DNS, bounce-webhook, migration, or deployed-worker
@@ -53,7 +53,8 @@ checklist has passed with a dedicated test mailbox and test recipients.
 - [ ] Apply and verify all email-related Prisma migrations.
 - [ ] Deploy the web image and matching tools/worker image from the same commit.
 - [ ] Set a dedicated, stable `INBOUND_EMAIL_ENCRYPTION_KEY` in both services.
-- [ ] Confirm worker restart policy, heartbeat, queue lag, and error alerting.
+- [ ] Add `yarn worker:health` as the worker container health check, alert on
+      unhealthy state, and confirm heartbeat and queue-lag thresholds live.
 - [ ] Verify global SMTP with a magic-link login and one application email.
 - [ ] Configure a dedicated non-production IMAP/SMTP mailbox.
 - [ ] Set `INBOUND_EMAIL_TRUSTED_AUTHSERV_IDS` to the receiving mail system's
@@ -108,6 +109,48 @@ checklist has passed with a dedicated test mailbox and test recipients.
   quarantine system log. Added pass, fail, forged-header, and missing-evidence
   fixtures. Live mailbox-header verification is still required.
 - Next implementation target: `EMAIL-005` production worker verification.
+- Verified the external production Compose/deploy definitions for `EMAIL-005`:
+  the deploy script requires a concrete image tag, uses it for migration, web,
+  and worker images, aborts after a failed migration, and recreates both runtime
+  services. The worker has `restart: unless-stopped` and the same shared database
+  configuration as the web process.
+- Added a durable database heartbeat containing eligible email queue depth and
+  oldest-queued time. `yarn worker:health` exits non-zero for a missing/stale
+  heartbeat or excessive queue lag. Added the
+  `20261005020000_add_background_worker_heartbeat` migration and threshold tests.
+  Live deployment, health-check wiring, and alert evidence remain required.
+- Next implementation target: `EMAIL-006` real provider and sender verification.
+
+## Production worker deployment handoff
+
+Static inspection of the production infrastructure repository on 2026-10-05
+confirmed that its deployment script accepts a required image tag, exports that
+tag for all Compose operations, runs `prisma migrate deploy`, checks the migration
+container exit code, persists the tag, and then recreates both `app` and `worker`.
+The worker uses the tools image with the same tag and database configuration as
+the web app, starts `scripts/background-worker.ts`, and has
+`restart: unless-stopped`.
+
+The remaining infrastructure change is to make the worker container run this
+probe after the heartbeat migration has been applied:
+
+```yaml
+healthcheck:
+  test:
+    ["CMD", "node", "--import", "tsx", "scripts/check-background-worker-health.ts"]
+  interval: 30s
+  timeout: 10s
+  retries: 4
+  start_period: 60s
+```
+
+Set `BACKGROUND_WORKER_HEALTH_MAX_AGE_MS` and
+`BACKGROUND_WORKER_EMAIL_QUEUE_MAX_LAG_MS` in the worker environment if the
+defaults of two and five minutes are not appropriate. Alert on the Compose
+health state; a healthy result is emitted as one JSON line for operational
+evidence. The production template must also pass the dedicated
+`INBOUND_EMAIL_ENCRYPTION_KEY` and `INBOUND_EMAIL_TRUSTED_AUTHSERV_IDS` described
+in the rollout checklist before inbound mail is enabled.
 
 ## Delivery ambiguity policy
 

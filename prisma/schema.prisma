@@ -891,6 +891,18 @@ model SystemLog {
   @@index([entityType, entityId])
 }
 
+model BackgroundWorkerHeartbeat {
+  workerId            String    @id @db.VarChar(255)
+  startedAt           DateTime  @db.Timestamptz(6)
+  lastSeenAt          DateTime  @db.Timestamptz(6)
+  emailQueueDepth     Int       @default(0)
+  oldestEmailQueuedAt DateTime? @db.Timestamptz(6)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@index([lastSeenAt])
+}
+
 model PostalCodeCentroid {
   countryCode String   @db.Char(2)
   postalCode  String   @db.VarChar(32)

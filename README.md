@@ -116,7 +116,22 @@ To run the app, Postgres, migrations, and the background worker together:
 docker compose up --build
 ```
 
-The `seaweedfs` service provides local S3-compatible storage, `seaweedfs-init` creates the default `crm` bucket, and `seaweedfs-cors` applies the upload CORS policy before the web app and worker start. The `migrate` service runs `prisma migrate deploy` before the web app and worker start. The `worker` service runs the background worker from the same image as the web app and processes queued jobs and maintenance tasks outside API requests.
+The `seaweedfs` service provides local S3-compatible storage, `seaweedfs-init` creates the default `crm` bucket, and `seaweedfs-cors` applies the upload CORS policy before the web app and worker start. The `migrate` service runs `prisma migrate deploy` before the web app and worker start. The `worker` service runs the background worker from the matching tools image and processes queued jobs and maintenance tasks outside API requests.
+
+The worker records a database heartbeat every 30 seconds. Check both heartbeat
+freshness and eligible email queue lag with:
+
+```bash
+yarn worker:health
+```
+
+The check exits non-zero when the latest heartbeat is older than
+`BACKGROUND_WORKER_HEALTH_MAX_AGE_MS` (default: 120000) or the oldest eligible
+email batch exceeds `BACKGROUND_WORKER_EMAIL_QUEUE_MAX_LAG_MS` (default: 300000).
+The write interval can be changed with
+`BACKGROUND_WORKER_HEARTBEAT_INTERVAL_MS` (default: 30000). Production should
+run this command as the worker container health check and alert on an unhealthy
+container.
 
 To bootstrap an initial admin on a fresh database, set `BOOTSTRAP_ADMIN_EMAIL` and optionally `BOOTSTRAP_ADMIN_NAME`:
 
@@ -135,6 +150,7 @@ yarn build
 yarn start
 yarn bootstrap:admin
 yarn worker
+yarn worker:health
 
 # Quality checks
 yarn lint          # biome lint .
