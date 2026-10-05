@@ -238,6 +238,8 @@ model Teams {
   contactEmails ContactEmail[]
   contactLists ContactList[]
   emailBatches EmailBatch[]
+  emailSuppressions EmailSuppression[]
+  emailDeliveryEvents EmailDeliveryEvent[]
   emailInboxes EmailInbox[]
   emailReplyDispatches EmailReplyDispatch[]
   inboundEmailMessages InboundEmailMessage[]
@@ -496,6 +498,13 @@ enum EmailReplyDispatchStatus {
   UNKNOWN
 }
 
+enum EmailSuppressionReason {
+  HARD_BOUNCE
+  SPAM
+  UNSUBSCRIBED
+  MANUAL
+}
+
 enum InboundEmailAuthenticationStatus {
   PASS
   FAIL
@@ -705,6 +714,37 @@ model EmailInternalCopyRecipient {
 
   @@unique([batchId, email])
   @@index([batchId, status])
+}
+
+model EmailSuppression {
+  id                String                 @id @default(uuid()) @unique
+  teamId            String
+  team              Teams                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  email             String                 @db.VarChar(255)
+  reason            EmailSuppressionReason
+  detail            String?                @db.Text
+  providerMessageId String?                @db.VarChar(255)
+  createdByUserId   String?
+  createdByUserName String?                @db.VarChar(255)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime               @updatedAt @db.Timestamptz(6)
+
+  @@unique([teamId, email])
+  @@index([teamId, reason])
+}
+
+model EmailDeliveryEvent {
+  eventId           String    @id @db.VarChar(255)
+  teamId            String
+  team              Teams     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  providerMessageId String    @db.VarChar(255)
+  type              String    @db.VarChar(64)
+  payload           Json
+  occurredAt        DateTime? @db.Timestamptz(6)
+  receivedAt        DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([teamId, receivedAt])
+  @@index([providerMessageId])
 }
 
 enum ContactAccessReviewStatus {

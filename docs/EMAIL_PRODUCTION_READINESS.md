@@ -28,7 +28,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
 | EMAIL-004 | P0 | READY FOR LIVE TEST | Inbound mail is contact-matched only when a trusted `Authentication-Results` service reports DMARC pass. Failed, missing, or untrusted evidence is stored without contact linkage and logged as quarantined. | Parser fixtures pass. Configure `INBOUND_EMAIL_TRUSTED_AUTHSERV_IDS`, apply the migration, and complete live pass/fail/spoof tests before marking `DONE`. |
 | EMAIL-005 | P0 | READY FOR LIVE TEST | The production deployment definition pins one supplied tag across migration, web, and worker images; migration failure stops rollout and the worker has `unless-stopped`. The application now records heartbeat and eligible email queue depth/age in the shared database, with a failing health command for stale heartbeat or queue lag. | Schema validation, threshold tests, typecheck, focused Biome, and production build passed on 2026-10-05. Apply the heartbeat migration, wire the health command into production monitoring, deploy one pinned tag, and verify it live before marking `DONE`. |
 | EMAIL-006 | P1 | READY FOR LIVE TEST | Saving Scaleway settings invalidates prior verification. Sender verification now checks the exact project/domain through the Scaleway API and requires domain status `checked`; settings and inbox test actions submit a real test message to the signed-in administrator. | Provider-response and real-send-path regression tests, typecheck, focused Biome, and production build pass. Complete verification and controlled delivery with production credentials before marking `DONE`. |
-| EMAIL-007 | P1 | BLOCKED | Delivery and bounce states are not ingested; suppression and unsubscribe/consent policy are absent. | Signed webhook tests, suppression behavior, and documented sending policy. |
+| EMAIL-007 | P1 | READY FOR LIVE TEST | A fail-closed Scaleway SNS receiver validates the allowed topic, rotating signing certificate against Scaleway's configured trust chain, and message signature. Delivery/hard-failure states are replay-safe; hard bounces and spam suppress future batches. Admins can record unsubscribe/manual suppressions. Marketing use is explicitly blocked pending consent and one-click unsubscribe support. | Signed-envelope, rejection, replay, bounce, suppression, typecheck, focused Biome, and production-build checks pass. Configure SNS/trust secrets, apply the migration, and run live delivery/bounce/spam/suppression tests before marking `DONE`. |
 | EMAIL-008 | P1 | BLOCKED | Integration API and webhook secrets are stored in plaintext. | Independently rotatable encryption plus migration/rotation test. |
 | EMAIL-009 | P1 | BLOCKED | IMAP, inbox reply, queue, and access-review paths lack integration coverage. | Automated happy-path, mismatch, retry, UID reset, and access-boundary tests. |
 | EMAIL-010 | P1 | DECISION NEEDED | Attachments, `Reply-To`, and Sent-folder behavior are not implemented. | Product decision recorded; accepted behavior implemented and tested where required. |
@@ -42,7 +42,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
   Handlebars `require.extensions` warnings remain.
 - `yarn lint`: passed with one existing unused `toBigInt` warning in the inbound
   email service.
-- `yarn test`: 23/24 passed in the restricted sandbox; the isolated vCard test
+- `yarn test`: 24/25 passed in the restricted sandbox; the isolated vCard test
   passed outside the sandbox, confirming a subprocess restriction rather than a
   product failure.
 - No live IMAP, SMTP, Scaleway, DNS, bounce-webhook, migration, or deployed-worker
@@ -66,6 +66,11 @@ checklist has passed with a dedicated test mailbox and test recipients.
       threading, sender identity, duplicate protection, and failure recovery.
 - [ ] Send a controlled bulk batch and verify authorization, personalization,
       delivery events, bounce suppression, and history visibility.
+- [ ] Configure the Scaleway SNS topic allowlist and trust-chain secret, then
+      verify signed delivery, hard-bounce, spam, replay, and subscription events.
+- [ ] Confirm operators understand `docs/EMAIL_SENDING_POLICY.md`; keep
+      marketing/promotional sends disabled until consent and one-click
+      unsubscribe support are implemented.
 - [ ] Confirm SPF, DKIM, and DMARC for every production sender domain.
 - [ ] Record rollback steps and disable switches for inbox sync and sending.
 
@@ -131,6 +136,21 @@ checklist has passed with a dedicated test mailbox and test recipients.
   still need live proof.
 - Next implementation target: `EMAIL-007` delivery/bounce ingestion and sending
   policy.
+- Implemented the static portion of `EMAIL-007`. A public Scaleway SNS endpoint
+  verifies an exact topic allowlist, restricts certificate and subscription URLs
+  to the expected regional Scaleway hosts, validates the rotating leaf against
+  the configured long-term trust chain, and verifies the SNS signature before
+  parsing TEM events. Event IDs are persisted for replay safety.
+- Delivered messages move from `SENT` to `DELIVERED`; hard drops, missing
+  mailboxes, blocklist events, and spam move eligible recipients to `BOUNCED`
+  and add a team suppression. Batch counters are recalculated, future batches
+  skip suppressed addresses, and retries no longer requeue bounced recipients.
+- Added an admin suppression panel for unsubscribe and manual blocks plus
+  `docs/EMAIL_SENDING_POLICY.md`. Promotional/marketing use is explicitly out of
+  scope until explicit consent and a recipient-facing one-click unsubscribe flow
+  exist. Live SNS subscription, delivery, bounce, and suppression proof remains.
+- Next implementation target: `EMAIL-008` encryption and rotation of integration
+  secrets.
 
 ## Production worker deployment handoff
 

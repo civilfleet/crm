@@ -210,6 +210,11 @@ test("bulk email publishes its batch and complete recipient set atomically", asy
             name: "Ada",
             emails: [{ email: "ada@example.org" }],
           },
+          {
+            id: "contact-b",
+            name: "Blocked",
+            emails: [{ email: "blocked@example.org" }],
+          },
         ],
       },
       integrationConnection: {
@@ -220,6 +225,11 @@ test("bulk email publishes its batch and complete recipient set atomically", asy
           senderName: "CRM",
           isEnabled: true,
         }),
+      },
+      emailSuppression: {
+        findMany: async () => [
+          { email: "blocked@example.org", reason: "HARD_BOUNCE" },
+        ],
       },
       $transaction: async (
         callback: (tx: typeof transactionClient) => Promise<unknown>,
@@ -250,7 +260,7 @@ test("bulk email publishes its batch and complete recipient set atomically", asy
 
   const result = await service.sendMassEmailToContacts({
     teamId: "team-a",
-    contactIds: ["contact-a"],
+    contactIds: ["contact-a", "contact-b"],
     subject: "Update",
     html: "<p>Hello</p>",
     bccEmails: ["audit@example.org"],
@@ -266,17 +276,31 @@ test("bulk email publishes its batch and complete recipient set atomically", asy
       name: "Ada",
       status: "PENDING",
     },
+    {
+      batchId: "batch-a",
+      contactId: "contact-b",
+      email: "blocked@example.org",
+      name: "Blocked",
+      status: "SKIPPED",
+      errorMessage: "Email is suppressed (HARD_BOUNCE).",
+    },
   ]);
   assert.deepEqual(internalCopyData, [
     { batchId: "batch-a", email: "audit@example.org" },
   ]);
   assert.deepEqual(result, {
     batchId: "batch-a",
-    requested: 1,
+    requested: 2,
     sent: 0,
-    skipped: 0,
+    skipped: 1,
     failed: 0,
-    failures: [],
+    failures: [
+      {
+        contactId: "contact-b",
+        email: "blocked@example.org",
+        message: "Email is suppressed (HARD_BOUNCE).",
+      },
+    ],
   });
 });
 

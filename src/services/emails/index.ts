@@ -187,9 +187,7 @@ export const retryEmailBatch = async (
     const retryableRecipients = await tx.emailRecipient.updateMany({
       where: {
         batchId,
-        status: {
-          in: [EmailRecipientStatus.FAILED, EmailRecipientStatus.BOUNCED],
-        },
+        status: EmailRecipientStatus.FAILED,
       },
       data: {
         status: EmailRecipientStatus.PENDING,

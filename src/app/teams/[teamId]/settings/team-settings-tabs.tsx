@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import useSWR from "swr";
 import CreateEmailTemplate from "@/components/forms/create-email-template";
+import EmailSuppressions from "@/components/forms/email-suppressions";
 import EventRolesManager from "@/components/forms/event-roles-manager";
 import EventTypesManager from "@/components/forms/event-types-manager";
 import FormConfigurationManager from "@/components/forms/form-configuration-manager";
@@ -204,6 +205,7 @@ export default function TeamSettingsTabs({
         <InboundEmailInboxes teamId={teamId} />
         <KlaviyoIntegration teamId={teamId} />
         <ScalewayEmailIntegration teamId={teamId} />
+        <EmailSuppressions teamId={teamId} />
         <ZammadIntegration teamId={teamId} />
       </TabsContent>
     </Tabs>

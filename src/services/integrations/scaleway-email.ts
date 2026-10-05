@@ -855,10 +855,21 @@ export const sendMassEmailToContacts = async ({
         ? userName?.trim() || integration.senderName
         : integration.senderName,
   });
+  const contactEmails = contacts
+    .map((contact) => getPrimaryEmail(contact)?.trim().toLowerCase())
+    .filter((email): email is string => Boolean(email));
+  const suppressions = await prisma.emailSuppression.findMany({
+    where: { teamId, email: { in: contactEmails } },
+    select: { email: true, reason: true },
+  });
+  const suppressionByEmail = new Map(
+    suppressions.map((suppression) => [suppression.email, suppression.reason]),
+  );
   const failures: SendMassEmailResult["failures"] = [];
   const recipients = contacts.map((contact) => {
     const email = getPrimaryEmail(contact)?.trim().toLowerCase();
-    if (email) {
+    const suppressionReason = email ? suppressionByEmail.get(email) : null;
+    if (email && !suppressionReason) {
       return {
         contactId: contact.id,
         email,
@@ -867,16 +878,20 @@ export const sendMassEmailToContacts = async ({
       };
     }
 
+    const errorMessage = suppressionReason
+      ? `Email is suppressed (${suppressionReason}).`
+      : "Contact has no email address.";
     failures.push({
       contactId: contact.id,
-      message: "Contact has no email address.",
+      email,
+      message: errorMessage,
     });
     return {
       contactId: contact.id,
-      email: "missing-email",
+      email: email ?? "missing-email",
       name: contact.name,
       status: EmailRecipientStatus.SKIPPED,
-      errorMessage: "Contact has no email address.",
+      errorMessage,
     };
   });
   const skipped = failures.length;

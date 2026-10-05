@@ -133,6 +133,13 @@ The write interval can be changed with
 run this command as the worker container health check and alert on an unhealthy
 container.
 
+Scaleway delivery and bounce events are received at
+`/api/webhooks/scaleway-email`. Production must set the exact
+`SCALEWAY_EMAIL_SNS_TOPIC_ARNS` allowlist and either
+`SCALEWAY_SNS_TRUST_CHAIN_PEM` or its base64 variant before configuring the SNS
+subscription. See [docs/EMAIL_SENDING_POLICY.md](docs/EMAIL_SENDING_POLICY.md)
+for the sending boundary, suppression behavior, and rollout checks.
+
 To bootstrap an initial admin on a fresh database, set `BOOTSTRAP_ADMIN_EMAIL` and optionally `BOOTSTRAP_ADMIN_NAME`:
 
 ```bash

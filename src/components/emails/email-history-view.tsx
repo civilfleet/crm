@@ -82,7 +82,7 @@ const isFutureDate = (value?: string) => {
 const canRetryBatch = (batch: EmailHistoryBatch) =>
   (batch.status === "FAILED" || batch.status === "PARTIAL") &&
   batch.recipients.some((recipient) =>
-    ["FAILED", "BOUNCED", "PENDING"].includes(recipient.status),
+    ["FAILED", "PENDING"].includes(recipient.status),
   );
 
 const getBatchWorkerState = (batch: EmailHistoryBatch) => {
@@ -105,9 +105,7 @@ const getPendingRetryCount = (batch: EmailHistoryBatch) =>
   batch.recipients.filter((recipient) => recipient.status === "PENDING").length;
 
 const getFailedRetryCount = (batch: EmailHistoryBatch) =>
-  batch.recipients.filter((recipient) =>
-    ["FAILED", "BOUNCED"].includes(recipient.status),
-  ).length;
+  batch.recipients.filter((recipient) => recipient.status === "FAILED").length;
 
 const formatInternalCopyMode = (mode: string) =>
   INTERNAL_COPY_MODE_LABELS[mode as InternalCopyMode] ?? mode;
