@@ -697,64 +697,60 @@ export const sendMassEmailToContacts = async ({
         ? userName?.trim() || integration.senderName
         : integration.senderName,
   });
-  const batch = await prisma.emailBatch.create({
-    data: {
-      teamId,
-      provider: PrismaIntegrationProvider.SCALEWAY_TEM,
-      subject,
-      html,
-      text: stripHtml(html),
-      bccEmails: normalizedBccEmails,
-      internalCopyMode,
-      senderEmail: from.email,
-      senderName: from.name,
-      requestedCount: uniqueContactIds.length,
-      userId,
-      userName,
-    },
-  });
-
   const failures: SendMassEmailResult["failures"] = [];
-  let skipped = 0;
-
-  for (const contact of contacts) {
+  const recipients = contacts.map((contact) => {
     const email = getPrimaryEmail(contact)?.trim().toLowerCase();
     if (email) {
-      await prisma.emailRecipient.create({
-        data: {
-          batchId: batch.id,
-          contactId: contact.id,
-          email,
-          name: contact.name,
-          status: EmailRecipientStatus.PENDING,
-        },
-      });
-      continue;
+      return {
+        contactId: contact.id,
+        email,
+        name: contact.name,
+        status: EmailRecipientStatus.PENDING,
+      };
     }
 
-    skipped += 1;
-    await prisma.emailRecipient.create({
-      data: {
-        batchId: batch.id,
-        contactId: contact.id,
-        email: "missing-email",
-        name: contact.name,
-        status: EmailRecipientStatus.SKIPPED,
-        errorMessage: "Contact has no email address.",
-      },
-    });
     failures.push({
       contactId: contact.id,
       message: "Contact has no email address.",
     });
-  }
+    return {
+      contactId: contact.id,
+      email: "missing-email",
+      name: contact.name,
+      status: EmailRecipientStatus.SKIPPED,
+      errorMessage: "Contact has no email address.",
+    };
+  });
+  const skipped = failures.length;
 
-  if (skipped > 0) {
-    await prisma.emailBatch.update({
-      where: { id: batch.id },
-      data: { skippedCount: skipped },
+  const batch = await prisma.$transaction(async (tx) => {
+    const created = await tx.emailBatch.create({
+      data: {
+        teamId,
+        provider: PrismaIntegrationProvider.SCALEWAY_TEM,
+        subject,
+        html,
+        text: stripHtml(html),
+        bccEmails: normalizedBccEmails,
+        internalCopyMode,
+        senderEmail: from.email,
+        senderName: from.name,
+        requestedCount: uniqueContactIds.length,
+        skippedCount: skipped,
+        userId,
+        userName,
+      },
     });
-  }
+
+    await tx.emailRecipient.createMany({
+      data: recipients.map((recipient) => ({
+        batchId: created.id,
+        ...recipient,
+      })),
+    });
+
+    return created;
+  });
 
   return {
     batchId: batch.id,

@@ -23,7 +23,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
 | ID | Priority | Status | Issue | Completion evidence |
 | --- | --- | --- | --- | --- |
 | EMAIL-001 | P0 | DONE | Bulk send, history, retry, and internal-copy operations enforce contact and actor visibility at the service boundary. | Authorization regression tests, typecheck, focused Biome check, and production build passed on 2026-10-05. Live role-matrix smoke testing remains part of rollout. |
-| EMAIL-002 | P0 | BLOCKED | Batch and recipient creation is not atomic, so the worker can claim an incomplete batch. | Transaction-boundary test, typecheck, focused Biome check, and production build. |
+| EMAIL-002 | P0 | DONE | Batch and recipient creation is atomic so the worker cannot claim an incomplete batch. | Transaction-boundary test, typecheck, focused Biome check, and production build passed on 2026-10-05. |
 | EMAIL-003 | P0 | BLOCKED | Provider acceptance followed by a database failure can cause duplicate bulk emails or replies. Add an outbox/idempotency and reconciliation design. | Crash-window tests plus provider-level idempotency/reconciliation evidence. |
 | EMAIL-004 | P0 | BLOCKED | Inbound contact matching trusts the message `From` header without authentication-result policy. Quarantine or clearly isolate unauthenticated mail. | SPF/DKIM/DMARC fixture tests and a live spoof/failure test. |
 | EMAIL-005 | P0 | BLOCKED | The production worker definition is external to this repository and has not been verified. | Deployed worker, migrations, shared database/key, restart policy, heartbeat, and queue-lag checks verified live. |
@@ -78,4 +78,11 @@ checklist has passed with a dedicated test mailbox and test recipients.
   scoped to batches created by that user. Added focused authorization tests;
   typecheck, focused Biome, isolated/full tests, and the production build passed
   (the known sandbox-only vCard runner limitation was verified separately).
-- Next implementation target: `EMAIL-002` atomic batch and recipient creation.
+- Started `EMAIL-002` by moving batch and recipient publication into one database
+  transaction.
+- Completed `EMAIL-002`: the batch and its full recipient set are now committed
+  in one transaction, including skipped-recipient state. Added a transaction-
+  boundary regression test; typecheck, focused Biome, the full test set (subject
+  to the documented vCard sandbox limitation), and the production build passed.
+- Next implementation target: `EMAIL-003` provider-send idempotency and crash
+  recovery.

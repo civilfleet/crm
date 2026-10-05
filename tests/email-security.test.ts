@@ -131,6 +131,107 @@ test("bulk email restricts internal recipient reports to team administrators", a
   assert.equal(recipientReads, 0);
 });
 
+test("bulk email publishes its batch and complete recipient set atomically", async () => {
+  const writes: string[] = [];
+  let recipientData: Array<Record<string, unknown>> = [];
+  const transactionClient = {
+    emailBatch: {
+      create: async () => {
+        writes.push("batch");
+        return { id: "batch-a" };
+      },
+    },
+    emailRecipient: {
+      createMany: async (args: { data: Array<Record<string, unknown>> }) => {
+        writes.push("recipients");
+        recipientData = args.data;
+        return { count: args.data.length };
+      },
+    },
+  };
+  const service = loadModule<{
+    sendMassEmailToContacts: (input: {
+      teamId: string;
+      contactIds: string[];
+      subject: string;
+      html: string;
+      userId: string;
+    }) => Promise<{ batchId: string; requested: number }>;
+  }>("src/services/integrations/scaleway-email.ts", {
+    "@/constants/email": {
+      DEFAULT_INTERNAL_COPY_MODE: "summary",
+      INTERNAL_COPY_MODE_LABELS: { summary: "Summary only" },
+    },
+    "@/lib/logger": {},
+    "@/lib/prisma": {
+      eventRegistration: { findMany: async () => [] },
+      contact: {
+        findMany: async () => [
+          {
+            id: "contact-a",
+            name: "Ada",
+            emails: [{ email: "ada@example.org" }],
+          },
+        ],
+      },
+      integrationConnection: {
+        findUnique: async () => ({
+          apiKey: "secret",
+          defaultListId: "project",
+          senderEmail: "crm@example.org",
+          senderName: "CRM",
+          isEnabled: true,
+        }),
+      },
+      $transaction: async (
+        callback: (tx: typeof transactionClient) => Promise<unknown>,
+      ) => callback(transactionClient),
+    },
+    "@/services/contact-emails": {
+      getPrimaryEmail: (contact: { emails: Array<{ email: string }> }) =>
+        contact.emails[0]?.email ?? null,
+      primaryContactEmailSelect: {},
+    },
+    "@/services/contacts/access": {
+      getContactVisibility: async () => ({
+        where: { teamId: "team-a" },
+        userGroupIds: [],
+      }),
+    },
+    "@/services/teams/access": {
+      getTeamAdminAccess: async () => ({ allowed: false }),
+    },
+    "@/types": emailTypes,
+  });
+
+  const result = await service.sendMassEmailToContacts({
+    teamId: "team-a",
+    contactIds: ["contact-a"],
+    subject: "Update",
+    html: "<p>Hello</p>",
+    userId: "actor",
+  });
+
+  assert.deepEqual(writes, ["batch", "recipients"]);
+  assert.deepEqual(recipientData, [
+    {
+      batchId: "batch-a",
+      contactId: "contact-a",
+      email: "ada@example.org",
+      name: "Ada",
+      status: "PENDING",
+    },
+  ]);
+  assert.deepEqual(result, {
+    batchId: "batch-a",
+    requested: 1,
+    sent: 0,
+    skipped: 0,
+    failed: 0,
+    failures: [],
+  });
+});
+
 test("email history is scoped to the sender unless the viewer is an admin", async () => {
   const whereClauses: unknown[] = [];
   let isAdmin = false;
