@@ -1,25 +1,63 @@
-// Check if SMTP is configured
-const isSMTPConfigured =
-  process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS;
+import { getEmailConnectionTimeouts } from "@/lib/email-timeouts";
 
-const mailConfig = isSMTPConfigured
-  ? {
-      host: process.env.SMTP_HOST as string,
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === "true", // true for 465, false for other ports
-      auth: {
-        user: process.env.SMTP_USER as string,
-        pass: process.env.SMTP_PASS as string,
-      },
-    }
-  : {
-      // Fallback configuration (will fail if no provider is configured)
-      host: "localhost",
-      port: 25,
-      secure: false,
+type MailEnvironment = Partial<
+  Pick<
+    NodeJS.ProcessEnv,
+    | "NODE_ENV"
+    | "SMTP_HOST"
+    | "SMTP_PORT"
+    | "SMTP_SECURE"
+    | "SMTP_USER"
+    | "SMTP_PASS"
+    | "SMTP_FROM"
+  >
+>;
+
+const SMTP_KEYS = ["SMTP_HOST", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"] as const;
+
+export const resolveMailConfiguration = (env: MailEnvironment) => {
+  const configuredValues = SMTP_KEYS.filter((key) => env[key]?.trim());
+  const smtpRequired =
+    env.NODE_ENV === "production" || configuredValues.length > 0;
+
+  if (!smtpRequired) {
+    return {
+      mailProvider: "None" as const,
+      config: { host: "localhost", port: 25, secure: false },
     };
+  }
 
-// Export mail provider info for logging
-export const mailProvider = isSMTPConfigured ? "SMTP" : "None";
+  const missing = SMTP_KEYS.filter((key) => !env[key]?.trim());
+  if (missing.length > 0) {
+    throw new Error(
+      `Global SMTP configuration is incomplete; missing: ${missing.join(", ")}.`,
+    );
+  }
 
-export default mailConfig;
+  const port = env.SMTP_PORT?.trim() ? Number(env.SMTP_PORT) : 587;
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error("SMTP_PORT must be an integer between 1 and 65535.");
+  }
+  if (env.SMTP_SECURE && !["true", "false"].includes(env.SMTP_SECURE)) {
+    throw new Error('SMTP_SECURE must be either "true" or "false".');
+  }
+
+  return {
+    mailProvider: "SMTP" as const,
+    config: {
+      host: env.SMTP_HOST as string,
+      port,
+      secure: env.SMTP_SECURE === "true",
+      auth: {
+        user: env.SMTP_USER as string,
+        pass: env.SMTP_PASS as string,
+      },
+      ...getEmailConnectionTimeouts(),
+    },
+  };
+};
+
+const resolved = resolveMailConfiguration(process.env);
+
+export const mailProvider = resolved.mailProvider;
+export default resolved.config;

@@ -33,7 +33,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
 | EMAIL-009 | P1 | DONE | IMAP import/checkpoint behavior, inbox reply ambiguity, batch retry ownership, real outbound test dispatch, and access-review scoping have automated integration coverage. | Happy-path import, team mismatch, retry/uncertain delivery, UID reset, and access-boundary tests plus typecheck, focused Biome, and production build passed on 2026-10-05. |
 | EMAIL-010 | P1 | DECISION NEEDED | Attachments, `Reply-To`, and Sent-folder behavior are not implemented. | Product decision recorded; accepted behavior implemented and tested where required. |
 | EMAIL-011 | P1 | READY FOR LIVE TEST | Scaleway, Klaviyo, Zammad, IMAP, and inbox SMTP operations have configurable bounded deadlines. Worker health now fails on eligible Zammad queue lag and stale enabled-inbox syncs in addition to bulk-email queue lag. | Timeout configuration and health-threshold tests, schema validation, typecheck, focused Biome, and production build passed. Apply the heartbeat extension migration and verify timeout/lag alerts live before marking `DONE`. |
-| EMAIL-012 | P1 | BLOCKED | Global SMTP configuration does not fail fast even though it powers magic-link login and application email. | Startup validation and live magic-link/application-email smoke tests. |
+| EMAIL-012 | P1 | READY FOR LIVE TEST | Production startup rejects missing or invalid global SMTP host, credentials, sender, port, and TLS-mode configuration. Global SMTP also uses bounded connection, greeting, and socket deadlines. | Startup configuration tests, typecheck, focused Biome, and production build passed. Complete live magic-link and application-email smoke tests before marking `DONE`. |
 
 ## Baseline validation (2026-10-05)
 
@@ -181,6 +181,13 @@ checklist has passed with a dedicated test mailbox and test recipients.
   Live migration, deliberate timeout tests, and production alert proof remain.
 - Next implementation target: `EMAIL-012` global SMTP startup validation.
   `EMAIL-010` remains a product decision.
+- Implemented the static portion of `EMAIL-012`. Production no longer silently
+  falls back to localhost SMTP: missing host, username, password, or sender and
+  invalid port/TLS settings now fail during configuration loading. A completely
+  unconfigured development environment retains the local non-delivering
+  fallback. Live magic-link and application-email delivery proof remains.
+- Remaining implementation work is the `EMAIL-010` product decision; all other
+  unresolved items require controlled live rollout evidence.
 
 ## Production worker deployment handoff
 

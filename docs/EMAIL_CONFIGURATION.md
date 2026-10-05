@@ -8,7 +8,10 @@ The application uses SMTP (Simple Mail Transfer Protocol) for sending emails via
 
 ## Configuration
 
-The email provider is configured through environment variables. If SMTP is not configured, the application will fall back to `localhost:25` which will likely fail.
+The email provider is configured through environment variables. Production
+startup fails if the global SMTP settings are incomplete or invalid. A fully
+unconfigured development environment may still use the non-delivering local
+fallback.
 
 ## SMTP Configuration
 
@@ -32,7 +35,7 @@ SMTP_FROM="noreply@yourdomain.com"
 | `SMTP_SECURE` | No | false | Use SSL/TLS encryption |
 | `SMTP_USER` | Yes | - | SMTP username |
 | `SMTP_PASS` | Yes | - | SMTP password |
-| `SMTP_FROM` | No | SMTP_USER | Default sender email address |
+| `SMTP_FROM` | Yes | - | Default sender email address used by magic links and application mail |
 
 ## Common SMTP Providers
 
