@@ -17,6 +17,29 @@ test("production SMTP configuration fails fast when required values are missing"
   );
 });
 
+test("production builds do not require runtime SMTP secrets", () => {
+  assert.deepEqual(
+    resolveMailConfiguration({
+      NODE_ENV: "production",
+      NEXT_PHASE: "phase-production-build",
+    }),
+    {
+      mailProvider: "None",
+      config: { host: "localhost", port: 25, secure: false },
+    },
+  );
+
+  assert.throws(
+    () =>
+      resolveMailConfiguration({
+        NODE_ENV: "production",
+        NEXT_PHASE: "phase-production-build",
+        SMTP_HOST: "smtp.example.org",
+      }),
+    /SMTP_USER, SMTP_PASS, SMTP_FROM/,
+  );
+});
+
 test("SMTP configuration rejects invalid ports and security flags", () => {
   const complete = {
     NODE_ENV: "production",

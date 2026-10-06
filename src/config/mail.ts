@@ -1,9 +1,11 @@
 import { getEmailConnectionTimeouts } from "@/lib/email-timeouts";
+import { PHASE_PRODUCTION_BUILD } from "next/constants.js";
 
 type MailEnvironment = Partial<
   Pick<
     NodeJS.ProcessEnv,
     | "NODE_ENV"
+    | "NEXT_PHASE"
     | "SMTP_HOST"
     | "SMTP_PORT"
     | "SMTP_SECURE"
@@ -17,8 +19,10 @@ const SMTP_KEYS = ["SMTP_HOST", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"] as const;
 
 export const resolveMailConfiguration = (env: MailEnvironment) => {
   const configuredValues = SMTP_KEYS.filter((key) => env[key]?.trim());
+  const isProductionBuild = env.NEXT_PHASE === PHASE_PRODUCTION_BUILD;
   const smtpRequired =
-    env.NODE_ENV === "production" || configuredValues.length > 0;
+    (env.NODE_ENV === "production" && !isProductionBuild) ||
+    configuredValues.length > 0;
 
   if (!smtpRequired) {
     return {
