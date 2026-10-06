@@ -37,6 +37,7 @@ const MAX_RECIPIENTS = 100;
 const DEFAULT_RETRY_DELAY_SECONDS = 30;
 const MAX_RETRY_DELAY_SECONDS = 15 * 60;
 const SENDER_LABEL_MODES = ["default", "user"] as const;
+const MAX_SCALEWAY_API_MESSAGE_BYTES = 2 * 1024 * 1024;
 
 export type SenderLabelMode = (typeof SENDER_LABEL_MODES)[number];
 
@@ -44,6 +45,12 @@ type ScalewayEmailRecord = {
   id: string;
   message_id?: string;
   status?: string;
+};
+
+export type ScalewayEmailAttachment = {
+  name: string;
+  type: string;
+  content: string;
 };
 
 export class ScalewayEmailRejectedError extends Error {
@@ -220,6 +227,7 @@ const sendScalewayEmail = async ({
   text,
   html,
   additionalHeaders,
+  attachments,
 }: {
   apiKey: string;
   region: string;
@@ -230,7 +238,24 @@ const sendScalewayEmail = async ({
   text?: string;
   html: string;
   additionalHeaders?: Array<{ key: string; value: string }>;
+  attachments?: ScalewayEmailAttachment[];
 }) => {
+  const payload = JSON.stringify({
+    from,
+    to: [to],
+    subject,
+    text: text ?? stripHtml(html),
+    html,
+    project_id: projectId,
+    additional_headers: additionalHeaders,
+    attachments,
+  });
+  if (Buffer.byteLength(payload) > MAX_SCALEWAY_API_MESSAGE_BYTES) {
+    throw new ScalewayEmailConfigurationError(
+      "The complete Scaleway email exceeds the 2 MB API limit.",
+    );
+  }
+
   const response = await fetch(
     `https://api.scaleway.com/transactional-email/v1alpha1/regions/${region}/emails`,
     {
@@ -239,15 +264,7 @@ const sendScalewayEmail = async ({
         "Content-Type": "application/json",
         "X-Auth-Token": apiKey,
       },
-      body: JSON.stringify({
-        from,
-        to: [to],
-        subject,
-        text: text ?? stripHtml(html),
-        html,
-        project_id: projectId,
-        additional_headers: additionalHeaders,
-      }),
+      body: payload,
       signal: createEmailProviderAbortSignal(),
     },
   );
@@ -280,6 +297,7 @@ export const sendScalewayTransactionalEmail = async ({
   text,
   html,
   additionalHeaders,
+  attachments,
 }: {
   teamId: string;
   from: { email: string; name?: string };
@@ -288,6 +306,7 @@ export const sendScalewayTransactionalEmail = async ({
   text: string;
   html: string;
   additionalHeaders?: Array<{ key: string; value: string }>;
+  attachments?: ScalewayEmailAttachment[];
 }) => {
   const integration = await prisma.integrationConnection.findUnique({
     where: {
@@ -318,6 +337,7 @@ export const sendScalewayTransactionalEmail = async ({
     text,
     html,
     additionalHeaders,
+    attachments,
   });
 
   return {

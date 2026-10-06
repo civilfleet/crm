@@ -55,6 +55,7 @@ const getInboxInclude = (userId: string) =>
         outboundMode: true,
       },
     },
+    emailAttachments: true,
     inboundEmailMessages: {
       take: 1,
       select: {
@@ -63,9 +64,12 @@ const getInboxInclude = (userId: string) =>
         mailbox: true,
         fromEmail: true,
         fromName: true,
+        replyToEmail: true,
+        replyToName: true,
         rawHeaders: true,
         messageId: true,
         uid: true,
+        attachments: true,
         emailInbox: {
           select: {
             name: true,

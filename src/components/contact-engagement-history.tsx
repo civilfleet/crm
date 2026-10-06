@@ -16,6 +16,11 @@ import {
 } from "lucide-react";
 import React, { useState } from "react";
 import useSWR from "swr";
+import {
+  EmailAttachmentLinks,
+  EmailAttachmentUploader,
+  type PendingEmailAttachment,
+} from "@/components/email-attachments";
 import ContactEngagementForm from "@/components/forms/contact-engagement";
 import { Loader } from "@/components/helper/loader";
 import MentionText from "@/components/mention-text";
@@ -237,7 +242,7 @@ function SafeEmailHtmlFrame({ html }: { html: string }) {
     <div className="rounded-lg border shadow-sm bg-white">
       <iframe
         title="Inbound email HTML body"
-        sandbox=""
+        sandbox="allow-same-origin"
         referrerPolicy="no-referrer"
         className="h-96 w-full rounded-lg bg-white"
         srcDoc={html}
@@ -871,6 +876,11 @@ function EngagementRow({
           })()
         )}
 
+        <EmailAttachmentLinks
+          teamId={teamId}
+          attachments={engagement.attachments}
+        />
+
         {engagement.source === EngagementSource.TODO && (
           <div className="mt-2 flex flex-col gap-1">
             {engagement.assignedToUserName && (
@@ -920,6 +930,9 @@ export default function ContactEngagementHistory({
   const [replyMessage, setReplyMessage] = useState("");
   const [replySubject, setReplySubject] = useState("");
   const [isReplying, setIsReplying] = useState(false);
+  const [replyAttachments, setReplyAttachments] = useState<
+    PendingEmailAttachment[]
+  >([]);
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(
     () => new Set(),
   );
@@ -972,11 +985,14 @@ export default function ContactEngagementHistory({
         inboundEmailMessageId: engagement.inboundEmail.id,
         idempotencyKey: crypto.randomUUID(),
         from: engagement.inboundEmail.replyFromEmail,
-        to: engagement.inboundEmail.fromEmail,
+        to:
+          engagement.inboundEmail.replyToEmail ??
+          engagement.inboundEmail.fromEmail,
         subject: replySubject,
       });
       setReplySubject(replySubject);
       setReplyMessage("");
+      setReplyAttachments([]);
       return;
     }
 
@@ -991,6 +1007,7 @@ export default function ContactEngagementHistory({
     setReplyTarget(null);
     setReplyMessage("");
     setReplySubject("");
+    setReplyAttachments([]);
   };
 
   const handleReplySubmit = async () => {
@@ -1022,7 +1039,12 @@ export default function ContactEngagementHistory({
             subject: replySubject || undefined,
             contactId,
             ...(isInboxReply
-              ? { idempotencyKey: replyTarget.idempotencyKey }
+              ? {
+                  idempotencyKey: replyTarget.idempotencyKey,
+                  attachments: replyAttachments.map(({ pendingUploadId }) => ({
+                    pendingUploadId,
+                  })),
+                }
               : {}),
           }),
         },
@@ -1274,15 +1296,33 @@ export default function ContactEngagementHistory({
           </DialogHeader>
           <div className="space-y-4">
             {replyTarget?.kind === "inbox" ? (
-              <div className="grid gap-3 rounded-md border bg-muted/30 p-3 text-sm sm:grid-cols-2">
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">From</p>
-                  <p className="truncate font-medium">{replyTarget.from}</p>
+              <div className="space-y-2 rounded-md border bg-muted/30 p-3 text-sm">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">From</p>
+                    <p className="truncate font-medium">{replyTarget.from}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">To</p>
+                    <p className="truncate font-medium">{replyTarget.to}</p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">To</p>
-                  <p className="truncate font-medium">{replyTarget.to}</p>
-                </div>
+                {replyTarget.to &&
+                engagements.find(
+                  (item) =>
+                    item.inboundEmail?.id === replyTarget.inboundEmailMessageId,
+                )?.inboundEmail?.replyToEmail &&
+                replyTarget.to !==
+                  engagements.find(
+                    (item) =>
+                      item.inboundEmail?.id ===
+                      replyTarget.inboundEmailMessageId,
+                  )?.inboundEmail?.fromEmail ? (
+                  <p className="text-xs text-amber-700">
+                    This reply will use the sender-provided Reply-To address,
+                    which differs from From.
+                  </p>
+                ) : null}
               </div>
             ) : null}
             <div className="space-y-2">
@@ -1294,6 +1334,15 @@ export default function ContactEngagementHistory({
                 placeholder="Subject"
               />
             </div>
+            {replyTarget?.kind === "inbox" && replyTarget.inboxId ? (
+              <EmailAttachmentUploader
+                teamId={teamId}
+                inboxId={replyTarget.inboxId}
+                attachments={replyAttachments}
+                onChange={setReplyAttachments}
+                disabled={isReplying}
+              />
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor="email-reply-message">Message</Label>
               <Textarea

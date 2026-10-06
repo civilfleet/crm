@@ -31,7 +31,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
 | EMAIL-007 | P1 | READY FOR LIVE TEST | A fail-closed Scaleway SNS receiver validates the allowed topic, rotating signing certificate against Scaleway's configured trust chain, and message signature. Delivery/hard-failure states are replay-safe; hard bounces and spam suppress future batches. Admins can record unsubscribe/manual suppressions. Marketing use is explicitly blocked pending consent and one-click unsubscribe support. | Signed-envelope, rejection, replay, bounce, suppression, typecheck, focused Biome, and production-build checks pass. Configure SNS/trust secrets, apply the migration, and run live delivery/bounce/spam/suppression tests before marking `DONE`. |
 | EMAIL-008 | P1 | READY FOR LIVE TEST | Scaleway, Klaviyo, and Zammad API keys plus the Zammad webhook secret are encrypted at rest with an independent, versioned AES-256-GCM keyring. Legacy plaintext is migration-compatible and the rotation command rewraps all secrets atomically. | Encryption, tamper, plaintext-compatibility, and old-to-new-key rotation tests, typecheck, focused Biome, and production build passed. Configure the production keyring, run the transactional rotation, and smoke-test every integration before marking `DONE`. |
 | EMAIL-009 | P1 | DONE | IMAP import/checkpoint behavior, inbox reply ambiguity, batch retry ownership, real outbound test dispatch, and access-review scoping have automated integration coverage. | Happy-path import, team mismatch, retry/uncertain delivery, UID reset, and access-boundary tests plus typecheck, focused Biome, and production build passed on 2026-10-05. |
-| EMAIL-010 | P1 | DECISION NEEDED | Attachments, `Reply-To`, and Sent-folder behavior are not implemented. | Product decision recorded; accepted behavior implemented and tested where required. |
+| EMAIL-010 | P1 | READY FOR LIVE TEST | Inbound and reply attachments use private storage, authenticated downloads, secure global blocklist defaults, inline safe raster images, provider-specific limits, and retry-safe IMAP checkpoints. Replies honor the first valid `Reply-To` with a visible warning. Sent replies remain CRM-only. | Migration/schema validation, attachment-policy, storage-failure, `Reply-To`, idempotency/security, provider, typecheck, focused Biome, and production-build checks pass. Apply the migration and complete live IMAP/S3/SMTP/Scaleway attachment tests before marking `DONE`. |
 | EMAIL-011 | P1 | READY FOR LIVE TEST | Scaleway, Klaviyo, Zammad, IMAP, and inbox SMTP operations have configurable bounded deadlines. Worker health now fails on eligible Zammad queue lag and stale enabled-inbox syncs in addition to bulk-email queue lag. | Timeout configuration and health-threshold tests, schema validation, typecheck, focused Biome, and production build passed. Apply the heartbeat extension migration and verify timeout/lag alerts live before marking `DONE`. |
 | EMAIL-012 | P1 | READY FOR LIVE TEST | Production startup rejects missing or invalid global SMTP host, credentials, sender, port, and TLS-mode configuration. Global SMTP also uses bounded connection, greeting, and socket deadlines. | Startup configuration tests, typecheck, focused Biome, and production build passed. Complete live magic-link and application-email smoke tests before marking `DONE`. |
 
@@ -66,8 +66,12 @@ checklist has passed with a dedicated test mailbox and test recipients.
       orders sender-injected Authentication-Results headers.
 - [ ] Test authenticated inbound mail, failed-authentication mail, UID replay,
       checkpoint reset, HTML sanitization, and access-review behavior.
+- [ ] Test allowed, blocked, inline, and oversized inbound attachments; confirm
+      every manual inbound download warns and an S3 failure retries the same UID.
 - [ ] Send controlled replies through each enabled outbound mode and verify
       threading, sender identity, duplicate protection, and failure recovery.
+- [ ] Verify differing `Reply-To` display/delivery plus 10 MiB per-file, 25 MiB
+      SMTP-message, and 2 MiB Scaleway-payload attachment boundaries live.
 - [ ] Send a controlled bulk batch and verify authorization, personalization,
       delivery events, bounce suppression, and history visibility.
 - [ ] Configure the Scaleway SNS topic allowlist and trust-chain secret, then
@@ -179,15 +183,27 @@ checklist has passed with a dedicated test mailbox and test recipients.
 - Extended the durable worker heartbeat with eligible Zammad queue depth/age and
   enabled-inbox sync age. The health command now fails for either new lag class.
   Live migration, deliberate timeout tests, and production alert proof remain.
-- Next implementation target: `EMAIL-012` global SMTP startup validation.
-  `EMAIL-010` remains a product decision.
+- Next implementation target was `EMAIL-012` global SMTP startup validation;
+  the `EMAIL-010` decisions were finalized afterward.
 - Implemented the static portion of `EMAIL-012`. Production no longer silently
   falls back to localhost SMTP: missing host, username, password, or sender and
   invalid port/TLS settings now fail during configuration loading. A completely
   unconfigured development environment retains the local non-delivering
   fallback. Live magic-link and application-email delivery proof remains.
-- Remaining implementation work is the `EMAIL-010` product decision; all other
-  unresolved items require controlled live rollout evidence.
+- Completed the static portion of `EMAIL-010`. Inbound MIME attachments are
+  stored in private object storage with deterministic retry keys; blocked types
+  remain visible as blocked metadata, safe CID raster images render through an
+  authenticated route, and every manual inbound download requires a malware
+  warning acknowledgement. Storage failure does not advance the UID checkpoint.
+- Reply attachments use scoped pending uploads, become CRM attachment records in
+  the same transaction as sent history, and participate in the idempotency hash.
+  SMTP enforces 10 MiB per file and a 25 MiB encoded-message limit; Scaleway
+  enforces its supported MIME set and 2 MiB encoded API payload. Both cap replies
+  at 10 attachments.
+- The first valid `Reply-To` is stored separately from the authenticated `From`
+  identity and used by the server, with a warning in both reply interfaces when
+  they differ. Sent replies remain CRM-only by product decision.
+- Remaining unresolved items require controlled live rollout evidence.
 
 ## Production worker deployment handoff
 

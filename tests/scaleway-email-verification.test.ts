@@ -103,6 +103,11 @@ test("inbox outbound test submits a real Scaleway delivery", async () => {
     "@/services/email-delivery-errors": {
       EmailDeliveryUncertainError: class extends Error {},
     },
+    "@/services/file/s3-service": {
+      getStoredFile: async () => ({ body: Buffer.alloc(0) }),
+      getStoredFileMetadata: async () => ({ sizeBytes: 1 }),
+      storeFileAtKey: async () => undefined,
+    },
     "@/services/integrations/scaleway-email": {
       ScalewayEmailConfigurationError: class extends Error {},
       ScalewayEmailRejectedError: class extends Error {},
@@ -116,6 +121,16 @@ test("inbox outbound test submits a real Scaleway delivery", async () => {
     "@/services/system-logs": {},
     "@/types": { ContactEmailKind: {} },
     "./authentication": { parseInboundAuthentication: () => ({}) },
+    "./attachments": {
+      getInboundMessageByteLimit: () => 100 * 1024 * 1024,
+      isEmailAttachmentBlocked: () => false,
+      MAX_EMAIL_ATTACHMENT_BYTES: 10 * 1024 * 1024,
+      MAX_EMAIL_ATTACHMENT_COUNT: 10,
+      MAX_SMTP_MESSAGE_BYTES: 25 * 1024 * 1024,
+      SAFE_INLINE_IMAGE_MIME_TYPES: new Set(),
+      sanitizeAttachmentFileName: (value?: string) => value ?? "attachment",
+      SCALEWAY_ATTACHMENT_MIME_TYPES: new Set(),
+    },
     "./reply-helpers": {
       escapeEmailHtml: (value: string) => value,
       getStoredReferences: () => [],
@@ -123,6 +138,8 @@ test("inbox outbound test submits a real Scaleway delivery", async () => {
     },
     "@prisma/client": {
       ContactAccessReviewStatus: {},
+      EmailAttachmentDirection: { INBOUND: "INBOUND", OUTBOUND: "OUTBOUND" },
+      EmailAttachmentStatus: { AVAILABLE: "AVAILABLE", BLOCKED: "BLOCKED" },
       EmailInboxOutboundMode: {
         DISABLED: "DISABLED",
         SMTP: "SMTP",

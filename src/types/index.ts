@@ -390,6 +390,15 @@ export interface ContactEngagement {
     outboundMode: "DISABLED" | "SMTP" | "SCALEWAY";
   };
   replyToEngagementId?: string;
+  attachments?: Array<{
+    id: string;
+    fileName: string;
+    contentType: string;
+    sizeBytes: number;
+    status: "AVAILABLE" | "BLOCKED" | "OMITTED";
+    direction: "INBOUND" | "OUTBOUND";
+    inline: boolean;
+  }>;
   inboundEmail?: {
     id: string;
     emailInboxId: string;
@@ -400,6 +409,8 @@ export interface ContactEngagement {
     mailbox: string;
     fromEmail: string;
     fromName?: string;
+    replyToEmail?: string;
+    replyToName?: string;
     receivedAtEmail?: string;
     messageId?: string;
     uid?: string;

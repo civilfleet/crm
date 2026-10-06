@@ -537,6 +537,7 @@ test("inbox reply retries cannot resend an uncertain dispatch", async () => {
     engagement: null,
   };
   let providerCalls = 0;
+  let providerRecipient: unknown;
   class MockUncertainError extends Error {}
   class MockRejectedError extends Error {}
   class MockConfigurationError extends Error {}
@@ -550,6 +551,8 @@ test("inbox reply retries cannot resend an uncertain dispatch", async () => {
         engagementId: "engagement-inbound",
         fromEmail: "sender@example.org",
         fromName: "Sender",
+        replyToEmail: "replies@example.net",
+        replyToName: "Reply desk",
         subject: "Question",
         messageId: "<message@example.org>",
         rawHeaders: {},
@@ -605,11 +608,19 @@ test("inbox reply retries cannot resend an uncertain dispatch", async () => {
     "@/services/email-delivery-errors": {
       EmailDeliveryUncertainError: MockUncertainError,
     },
+    "@/services/file/s3-service": {
+      getStoredFile: async () => ({ body: Buffer.alloc(0) }),
+      getStoredFileMetadata: async () => ({ sizeBytes: 1 }),
+      storeFileAtKey: async () => undefined,
+    },
     "@/services/integrations/scaleway-email": {
       ScalewayEmailConfigurationError: MockConfigurationError,
       ScalewayEmailRejectedError: MockRejectedError,
-      sendScalewayTransactionalEmail: async () => {
+      sendScalewayTransactionalEmail: async (
+        input: Record<string, unknown>,
+      ) => {
         providerCalls += 1;
+        providerRecipient = input.to;
         return { id: "provider-a" };
       },
     },
@@ -626,8 +637,20 @@ test("inbox reply retries cannot resend an uncertain dispatch", async () => {
         reason: "test",
       }),
     },
+    "./attachments": {
+      getInboundMessageByteLimit: () => 100 * 1024 * 1024,
+      isEmailAttachmentBlocked: () => false,
+      MAX_EMAIL_ATTACHMENT_BYTES: 10 * 1024 * 1024,
+      MAX_EMAIL_ATTACHMENT_COUNT: 10,
+      MAX_SMTP_MESSAGE_BYTES: 25 * 1024 * 1024,
+      SAFE_INLINE_IMAGE_MIME_TYPES: new Set(),
+      sanitizeAttachmentFileName: (value?: string) => value ?? "attachment",
+      SCALEWAY_ATTACHMENT_MIME_TYPES: new Set(),
+    },
     "@prisma/client": {
       ContactAccessReviewStatus: {},
+      EmailAttachmentDirection: { INBOUND: "INBOUND", OUTBOUND: "OUTBOUND" },
+      EmailAttachmentStatus: { AVAILABLE: "AVAILABLE", BLOCKED: "BLOCKED" },
       EmailInboxOutboundMode: {
         DISABLED: "DISABLED",
         SMTP: "SMTP",
@@ -664,4 +687,8 @@ test("inbox reply retries cannot resend an uncertain dispatch", async () => {
   assert.equal(dispatch.status, replyStatuses.DISPATCHING);
   await assert.rejects(service.replyToInboundEmail(input), MockUncertainError);
   assert.equal(providerCalls, 1);
+  assert.deepEqual(providerRecipient, {
+    email: "replies@example.net",
+    name: "Reply desk",
+  });
 });

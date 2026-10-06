@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import {
   ContactAccessReviewStatus,
   type ContactEngagement,
+  EmailAttachmentDirection,
+  EmailAttachmentStatus,
   EmailInboxOutboundMode,
   type EmailReplyDispatch,
   EmailReplyDispatchStatus,
@@ -32,12 +34,26 @@ import {
 } from "@/services/contacts";
 import { EmailDeliveryUncertainError } from "@/services/email-delivery-errors";
 import {
+  getStoredFile,
+  getStoredFileMetadata,
+  storeFileAtKey,
+} from "@/services/file/s3-service";
+import {
   ScalewayEmailConfigurationError,
   ScalewayEmailRejectedError,
   sendScalewayTransactionalEmail,
 } from "@/services/integrations/scaleway-email";
 import { recordSystemLog } from "@/services/system-logs";
 import { ContactEmailKind } from "@/types";
+import {
+  getInboundMessageByteLimit,
+  isEmailAttachmentBlocked,
+  MAX_EMAIL_ATTACHMENT_BYTES,
+  MAX_EMAIL_ATTACHMENT_COUNT,
+  MAX_SMTP_MESSAGE_BYTES,
+  SCALEWAY_ATTACHMENT_MIME_TYPES,
+  sanitizeAttachmentFileName,
+} from "./attachments";
 import { parseInboundAuthentication } from "./authentication";
 import {
   escapeEmailHtml,
@@ -49,6 +65,25 @@ const DEFAULT_INBOX_SYNC_LIMIT = 25;
 const DEFAULT_INBOX_LOCK_MS = 5 * 60 * 1000;
 const IMAP_EXTERNAL_SOURCE = "IMAP";
 const INBOUND_EMAIL_ACCESS_REVIEW_SOURCE = "INBOUND_EMAIL";
+
+type ReplyAttachment = {
+  pendingUploadId: string;
+};
+
+class EmailReplyValidationError extends Error {}
+
+const normalizeContentId = (value?: string | null) =>
+  value?.trim().replace(/^<|>$/g, "") || null;
+
+const resolveReplyAddress = (parsed: ParsedMail) => {
+  const replyTo = parsed.replyTo?.value.find((address) =>
+    Boolean(normalizeEmail(address.address)),
+  );
+  return {
+    email: normalizeEmail(replyTo?.address),
+    name: truncate(replyTo?.name, 255),
+  };
+};
 
 const getTrustedAuthenticationServices = () =>
   (process.env.INBOUND_EMAIL_TRUSTED_AUTHSERV_IDS ?? "")
@@ -703,6 +738,85 @@ export const recoverStaleEmailReplyDispatches = async (
   });
 };
 
+const loadReplyAttachments = async ({
+  attachments,
+  teamId,
+  userId,
+  outboundMode,
+}: {
+  attachments: ReplyAttachment[];
+  teamId: string;
+  userId: string;
+  outboundMode: EmailInboxOutboundMode;
+}) => {
+  if (attachments.length > MAX_EMAIL_ATTACHMENT_COUNT) {
+    throw new Error(
+      `A reply can include at most ${MAX_EMAIL_ATTACHMENT_COUNT} attachments.`,
+    );
+  }
+  const ids = attachments.map((attachment) => attachment.pendingUploadId);
+  if (new Set(ids).size !== ids.length) {
+    throw new Error("The same attachment cannot be included more than once.");
+  }
+  if (ids.length === 0) return [];
+
+  const pending = await prisma.pendingUpload.findMany({
+    where: {
+      id: { in: ids },
+      teamId,
+      userId,
+      consumedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+  });
+  const byId = new Map(pending.map((upload) => [upload.id, upload]));
+  const loaded = [];
+  for (const id of ids) {
+    const upload = byId.get(id);
+    if (!upload)
+      throw new Error("One or more reply attachments are no longer available.");
+    const fileName = sanitizeAttachmentFileName(upload.originalName);
+    const metadata = await getStoredFileMetadata(upload.key);
+    const contentType = (
+      metadata.contentType ||
+      upload.contentType ||
+      "application/octet-stream"
+    )
+      .split(";")[0]
+      .trim()
+      .toLowerCase();
+    if (
+      !metadata.sizeBytes ||
+      metadata.sizeBytes > MAX_EMAIL_ATTACHMENT_BYTES
+    ) {
+      throw new Error(
+        `${fileName} is empty or exceeds the 10 MB per-file limit.`,
+      );
+    }
+    if (isEmailAttachmentBlocked(fileName, contentType)) {
+      throw new Error(`${fileName} is blocked by the email attachment policy.`);
+    }
+    if (
+      outboundMode === EmailInboxOutboundMode.SCALEWAY &&
+      !SCALEWAY_ATTACHMENT_MIME_TYPES.has(contentType)
+    ) {
+      throw new Error(
+        `${fileName} is not supported by Scaleway Transactional Email.`,
+      );
+    }
+    const stored = await getStoredFile(upload.key);
+    loaded.push({
+      pendingUploadId: upload.id,
+      storageKey: upload.key,
+      fileName,
+      contentType,
+      sizeBytes: metadata.sizeBytes,
+      content: stored.body,
+    });
+  }
+  return loaded;
+};
+
 export const replyToInboundEmail = async ({
   teamId,
   inboxId,
@@ -714,6 +828,7 @@ export const replyToInboundEmail = async ({
   userName,
   roles,
   isTeamAdmin,
+  attachments = [],
 }: {
   teamId: string;
   inboxId: string;
@@ -725,6 +840,7 @@ export const replyToInboundEmail = async ({
   userName?: string;
   roles: import("@/types").Roles[];
   isTeamAdmin: boolean;
+  attachments?: ReplyAttachment[];
 }) => {
   const inbound = await prisma.inboundEmailMessage.findFirst({
     where: { id: inboundEmailMessageId, teamId, emailInboxId: inboxId },
@@ -771,6 +887,10 @@ export const replyToInboundEmail = async ({
 
   const normalizedSubject = normalizeReplySubject(subject ?? inbound.subject);
   const normalizedMessage = message.trim();
+  const recipientEmail = inbound.replyToEmail ?? inbound.fromEmail;
+  const recipientName = inbound.replyToEmail
+    ? (inbound.replyToName ?? "")
+    : (inbound.fromName ?? "");
   const requestHash = crypto
     .createHash("sha256")
     .update(
@@ -779,8 +899,9 @@ export const replyToInboundEmail = async ({
         subject: normalizedSubject,
         message: normalizedMessage,
         from: inbox.replyFromEmail,
-        to: inbound.fromEmail,
+        to: recipientEmail,
         transport: inbox.outboundMode,
+        attachments: attachments.map(({ pendingUploadId }) => pendingUploadId),
       }),
     )
     .digest("hex");
@@ -830,6 +951,13 @@ export const replyToInboundEmail = async ({
     );
   }
 
+  const loadedAttachments = await loadReplyAttachments({
+    attachments,
+    teamId,
+    userId,
+    outboundMode: inbox.outboundMode,
+  });
+
   const claimed = await prisma.emailReplyDispatch.updateMany({
     where: {
       id: dispatch.id,
@@ -864,18 +992,35 @@ export const replyToInboundEmail = async ({
     let providerMessageId: string | undefined;
     let externalSource: string;
     if (inbox.outboundMode === EmailInboxOutboundMode.SMTP) {
-      const info = await getSmtpTransport(inbox).sendMail({
+      const mailOptions = {
         from: {
           address: inbox.replyFromEmail,
           name: inbox.replyFromName ?? "",
         },
-        to: { address: inbound.fromEmail, name: inbound.fromName ?? "" },
+        to: { address: recipientEmail, name: recipientName },
         subject: normalizedSubject,
         text: normalizedMessage,
         html: `<p>${escapeEmailHtml(normalizedMessage)}</p>`,
         inReplyTo: inbound.messageId ?? undefined,
         references: references.length ? references : undefined,
-      });
+        attachments: loadedAttachments.map((attachment) => ({
+          filename: attachment.fileName,
+          contentType: attachment.contentType,
+          content: attachment.content,
+        })),
+      };
+      const compiled = await nodemailer
+        .createTransport({ streamTransport: true, buffer: true })
+        .sendMail(mailOptions);
+      if (
+        !Buffer.isBuffer(compiled.message) ||
+        compiled.message.length > MAX_SMTP_MESSAGE_BYTES
+      ) {
+        throw new EmailReplyValidationError(
+          "The complete encoded SMTP message exceeds the 25 MB limit.",
+        );
+      }
+      const info = await getSmtpTransport(inbox).sendMail(mailOptions);
       providerMessageId = info.messageId;
       externalSource = "INBOX_SMTP";
     } else {
@@ -885,11 +1030,16 @@ export const replyToInboundEmail = async ({
           email: inbox.replyFromEmail,
           name: inbox.replyFromName ?? undefined,
         },
-        to: { email: inbound.fromEmail, name: inbound.fromName ?? undefined },
+        to: { email: recipientEmail, name: recipientName || undefined },
         subject: normalizedSubject,
         text: normalizedMessage,
         html: `<p>${escapeEmailHtml(normalizedMessage)}</p>`,
         additionalHeaders: threadHeaders,
+        attachments: loadedAttachments.map((attachment) => ({
+          name: attachment.fileName,
+          type: attachment.contentType,
+          content: attachment.content.toString("base64"),
+        })),
       });
       providerMessageId = result.messageId ?? result.id;
       externalSource = "INBOX_SCALEWAY";
@@ -931,6 +1081,34 @@ export const replyToInboundEmail = async ({
       if (updated.count !== 1) {
         throw new Error(`Reply dispatch ${dispatch.id} lost its claim.`);
       }
+      if (loadedAttachments.length > 0) {
+        await tx.emailAttachment.createMany({
+          data: loadedAttachments.map((attachment) => ({
+            teamId,
+            engagementId: created.id,
+            direction: EmailAttachmentDirection.OUTBOUND,
+            status: EmailAttachmentStatus.AVAILABLE,
+            storageKey: attachment.storageKey,
+            fileName: attachment.fileName,
+            contentType: attachment.contentType,
+            sizeBytes: attachment.sizeBytes,
+            disposition: "attachment",
+          })),
+        });
+        await tx.pendingUpload.updateMany({
+          where: {
+            id: {
+              in: loadedAttachments.map(
+                (attachment) => attachment.pendingUploadId,
+              ),
+            },
+            teamId,
+            userId,
+            consumedAt: null,
+          },
+          data: { consumedAt: sentAt },
+        });
+      }
       return created;
     });
 
@@ -955,7 +1133,8 @@ export const replyToInboundEmail = async ({
     if (!providerAccepted) {
       const definitiveFailure =
         error instanceof ScalewayEmailRejectedError ||
-        error instanceof ScalewayEmailConfigurationError;
+        error instanceof ScalewayEmailConfigurationError ||
+        error instanceof EmailReplyValidationError;
       await prisma.emailReplyDispatch.updateMany({
         where: {
           id: dispatch.id,
@@ -1021,9 +1200,10 @@ const getMessageBody = (mail: ParsedMail) => {
         table: ["border", "cellpadding", "cellspacing"],
         th: ["colspan", "rowspan"],
         td: ["colspan", "rowspan"],
+        img: ["src", "alt", "width", "height"],
       },
-      allowedSchemes: ["http", "https", "mailto"],
-      allowedSchemesAppliedToAttributes: ["href"],
+      allowedSchemes: ["http", "https", "mailto", "cid"],
+      allowedSchemesAppliedToAttributes: ["href", "src"],
       transformTags: {
         a: sanitizeHtml.simpleTransform("a", {
           rel: "noopener noreferrer",
@@ -1178,6 +1358,68 @@ const importMessage = async ({
   const receivedAt = parsed.date ?? new Date();
   const externalId = buildExternalId(inbox.id, uidValidity, uid);
   const message = getMessageBody(parsed) || "(No message body)";
+  const inboundKey = {
+    emailInboxId_mailbox_uidValidity_uid: {
+      emailInboxId: inbox.id,
+      mailbox: inbox.mailbox,
+      uidValidity,
+      uid,
+    },
+  };
+  const parsedAttachments = parsed.attachments ?? [];
+  const existingInbound = parsedAttachments.length
+    ? await prisma.inboundEmailMessage.findUnique({
+        where: inboundKey,
+        select: { id: true, engagementId: true, contactId: true },
+      })
+    : null;
+  if (existingInbound) {
+    return {
+      imported: false as const,
+      reason: "already-imported" as const,
+      contactId: existingInbound.contactId,
+      needsAccessReview: false,
+      fromEmail,
+      inboundId: existingInbound.id,
+      engagementId: existingInbound.engagementId,
+      alreadyImported: true,
+    };
+  }
+  const inboundId = crypto.randomUUID();
+  const replyTo = resolveReplyAddress(parsed);
+  const attachmentRecords: Prisma.EmailAttachmentCreateManyInput[] = [];
+  for (const [index, attachment] of parsedAttachments.entries()) {
+    const fileName = sanitizeAttachmentFileName(attachment.filename);
+    const contentType = (attachment.contentType || "application/octet-stream")
+      .split(";")[0]
+      .trim()
+      .toLowerCase();
+    const blocked = isEmailAttachmentBlocked(fileName, contentType);
+    const storageKey = blocked
+      ? null
+      : `email-attachments/inbound/${inbox.teamId}/${inbox.id}/${uidValidity.toString()}/${uid.toString()}/${index}-${fileName}`;
+    if (storageKey) {
+      await storeFileAtKey({
+        key: storageKey,
+        body: attachment.content,
+        fileType: contentType,
+      });
+    }
+    attachmentRecords.push({
+      teamId: inbox.teamId,
+      inboundEmailMessageId: inboundId,
+      direction: EmailAttachmentDirection.INBOUND,
+      status: blocked
+        ? EmailAttachmentStatus.BLOCKED
+        : EmailAttachmentStatus.AVAILABLE,
+      storageKey,
+      fileName,
+      contentType,
+      sizeBytes: attachment.size,
+      contentId: normalizeContentId(attachment.contentId),
+      disposition: truncate(attachment.contentDisposition, 32),
+    });
+  }
   const authentication = parseInboundAuthentication(
     parsed.headerLines,
     getTrustedAuthenticationServices(),
@@ -1215,14 +1457,6 @@ const importMessage = async ({
         };
 
   const result = await prisma.$transaction(async (tx) => {
-    const inboundKey = {
-      emailInboxId_mailbox_uidValidity_uid: {
-        emailInboxId: inbox.id,
-        mailbox: inbox.mailbox,
-        uidValidity,
-        uid,
-      },
-    };
     let inbound = await tx.inboundEmailMessage.findUnique({
       where: inboundKey,
       select: { id: true, engagementId: true },
@@ -1232,6 +1466,7 @@ const importMessage = async ({
     if (!inbound) {
       inbound = await tx.inboundEmailMessage.create({
         data: {
+          id: inboundId,
           teamId: inbox.teamId,
           groupId: inbox.groupId,
           emailInboxId: inbox.id,
@@ -1241,6 +1476,8 @@ const importMessage = async ({
           messageId: truncate(parsed.messageId ?? undefined, 500),
           fromEmail,
           fromName: truncate(from?.name, 255),
+          replyToEmail: replyTo.email,
+          replyToName: replyTo.name,
           subject: truncate(parsed.subject ?? undefined, 500),
           body: message,
           receivedAt,
@@ -1251,6 +1488,9 @@ const importMessage = async ({
         },
         select: { id: true, engagementId: true },
       });
+      if (attachmentRecords.length > 0) {
+        await tx.emailAttachment.createMany({ data: attachmentRecords });
+      }
     }
 
     if (alreadyImported) {
@@ -1415,6 +1655,55 @@ const importMessage = async ({
     fromEmail,
     ...result,
   };
+};
+
+const quarantineOversizedMessage = async ({
+  inbox,
+  uid,
+  uidValidity,
+  sizeBytes,
+}: {
+  inbox: Prisma.EmailInboxGetPayload<Record<string, never>>;
+  uid: bigint;
+  uidValidity: bigint;
+  sizeBytes: number;
+}) => {
+  const message = await prisma.inboundEmailMessage.upsert({
+    where: {
+      emailInboxId_mailbox_uidValidity_uid: {
+        emailInboxId: inbox.id,
+        mailbox: inbox.mailbox,
+        uidValidity,
+        uid,
+      },
+    },
+    update: {},
+    create: {
+      teamId: inbox.teamId,
+      groupId: inbox.groupId,
+      emailInboxId: inbox.id,
+      mailbox: inbox.mailbox,
+      uidValidity,
+      uid,
+      fromEmail: "unparsed-oversized-message@invalid",
+      subject: "Oversized inbound email quarantined",
+      body: "This message exceeded the configured emergency parsing ceiling and was not parsed.",
+      receivedAt: new Date(),
+      authenticationStatus: InboundEmailAuthenticationStatus.UNKNOWN,
+      authenticationDetails: { reason: "message-too-large", sizeBytes },
+    },
+    select: { id: true },
+  });
+  await recordSystemLog({
+    teamId: inbox.teamId,
+    level: SystemLogLevel.WARN,
+    source: "INBOUND_EMAIL",
+    event: "inbound_email_oversized_quarantined",
+    message: `Inbound email exceeded the ${getInboundMessageByteLimit()} byte emergency parsing ceiling.`,
+    entityType: "InboundEmailMessage",
+    entityId: message.id,
+    metadata: { emailInboxId: inbox.id, uid: uid.toString(), sizeBytes },
+  });
 };
 
 export const listContactAccessReviewsForInboundEmail = async (
@@ -1805,6 +2094,7 @@ export const syncEmailInbox = async (
     existingVisibleReview: 0,
     accessReviews: 0,
     alreadyImported: 0,
+    oversizedQuarantined: 0,
   };
 
   try {
@@ -1845,6 +2135,17 @@ export const syncEmailInbox = async (
           fetched += 1;
           stats.fetched += 1;
           const uid = BigInt(message.uid);
+          if (message.source.length > getInboundMessageByteLimit()) {
+            await quarantineOversizedMessage({
+              inbox,
+              uid,
+              uidValidity,
+              sizeBytes: message.source.length,
+            });
+            stats.oversizedQuarantined += 1;
+            lastUid = uid;
+            continue;
+          }
           const parsed = await simpleParser(message.source);
           const result = await importMessage({
             inbox,

@@ -40,40 +40,82 @@ type UpdateEngagementInput = {
   restrictedToSubmodule?: ContactSubmodule | null;
 };
 
+const engagementInclude = {
+  emailInbox: {
+    select: {
+      id: true,
+      name: true,
+      replyFromEmail: true,
+      outboundMode: true,
+    },
+  },
+  emailAttachments: true,
+  inboundEmailMessages: {
+    take: 1,
+    select: {
+      id: true,
+      emailInboxId: true,
+      mailbox: true,
+      fromEmail: true,
+      fromName: true,
+      replyToEmail: true,
+      replyToName: true,
+      rawHeaders: true,
+      messageId: true,
+      uid: true,
+      attachments: true,
+      emailInbox: {
+        select: {
+          name: true,
+          groupId: true,
+          username: true,
+          replyFromEmail: true,
+          outboundMode: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.ContactEngagementInclude;
+
 type ContactEngagementWithDefaults = Prisma.ContactEngagementGetPayload<{
-  include: {
-    emailInbox: {
-      select: {
-        id: true;
-        name: true;
-        replyFromEmail: true;
-        outboundMode: true;
-      };
-    };
-    inboundEmailMessages: {
-      take: 1;
-      select: {
-        id: true;
-        emailInboxId: true;
-        mailbox: true;
-        fromEmail: true;
-        fromName: true;
-        rawHeaders: true;
-        messageId: true;
-        uid: true;
-        emailInbox: {
-          select: {
-            name: true;
-            groupId: true;
-            username: true;
-            replyFromEmail: true;
-            outboundMode: true;
-          };
-        };
-      };
-    };
-  };
+  include: typeof engagementInclude;
 }>;
+
+const mapAttachment = (
+  attachment: ContactEngagementWithDefaults["emailAttachments"][number],
+) => ({
+  id: attachment.id,
+  fileName: attachment.fileName,
+  contentType: attachment.contentType,
+  sizeBytes: attachment.sizeBytes,
+  status: attachment.status,
+  direction: attachment.direction,
+  inline: false,
+});
+
+const renderInlineAttachments = (
+  message: string,
+  teamId: string,
+  attachments: ContactEngagementWithDefaults["inboundEmailMessages"][number]["attachments"],
+) => {
+  let rendered = message;
+  for (const attachment of attachments) {
+    if (
+      attachment.status !== "AVAILABLE" ||
+      !attachment.contentId ||
+      !["image/gif", "image/jpeg", "image/png", "image/webp"].includes(
+        attachment.contentType,
+      )
+    )
+      continue;
+    const escaped = attachment.contentId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    rendered = rendered.replace(
+      new RegExp(`cid:${escaped}`, "gi"),
+      `/api/teams/${teamId}/email-attachments/${attachment.id}/content?inline=true`,
+    );
+  }
+  return rendered;
+};
 
 const mapEngagement = (
   engagement: ContactEngagementWithDefaults,
@@ -85,7 +127,13 @@ const mapEngagement = (
   direction: engagement.direction as EngagementDirection,
   source: engagement.source as EngagementSource,
   subject: engagement.subject ?? undefined,
-  message: engagement.message,
+  message: engagement.inboundEmailMessages[0]
+    ? renderInlineAttachments(
+        engagement.message,
+        engagement.teamId,
+        engagement.inboundEmailMessages[0].attachments,
+      )
+    : engagement.message,
   userId: engagement.userId ?? undefined,
   userName: engagement.userName ?? undefined,
   externalId: engagement.externalId ?? undefined,
@@ -99,6 +147,20 @@ const mapEngagement = (
       }
     : undefined,
   replyToEngagementId: engagement.replyToEngagementId ?? undefined,
+  attachments: [
+    ...engagement.emailAttachments.map(mapAttachment),
+    ...(engagement.inboundEmailMessages[0]?.attachments ?? []).map(
+      (attachment) => ({
+        ...mapAttachment(attachment),
+        inline: Boolean(
+          attachment.contentId &&
+            ["image/gif", "image/jpeg", "image/png", "image/webp"].includes(
+              attachment.contentType,
+            ),
+        ),
+      }),
+    ),
+  ],
   inboundEmail: engagement.inboundEmailMessages[0]
     ? {
         id: engagement.inboundEmailMessages[0].id,
@@ -119,6 +181,10 @@ const mapEngagement = (
         mailbox: engagement.inboundEmailMessages[0].mailbox,
         fromEmail: engagement.inboundEmailMessages[0].fromEmail,
         fromName: engagement.inboundEmailMessages[0].fromName ?? undefined,
+        replyToEmail:
+          engagement.inboundEmailMessages[0].replyToEmail ?? undefined,
+        replyToName:
+          engagement.inboundEmailMessages[0].replyToName ?? undefined,
         receivedAtEmail: resolveInboundRecipientEmail({
           rawHeaders: engagement.inboundEmailMessages[0].rawHeaders,
           inboxUsername: engagement.inboundEmailMessages[0].emailInbox.username,
@@ -167,38 +233,7 @@ const getContactEngagements = async (
     orderBy: {
       engagedAt: "desc",
     },
-    include: {
-      emailInbox: {
-        select: {
-          id: true,
-          name: true,
-          replyFromEmail: true,
-          outboundMode: true,
-        },
-      },
-      inboundEmailMessages: {
-        take: 1,
-        select: {
-          id: true,
-          emailInboxId: true,
-          mailbox: true,
-          fromEmail: true,
-          fromName: true,
-          rawHeaders: true,
-          messageId: true,
-          uid: true,
-          emailInbox: {
-            select: {
-              name: true,
-              groupId: true,
-              username: true,
-              replyFromEmail: true,
-              outboundMode: true,
-            },
-          },
-        },
-      },
-    },
+    include: engagementInclude,
   });
 
   const replyInboxesPromise = replyAccess
@@ -245,38 +280,7 @@ const createEngagement = async (input: CreateEngagementInput) => {
       dueDate: input.dueDate,
       engagedAt: input.engagedAt,
     },
-    include: {
-      emailInbox: {
-        select: {
-          id: true,
-          name: true,
-          replyFromEmail: true,
-          outboundMode: true,
-        },
-      },
-      inboundEmailMessages: {
-        take: 1,
-        select: {
-          id: true,
-          emailInboxId: true,
-          mailbox: true,
-          fromEmail: true,
-          fromName: true,
-          rawHeaders: true,
-          messageId: true,
-          uid: true,
-          emailInbox: {
-            select: {
-              name: true,
-              groupId: true,
-              username: true,
-              replyFromEmail: true,
-              outboundMode: true,
-            },
-          },
-        },
-      },
-    },
+    include: engagementInclude,
   });
 
   return mapEngagement(engagement);
@@ -291,38 +295,7 @@ const updateEngagement = async (input: UpdateEngagementInput) => {
       teamId,
     },
     data: updateData,
-    include: {
-      emailInbox: {
-        select: {
-          id: true,
-          name: true,
-          replyFromEmail: true,
-          outboundMode: true,
-        },
-      },
-      inboundEmailMessages: {
-        take: 1,
-        select: {
-          id: true,
-          emailInboxId: true,
-          mailbox: true,
-          fromEmail: true,
-          fromName: true,
-          rawHeaders: true,
-          messageId: true,
-          uid: true,
-          emailInbox: {
-            select: {
-              name: true,
-              groupId: true,
-              username: true,
-              replyFromEmail: true,
-              outboundMode: true,
-            },
-          },
-        },
-      },
-    },
+    include: engagementInclude,
   });
 
   return mapEngagement(engagement);

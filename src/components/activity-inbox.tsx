@@ -23,6 +23,12 @@ import {
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
+import {
+  EmailAttachmentLinks,
+  type EmailAttachmentSummary,
+  EmailAttachmentUploader,
+  type PendingEmailAttachment,
+} from "@/components/email-attachments";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -71,6 +77,7 @@ type InboxItem = {
   createdAt: string;
   todoStatus?: TodoStatus;
   isRead: boolean;
+  attachments?: EmailAttachmentSummary[];
   contact: { id: string; name: string; email?: string };
   inboundEmail?: {
     id: string;
@@ -80,6 +87,8 @@ type InboxItem = {
     canReply: boolean;
     fromEmail: string;
     fromName?: string;
+    replyToEmail?: string;
+    replyToName?: string;
     receivedAtEmail?: string;
     mailbox: string;
   };
@@ -151,7 +160,7 @@ function SafeHtml({ html }: { html: string }) {
   return (
     <iframe
       title="Inbound email HTML body"
-      sandbox=""
+      sandbox="allow-same-origin"
       referrerPolicy="no-referrer"
       className="h-[55vh] w-full rounded-md border bg-white"
       srcDoc={html}
@@ -173,6 +182,9 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
   const [replySubject, setReplySubject] = useState("");
   const [replyMessage, setReplyMessage] = useState("");
   const [replyIdempotencyKey, setReplyIdempotencyKey] = useState("");
+  const [replyAttachments, setReplyAttachments] = useState<
+    PendingEmailAttachment[]
+  >([]);
   const [isReplying, setIsReplying] = useState(false);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -357,6 +369,7 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
     );
     setReplyMessage("");
     setReplyIdempotencyKey(crypto.randomUUID());
+    setReplyAttachments([]);
     setReplyOpen(true);
   };
 
@@ -375,6 +388,9 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
             subject: replySubject || undefined,
             message: replyMessage,
             idempotencyKey: replyIdempotencyKey,
+            attachments: replyAttachments.map(({ pendingUploadId }) => ({
+              pendingUploadId,
+            })),
           }),
         },
       );
@@ -773,6 +789,10 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
                   </div>
                 )}
               </div>
+              <EmailAttachmentLinks
+                teamId={teamId}
+                attachments={selected.attachments}
+              />
             </div>
           ) : null}
         </SheetContent>
@@ -784,7 +804,7 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
             <DialogTitle>Reply to email</DialogTitle>
             <DialogDescription>
               {selected?.inboundEmail
-                ? `From ${selected.inboundEmail.replyFromEmail ?? selected.inboundEmail.emailInboxName} to ${selected.inboundEmail.fromEmail}`
+                ? `From ${selected.inboundEmail.replyFromEmail ?? selected.inboundEmail.emailInboxName} to ${selected.inboundEmail.replyToEmail ?? selected.inboundEmail.fromEmail}`
                 : ""}
             </DialogDescription>
           </DialogHeader>
@@ -797,6 +817,23 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
                 onChange={(event) => setReplySubject(event.target.value)}
               />
             </div>
+            {selected?.inboundEmail?.replyToEmail &&
+            selected.inboundEmail.replyToEmail !==
+              selected.inboundEmail.fromEmail ? (
+              <p className="text-xs text-amber-700">
+                This reply will use the sender-provided Reply-To address, which
+                differs from From.
+              </p>
+            ) : null}
+            {selected?.inboundEmail ? (
+              <EmailAttachmentUploader
+                teamId={teamId}
+                inboxId={selected.inboundEmail.emailInboxId}
+                attachments={replyAttachments}
+                onChange={setReplyAttachments}
+                disabled={isReplying}
+              />
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor="activity-reply-message">Message</Label>
               <Textarea

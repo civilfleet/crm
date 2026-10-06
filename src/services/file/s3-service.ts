@@ -2,6 +2,7 @@
 
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
@@ -71,6 +72,53 @@ export const storeFile = async ({
     }),
   );
   return key;
+};
+
+export const storeFileAtKey = async ({
+  body,
+  fileType,
+  key,
+}: {
+  body: Uint8Array;
+  fileType: string;
+  key: string;
+}) => {
+  await s3Client.send(
+    new PutObjectCommand({
+      Key: key,
+      Body: body,
+      ContentType: fileType,
+      Bucket: process.env.NEXT_AWS_S3_BUCKET_NAME,
+    }),
+  );
+  return key;
+};
+
+export const getStoredFile = async (key: string) => {
+  const result = await s3Client.send(
+    new GetObjectCommand({
+      Key: key,
+      Bucket: process.env.NEXT_AWS_S3_BUCKET_NAME,
+    }),
+  );
+  if (!result.Body) throw new Error("Stored file is empty.");
+  return {
+    body: Buffer.from(await result.Body.transformToByteArray()),
+    contentType: result.ContentType,
+  };
+};
+
+export const getStoredFileMetadata = async (key: string) => {
+  const result = await s3Client.send(
+    new HeadObjectCommand({
+      Key: key,
+      Bucket: process.env.NEXT_AWS_S3_BUCKET_NAME,
+    }),
+  );
+  return {
+    sizeBytes: result.ContentLength ?? 0,
+    contentType: result.ContentType,
+  };
 };
 
 // Filename: s3Service.ts

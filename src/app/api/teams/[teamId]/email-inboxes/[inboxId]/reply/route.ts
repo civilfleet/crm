@@ -12,6 +12,10 @@ const replySchema = z.object({
   subject: z.string().trim().max(500).optional(),
   message: z.string().trim().min(1, "Message is required").max(100_000),
   idempotencyKey: z.uuid(),
+  attachments: z
+    .array(z.object({ pendingUploadId: z.uuid() }))
+    .max(10)
+    .default([]),
 });
 
 export async function POST(
@@ -39,6 +43,7 @@ export async function POST(
       userName: session.user.name ?? session.user.email ?? undefined,
       roles,
       isTeamAdmin: adminAccess.allowed,
+      attachments: validated.attachments,
     });
     return NextResponse.json({ data: engagement });
   } catch (error) {

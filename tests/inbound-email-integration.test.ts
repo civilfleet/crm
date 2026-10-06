@@ -48,6 +48,7 @@ type LoadOptions = {
   ImapFlow?: new (...args: never[]) => unknown;
   simpleParser?: (source: unknown) => Promise<unknown>;
   findContactByIdentityEmail?: () => Promise<unknown>;
+  storeFileAtKey?: () => Promise<unknown>;
 };
 
 const loadInboundService = ({
@@ -55,6 +56,7 @@ const loadInboundService = ({
   ImapFlow = class {},
   simpleParser = async () => ({}),
   findContactByIdentityEmail = async () => null,
+  storeFileAtKey = async () => undefined,
 }: LoadOptions) =>
   loadModule<{
     approveContactAccessReviewForInboundEmail: (input: {
@@ -93,6 +95,11 @@ const loadInboundService = ({
     "@/services/email-delivery-errors": {
       EmailDeliveryUncertainError: class extends Error {},
     },
+    "@/services/file/s3-service": {
+      getStoredFile: async () => ({ body: Buffer.alloc(0) }),
+      getStoredFileMetadata: async () => ({ sizeBytes: 1 }),
+      storeFileAtKey,
+    },
     "@/services/integrations/scaleway-email": {
       ScalewayEmailConfigurationError: class extends Error {},
       ScalewayEmailRejectedError: class extends Error {},
@@ -108,6 +115,16 @@ const loadInboundService = ({
         reason: "trusted-dmarc-pass",
       }),
     },
+    "./attachments": {
+      getInboundMessageByteLimit: () => 100 * 1024 * 1024,
+      isEmailAttachmentBlocked: () => false,
+      MAX_EMAIL_ATTACHMENT_BYTES: 10 * 1024 * 1024,
+      MAX_EMAIL_ATTACHMENT_COUNT: 10,
+      MAX_SMTP_MESSAGE_BYTES: 25 * 1024 * 1024,
+      SAFE_INLINE_IMAGE_MIME_TYPES: new Set(),
+      sanitizeAttachmentFileName: (value?: string) => value ?? "attachment",
+      SCALEWAY_ATTACHMENT_MIME_TYPES: new Set(),
+    },
     "./reply-helpers": {
       escapeEmailHtml: (value: string) => value,
       getStoredReferences: () => [],
@@ -121,6 +138,8 @@ const loadInboundService = ({
         REJECTED: "REJECTED",
         REVOKED: "REVOKED",
       },
+      EmailAttachmentDirection: { INBOUND: "INBOUND", OUTBOUND: "OUTBOUND" },
+      EmailAttachmentStatus: { AVAILABLE: "AVAILABLE", BLOCKED: "BLOCKED" },
       EmailInboxOutboundMode: {
         DISABLED: "DISABLED",
         SMTP: "SMTP",
@@ -340,4 +359,59 @@ test("access-review approval scopes the lookup to team, source, and pending stat
     status: "PENDING",
   });
   assert.equal(writes, 0);
+});
+
+test("attachment storage failure leaves the IMAP checkpoint unchanged for retry", async () => {
+  const releases: Record<string, unknown>[] = [];
+  const source = Buffer.from("message with attachment");
+  class MockImapFlow {
+    mailbox = { uidValidity: BigInt(1), uidNext: BigInt(7) };
+    async connect() {}
+    async getMailboxLock() {
+      return { release: () => undefined };
+    }
+    async *fetch() {
+      yield { source, uid: 6 };
+    }
+    async logout() {}
+  }
+  const prisma = {
+    emailInbox: {
+      updateMany: async (args: { data: Record<string, unknown> }) => {
+        if ("lastSyncError" in args.data) releases.push(args.data);
+        return { count: 1 };
+      },
+      findUniqueOrThrow: async () => inbox(),
+    },
+    inboundEmailMessage: { findUnique: async () => null },
+  };
+  const service = loadInboundService({
+    prisma,
+    ImapFlow: MockImapFlow,
+    simpleParser: async () => ({
+      from: { value: [{ address: "sender@example.org" }] },
+      text: "Hello",
+      headers: new Map(),
+      headerLines: [],
+      attachments: [
+        {
+          filename: "invoice.pdf",
+          contentType: "application/pdf",
+          content: Buffer.from("pdf"),
+          size: 3,
+        },
+      ],
+    }),
+    storeFileAtKey: async () => {
+      throw new Error("object storage unavailable");
+    },
+  });
+
+  await assert.rejects(
+    service.syncEmailInbox("inbox-a", { workerId: "worker-a" }),
+    /object storage unavailable/,
+  );
+  assert.equal(releases.length, 1);
+  assert.equal(releases[0].lastUid, undefined);
+  assert.match(String(releases[0].lastSyncError), /object storage unavailable/);
 });

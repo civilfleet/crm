@@ -242,6 +242,7 @@ model Teams {
   emailDeliveryEvents EmailDeliveryEvent[]
   emailInboxes EmailInbox[]
   emailReplyDispatches EmailReplyDispatch[]
+  emailAttachments EmailAttachment[]
   inboundEmailMessages InboundEmailMessage[]
   contactAccessReviews ContactAccessReview[]
   events       Event[]
@@ -829,6 +830,8 @@ model InboundEmailMessage {
 
   fromEmail     String   @db.VarChar(255)
   fromName      String?  @db.VarChar(255)
+  replyToEmail  String?  @db.VarChar(255)
+  replyToName   String?  @db.VarChar(255)
   subject       String?  @db.VarChar(500)
   body          String   @db.Text
   receivedAt    DateTime @db.Timestamptz(6)
@@ -839,6 +842,7 @@ model InboundEmailMessage {
   engagement    ContactEngagement? @relation(fields: [engagementId], references: [id], onDelete: SetNull)
   accessReviews ContactAccessReview[]
   replyDispatches EmailReplyDispatch[]
+  attachments   EmailAttachment[]
   rawHeaders    Json?
   authenticationStatus InboundEmailAuthenticationStatus @default(UNKNOWN)
   authenticationDetails Json?
@@ -880,6 +884,40 @@ model EmailReplyDispatch {
   @@index([emailInboxId])
   @@index([inboundEmailMessageId])
   @@index([status, dispatchStartedAt])
+}
+
+enum EmailAttachmentDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum EmailAttachmentStatus {
+  AVAILABLE
+  BLOCKED
+  OMITTED
+}
+
+model EmailAttachment {
+  id                    String                   @id @default(uuid()) @unique
+  teamId                String
+  team                  Teams                    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  inboundEmailMessageId String?
+  inboundEmailMessage   InboundEmailMessage?     @relation(fields: [inboundEmailMessageId], references: [id], onDelete: Cascade)
+  engagementId          String?
+  engagement            ContactEngagement?       @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  direction             EmailAttachmentDirection
+  status                EmailAttachmentStatus    @default(AVAILABLE)
+  storageKey            String?                  @unique @db.VarChar(1024)
+  fileName              String                   @db.VarChar(255)
+  contentType           String                   @db.VarChar(255)
+  sizeBytes             Int
+  contentId             String?                  @db.VarChar(500)
+  disposition           String?                  @db.VarChar(32)
+  createdAt             DateTime                 @default(now()) @db.Timestamptz(6)
+
+  @@index([teamId])
+  @@index([inboundEmailMessageId])
+  @@index([engagementId])
 }
 
 model ContactAccessReview {
@@ -1354,6 +1392,7 @@ model ContactEngagement {
   updatedAt   DateTime             @updatedAt @db.Timestamptz(6)
   inboundEmailMessages InboundEmailMessage[]
   replyDispatch EmailReplyDispatch?
+  emailAttachments EmailAttachment[]
   userStates ContactEngagementUserState[]
   tags       String[] @default([])
 

@@ -156,12 +156,31 @@ approves access for a hidden match.
 
 An inbox can optionally send replies through dedicated SMTP credentials or the
 team's Scaleway Transactional Email integration. Each inbox has one configured
-reply-from address; replies are sent only to the original message sender.
+reply-from address. Replies honor the first valid stored `Reply-To` address and
+the UI warns when it differs from `From`; otherwise they go to the original
+sender. Sent replies remain in CRM history and are not appended to IMAP Sent.
 
 Only users who can access the contact and belong to the inbox's owning group can
 reply. Team and global admins bypass the inbox-group membership check. The API
 derives sender and recipient addresses from stored records and does not accept
 them from the browser.
+
+Inbound attachments are stored privately and exposed only through authenticated
+contact-scoped routes. Manual inbound downloads always show a malware warning;
+safe CID-linked JPEG, PNG, GIF, and WebP images may render inline. The CRM trusts
+the mail server's malware scanner and does not run a second scanner. Executable
+and script formats are blocked by secure defaults, replaceable globally through
+`EMAIL_ATTACHMENT_BLOCKED_EXTENSIONS` and
+`EMAIL_ATTACHMENT_BLOCKED_MIME_TYPES`.
+
+Replies support at most 10 attachments and 10 MiB per file. Complete encoded
+SMTP messages are limited to 25 MiB. Scaleway replies enforce the provider's
+[supported MIME types and 2 MB complete API payload limit](https://www.scaleway.com/en/docs/transactional-email/reference-content/tem-capabilities-and-limits/).
+Inbound parsing has
+no normal product limit, but `EMAIL_INBOUND_MAX_MESSAGE_BYTES` provides a
+100 MiB default emergency ceiling; larger messages are stored as unlinked
+quarantine records without parsing. Object-storage failures leave the IMAP UID
+checkpoint unchanged so the message is retried.
 
 Successful replies are stored as outbound `ContactEngagement` records linked to
 both the sending `EmailInbox` and the inbound engagement. Provider message IDs
