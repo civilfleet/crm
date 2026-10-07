@@ -5,15 +5,15 @@ import { signIn as authSignIn } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
 import { sendMagicLoginLink } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
-import type { PublicOidcLoginOption } from "@/lib/auth-routing";
+import type { PublicLoginOptions } from "@/lib/auth-routing";
 import { cn } from "@/lib/utils";
 
 export function LoginForm({
   className,
-  oidcLoginOptions = [],
+  loginOptions,
   ...props
 }: React.ComponentPropsWithoutRef<"form"> & {
-  oidcLoginOptions?: PublicOidcLoginOption[];
+  loginOptions: PublicLoginOptions;
 }) {
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
@@ -22,6 +22,7 @@ export function LoginForm({
     null,
   );
   const [error, setError] = useState("");
+  const { emailLoginEnabled, oidc: oidcLoginOptions } = loginOptions;
 
   const authError = searchParams.get("error");
   const authErrorMessage = useMemo(() => {
@@ -68,7 +69,11 @@ export function LoginForm({
       <div className="space-y-1.5">
         <h1 className="text-xl font-bold sm:text-2xl">Login to your account</h1>
         <p className="text-sm text-muted-foreground">
-          Choose single sign-on or request a login link by email.
+          {emailLoginEnabled && oidcLoginOptions.length > 0
+            ? "Choose single sign-on or request a login link by email."
+            : emailLoginEnabled
+              ? "Enter your work email to request a login link."
+              : "Continue with your organization's single sign-on."}
         </p>
       </div>
 
@@ -99,77 +104,84 @@ export function LoginForm({
             </Button>
           ))}
 
-          <div className="flex items-center gap-3" aria-hidden="true">
-            <div className="h-px flex-1 bg-border" />
-            <span className="text-xs uppercase text-muted-foreground">or</span>
-            <div className="h-px flex-1 bg-border" />
-          </div>
+          {emailLoginEnabled ? (
+            <div className="flex items-center gap-3" aria-hidden="true">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-xs uppercase text-muted-foreground">
+                or
+              </span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+          ) : null}
         </div>
       ) : null}
 
-      <form
-        className={cn("flex w-full min-w-0 flex-col gap-3", className)}
-        action={async (formData) => {
-          setIsLoading(true);
-          const email = formData.get("email") as string;
-          if (!validateEmail(email)) {
-            setError("Please enter a valid email address.");
-            setIsLoading(false);
-            return;
-          }
-          setError("");
-          try {
-            await sendMagicLoginLink(formData);
-            setIsLinkSent(true);
-          } catch (loginError) {
-            setError(
-              loginError instanceof Error
-                ? loginError.message
-                : "Unable to sign in with this email.",
-            );
-          } finally {
-            setIsLoading(false);
-          }
-        }}
-        {...props}
-      >
-        {!isLinkSent ? (
-          <>
-            <input
-              type="email"
-              name="email"
-              placeholder="name@organization.org"
-              disabled={isLoading}
-              aria-label="Email address"
-              aria-invalid={!!error}
-              aria-describedby={error ? "email-error" : undefined}
-              autoComplete="email"
-              inputMode="email"
-              className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
-            />
-            {error && (
-              <div
-                id="email-error"
-                className="mt-1 break-words text-left text-sm text-red-600"
-                role="alert"
+      {error ? (
+        <div
+          id="login-error"
+          className="w-full break-words text-left text-sm text-red-600"
+          role="alert"
+        >
+          {error}
+        </div>
+      ) : null}
+
+      {emailLoginEnabled ? (
+        <form
+          className={cn("flex w-full min-w-0 flex-col gap-3", className)}
+          action={async (formData) => {
+            setIsLoading(true);
+            const email = formData.get("email") as string;
+            if (!validateEmail(email)) {
+              setError("Please enter a valid email address.");
+              setIsLoading(false);
+              return;
+            }
+            setError("");
+            try {
+              await sendMagicLoginLink(formData);
+              setIsLinkSent(true);
+            } catch (loginError) {
+              setError(
+                loginError instanceof Error
+                  ? loginError.message
+                  : "Unable to sign in with this email.",
+              );
+            } finally {
+              setIsLoading(false);
+            }
+          }}
+          {...props}
+        >
+          {!isLinkSent ? (
+            <>
+              <input
+                type="email"
+                name="email"
+                placeholder="name@organization.org"
+                disabled={isLoading}
+                aria-label="Email address"
+                aria-invalid={!!error}
+                aria-describedby={error ? "login-error" : undefined}
+                autoComplete="email"
+                inputMode="email"
+                className="flex h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+              />
+              <Button
+                variant="outline"
+                className="w-full sm:mx-auto sm:w-44"
+                disabled={isLoading}
               >
-                {error}
-              </div>
-            )}
-            <Button
-              variant="outline"
-              className="w-full sm:mx-auto sm:w-44"
-              disabled={isLoading}
-            >
-              {isLoading ? "Sending..." : "Send login link"}
-            </Button>
-          </>
-        ) : (
-          <div className="break-words text-sm font-medium text-green-600">
-            Login link has been sent to your email!
-          </div>
-        )}
-      </form>
+                {isLoading ? "Sending..." : "Send login link"}
+              </Button>
+            </>
+          ) : (
+            <div className="break-words text-sm font-medium text-green-600">
+              Login link has been sent to your email!
+            </div>
+          )}
+        </form>
+      ) : null}
 
       <div className="text-center text-sm leading-relaxed">
         <div>Don&apos;t have an account?</div>

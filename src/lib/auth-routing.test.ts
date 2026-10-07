@@ -21,15 +21,22 @@ type AuthRoutingModule = {
     provider: string,
   ) => Promise<boolean>;
   resolveExpectedProviderByEmail: (email: string) => Promise<string>;
+  getPublicLoginOptions: () => Promise<{
+    emailLoginEnabled: boolean;
+    oidc: Array<{ providerId: string; label: string }>;
+  }>;
 };
 
-const loadAuthRouting = (team: TeamAuthConfig | null) =>
+const loadAuthRouting = (
+  team: TeamAuthConfig | null,
+  teams: TeamAuthConfig[] = [],
+) =>
   loadModule<AuthRoutingModule>("src/lib/auth-routing.ts", {
     "@/lib/logger": { debug() {}, info() {}, warn() {} },
     "@/lib/prisma": {
       teams: {
         findFirst: async () => team,
-        findMany: async () => [],
+        findMany: async () => teams,
       },
     },
   });
@@ -90,4 +97,27 @@ test("teams can allow both email login and their OIDC provider", async () => {
     await routing.resolveExpectedProviderByEmail("member@example.org"),
     "nodemailer",
   );
+});
+
+test("public login options hide email when every team disables it", async () => {
+  const routing = loadAuthRouting(oidcTeam, [oidcTeam]);
+
+  assert.deepEqual(await routing.getPublicLoginOptions(), {
+    emailLoginEnabled: false,
+    oidc: [
+      {
+        providerId: "oidc-team-a",
+        label: "Continue with Sea-Watch SSO",
+      },
+    ],
+  });
+});
+
+test("public login options keep email available before a team exists", async () => {
+  const routing = loadAuthRouting(null);
+
+  assert.deepEqual(await routing.getPublicLoginOptions(), {
+    emailLoginEnabled: true,
+    oidc: [],
+  });
 });

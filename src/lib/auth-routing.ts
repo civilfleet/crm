@@ -9,6 +9,11 @@ export type PublicOidcLoginOption = {
   label: string;
 };
 
+export type PublicLoginOptions = {
+  emailLoginEnabled: boolean;
+  oidc: PublicOidcLoginOption[];
+};
+
 const OIDC_LOGIN_METHOD = "OIDC";
 const MAGIC_LINK_PROVIDER_ID: SignInProviderId = "nodemailer";
 
@@ -219,26 +224,36 @@ export const loadTeamOidcProviders = async (): Promise<
   }));
 };
 
-export const getPublicOidcLoginOptions = async (): Promise<
-  PublicOidcLoginOption[]
-> => {
+export const getPublicLoginOptions = async (): Promise<PublicLoginOptions> => {
   const teams = await prisma.teams.findMany({
-    where: {
-      oidcLoginEnabled: true,
-      domainVerifiedAt: { not: null },
-      oidcIssuer: { not: null },
-      oidcClientId: { not: null },
-      oidcClientSecret: { not: null },
-    },
     select: {
       id: true,
+      emailLoginEnabled: true,
+      oidcLoginEnabled: true,
       oidcButtonLabel: true,
+      domainVerifiedAt: true,
+      oidcIssuer: true,
+      oidcClientId: true,
+      oidcClientSecret: true,
     },
     orderBy: [{ oidcButtonLabel: "asc" }, { id: "asc" }],
   });
 
-  return teams.map((team) => ({
-    providerId: buildOidcProviderId(team.id),
-    label: team.oidcButtonLabel,
-  }));
+  return {
+    emailLoginEnabled:
+      teams.length === 0 || teams.some((team) => team.emailLoginEnabled),
+    oidc: teams
+      .filter(
+        (team) =>
+          team.oidcLoginEnabled &&
+          team.domainVerifiedAt &&
+          team.oidcIssuer &&
+          team.oidcClientId &&
+          team.oidcClientSecret,
+      )
+      .map((team) => ({
+        providerId: buildOidcProviderId(team.id),
+        label: team.oidcButtonLabel,
+      })),
+  };
 };

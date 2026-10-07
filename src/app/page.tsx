@@ -3,16 +3,16 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { LoginForm } from "@/components/login-form";
 import { APP_NAME } from "@/constants/app";
-import { getPublicOidcLoginOptions } from "@/lib/auth-routing";
+import { getPublicLoginOptions } from "@/lib/auth-routing";
 import { getUserCurrent } from "@/services/users";
 import { Roles } from "@/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  const [session, oidcLoginOptions] = await Promise.all([
+  const [session, loginOptions] = await Promise.all([
     auth(),
-    getPublicOidcLoginOptions(),
+    getPublicLoginOptions(),
   ]);
 
   if (session?.user?.userId) {
@@ -59,7 +59,7 @@ export default async function LoginPage() {
         </div>
         <div className="flex flex-1 items-center justify-center py-6 sm:py-10">
           <div className="w-full min-w-0 max-w-sm rounded-xl border bg-card/95 p-5 shadow-sm sm:p-8">
-            <LoginForm oidcLoginOptions={oidcLoginOptions} />
+            <LoginForm loginOptions={loginOptions} />
           </div>
         </div>
       </div>
