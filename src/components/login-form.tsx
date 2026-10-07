@@ -22,7 +22,11 @@ export function LoginForm({
     null,
   );
   const [error, setError] = useState("");
-  const { emailLoginEnabled, oidc: oidcLoginOptions } = loginOptions;
+  const {
+    accountCreationContactUrl,
+    emailLoginEnabled,
+    oidc: oidcLoginOptions,
+  } = loginOptions;
 
   const authError = searchParams.get("error");
   const authErrorMessage = useMemo(() => {
@@ -186,7 +190,7 @@ export function LoginForm({
       <div className="text-center text-sm leading-relaxed">
         <div>Don&apos;t have an account?</div>
         <a
-          href="mailto:it@sea-watch.org"
+          href={accountCreationContactUrl}
           className="underline underline-offset-4"
         >
           Please contact us to create one

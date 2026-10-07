@@ -32,6 +32,11 @@ const loadAuthRouting = (
   teams: TeamAuthConfig[] = [],
 ) =>
   loadModule<AuthRoutingModule>("src/lib/auth-routing.ts", {
+    "@/lib/global-settings": {
+      getGlobalSettings: async () => ({
+        accountCreationContactUrl: "https://support.example.org/join",
+      }),
+    },
     "@/lib/logger": { debug() {}, info() {}, warn() {} },
     "@/lib/prisma": {
       teams: {
@@ -103,6 +108,7 @@ test("public login options hide email when every team disables it", async () => 
   const routing = loadAuthRouting(oidcTeam, [oidcTeam]);
 
   assert.deepEqual(await routing.getPublicLoginOptions(), {
+    accountCreationContactUrl: "https://support.example.org/join",
     emailLoginEnabled: false,
     oidc: [
       {
@@ -117,6 +123,7 @@ test("public login options keep email available before a team exists", async () 
   const routing = loadAuthRouting(null);
 
   assert.deepEqual(await routing.getPublicLoginOptions(), {
+    accountCreationContactUrl: "https://support.example.org/join",
     emailLoginEnabled: true,
     oidc: [],
   });

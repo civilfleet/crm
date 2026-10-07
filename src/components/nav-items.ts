@@ -53,6 +53,11 @@ const navItems: {
       icon: Building,
       isActive: true,
     },
+    {
+      title: "Settings",
+      url: "settings",
+      icon: Settings,
+    },
   ],
   team: [
     {

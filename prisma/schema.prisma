@@ -190,6 +190,13 @@ enum LoginMethod {
   OIDC
 }
 
+model GlobalSettings {
+  id                        String   @id @default("global") @db.VarChar(32)
+  accountCreationContactUrl String   @default("mailto:it@sea-watch.org") @db.VarChar(2048)
+  createdAt                 DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt                 DateTime @updatedAt @db.Timestamptz(6)
+}
+
 
 model Teams {
   id          String           @id @default(uuid()) @unique

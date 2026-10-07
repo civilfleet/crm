@@ -1,4 +1,5 @@
 import type { OAuthConfig } from "next-auth/providers";
+import { getGlobalSettings } from "@/lib/global-settings";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 
@@ -10,6 +11,7 @@ export type PublicOidcLoginOption = {
 };
 
 export type PublicLoginOptions = {
+  accountCreationContactUrl: string;
   emailLoginEnabled: boolean;
   oidc: PublicOidcLoginOption[];
 };
@@ -225,21 +227,25 @@ export const loadTeamOidcProviders = async (): Promise<
 };
 
 export const getPublicLoginOptions = async (): Promise<PublicLoginOptions> => {
-  const teams = await prisma.teams.findMany({
-    select: {
-      id: true,
-      emailLoginEnabled: true,
-      oidcLoginEnabled: true,
-      oidcButtonLabel: true,
-      domainVerifiedAt: true,
-      oidcIssuer: true,
-      oidcClientId: true,
-      oidcClientSecret: true,
-    },
-    orderBy: [{ oidcButtonLabel: "asc" }, { id: "asc" }],
-  });
+  const [teams, globalSettings] = await Promise.all([
+    prisma.teams.findMany({
+      select: {
+        id: true,
+        emailLoginEnabled: true,
+        oidcLoginEnabled: true,
+        oidcButtonLabel: true,
+        domainVerifiedAt: true,
+        oidcIssuer: true,
+        oidcClientId: true,
+        oidcClientSecret: true,
+      },
+      orderBy: [{ oidcButtonLabel: "asc" }, { id: "asc" }],
+    }),
+    getGlobalSettings(),
+  ]);
 
   return {
+    accountCreationContactUrl: globalSettings.accountCreationContactUrl,
     emailLoginEnabled:
       teams.length === 0 || teams.some((team) => team.emailLoginEnabled),
     oidc: teams

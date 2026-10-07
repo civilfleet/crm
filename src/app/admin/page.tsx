@@ -1,4 +1,4 @@
-import { Building, DollarSign, Users } from "lucide-react";
+import { Building, DollarSign, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import RecentActivity from "@/components/recent-activity";
 import {
@@ -65,6 +65,20 @@ export default async function AdminDashboard() {
             <CardContent>
               <CardDescription>
                 Manage user accounts and permissions
+              </CardDescription>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Link href="/admin/settings">
+          <Card className="hover:bg-accent transition-colors cursor-pointer h-full">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-lg font-medium">Settings</CardTitle>
+              <Settings className="h-5 w-5 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <CardDescription>
+                Configure application-wide login and support details
               </CardDescription>
             </CardContent>
           </Card>
