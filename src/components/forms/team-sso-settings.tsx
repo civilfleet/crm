@@ -22,11 +22,12 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
-type LoginMethod = "EMAIL_MAGIC_LINK" | "OIDC";
-
 type TeamAuthSettings = {
   loginDomain?: string | null;
-  loginMethod?: LoginMethod | null;
+  loginMethod?: "EMAIL_MAGIC_LINK" | "OIDC" | null;
+  emailLoginEnabled?: boolean | null;
+  oidcLoginEnabled?: boolean | null;
+  oidcButtonLabel?: string | null;
   oidcIssuer?: string | null;
   oidcClientId?: string | null;
   hasOidcClientSecret?: boolean;
@@ -86,8 +87,9 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
   const [isSaving, setIsSaving] = useState(false);
   const [isStartingVerification, setIsStartingVerification] = useState(false);
   const [isCheckingVerification, setIsCheckingVerification] = useState(false);
-  const [loginMethod, setLoginMethod] =
-    useState<LoginMethod>("EMAIL_MAGIC_LINK");
+  const [emailLoginEnabled, setEmailLoginEnabled] = useState(true);
+  const [oidcLoginEnabled, setOidcLoginEnabled] = useState(false);
+  const [oidcButtonLabel, setOidcButtonLabel] = useState("Sign in with SSO");
   const [loginDomain, setLoginDomain] = useState("");
   const [oidcIssuer, setOidcIssuer] = useState("");
   const [oidcClientId, setOidcClientId] = useState("");
@@ -117,14 +119,19 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
       return;
     }
 
-    const nextLoginMethod = (data.loginMethod ||
-      "EMAIL_MAGIC_LINK") as LoginMethod;
+    const nextEmailLoginEnabled =
+      data.emailLoginEnabled ?? data.loginMethod !== "OIDC";
+    const nextOidcLoginEnabled =
+      data.oidcLoginEnabled ?? data.loginMethod === "OIDC";
+    const nextOidcButtonLabel = data.oidcButtonLabel || "Sign in with SSO";
     const nextLoginDomain = data.loginDomain || "";
     const nextOidcIssuer = data.oidcIssuer || "";
     const nextOidcClientId = data.oidcClientId || "";
     const nextHasOidcClientSecret = Boolean(data.hasOidcClientSecret);
 
-    setLoginMethod(nextLoginMethod);
+    setEmailLoginEnabled(nextEmailLoginEnabled);
+    setOidcLoginEnabled(nextOidcLoginEnabled);
+    setOidcButtonLabel(nextOidcButtonLabel);
     setLoginDomain(nextLoginDomain);
     setOidcIssuer(nextOidcIssuer);
     setOidcClientId(nextOidcClientId);
@@ -138,7 +145,9 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
 
     setInitialSnapshot(
       JSON.stringify({
-        loginMethod: nextLoginMethod,
+        emailLoginEnabled: nextEmailLoginEnabled,
+        oidcLoginEnabled: nextOidcLoginEnabled,
+        oidcButtonLabel: nextOidcButtonLabel,
         loginDomain: nextLoginDomain,
         oidcIssuer: nextOidcIssuer,
         oidcClientId: nextOidcClientId,
@@ -160,7 +169,7 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
     });
   }, [error, toast]);
 
-  const isOidc = loginMethod === "OIDC";
+  const isOidc = oidcLoginEnabled;
   const groups = groupsResponse?.data || [];
 
   const normalizedLoginDomain = normalizeDomain(loginDomain);
@@ -193,7 +202,9 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
 
   const isDirty = useMemo(() => {
     const currentSnapshot = JSON.stringify({
-      loginMethod,
+      emailLoginEnabled,
+      oidcLoginEnabled,
+      oidcButtonLabel: oidcButtonLabel.trim(),
       loginDomain: loginDomain.trim(),
       oidcIssuer: oidcIssuer.trim(),
       oidcClientId: oidcClientId.trim(),
@@ -205,7 +216,9 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
     );
   }, [
     initialSnapshot,
-    loginMethod,
+    emailLoginEnabled,
+    oidcLoginEnabled,
+    oidcButtonLabel,
     loginDomain,
     oidcIssuer,
     oidcClientId,
@@ -243,7 +256,9 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          loginMethod,
+          emailLoginEnabled,
+          oidcLoginEnabled,
+          oidcButtonLabel: oidcButtonLabel.trim(),
           loginDomain: loginDomain.trim(),
           oidcIssuer: isOidc ? oidcIssuer.trim() : "",
           oidcClientId: isOidc ? oidcClientId.trim() : "",
@@ -368,20 +383,40 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="team-login-method">Login method</Label>
-          <Select
-            value={loginMethod}
-            onValueChange={(value) => setLoginMethod(value as LoginMethod)}
-          >
-            <SelectTrigger id="team-login-method">
-              <SelectValue placeholder="Select login method" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="EMAIL_MAGIC_LINK">Email magic link</SelectItem>
-              <SelectItem value="OIDC">OIDC</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="space-y-3 rounded-md border p-3">
+          <p className="text-sm font-medium">Enabled login methods</p>
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="team-email-login-enabled">Email login</Label>
+              <p className="text-xs text-muted-foreground">
+                Let team members request a magic login link by email.
+              </p>
+            </div>
+            <Switch
+              id="team-email-login-enabled"
+              checked={emailLoginEnabled}
+              onCheckedChange={setEmailLoginEnabled}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="team-oidc-login-enabled">OIDC login</Label>
+              <p className="text-xs text-muted-foreground">
+                Show a direct single sign-on button that does not ask for an
+                email address first.
+              </p>
+            </div>
+            <Switch
+              id="team-oidc-login-enabled"
+              checked={oidcLoginEnabled}
+              onCheckedChange={setOidcLoginEnabled}
+            />
+          </div>
+          {!emailLoginEnabled && !oidcLoginEnabled ? (
+            <p className="text-xs text-destructive" role="alert">
+              At least one login method must be enabled.
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-2">
@@ -488,6 +523,19 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
 
         {isOidc && (
           <>
+            <div className="space-y-2">
+              <Label htmlFor="team-oidc-button-label">SSO button label</Label>
+              <Input
+                id="team-oidc-button-label"
+                maxLength={80}
+                placeholder="Sign in with SSO"
+                value={oidcButtonLabel}
+                onChange={(event) => setOidcButtonLabel(event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                This text is shown on the public login page.
+              </p>
+            </div>
             <div className="space-y-3 rounded-md border p-3">
               <p className="text-sm font-medium">OIDC setup endpoints</p>
               <div className="space-y-2">
@@ -639,7 +687,13 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
           <Button
             type="button"
             onClick={handleSave}
-            disabled={isLoading || isSaving || !isDirty}
+            disabled={
+              isLoading ||
+              isSaving ||
+              !isDirty ||
+              (!emailLoginEnabled && !oidcLoginEnabled) ||
+              (oidcLoginEnabled && oidcButtonLabel.trim().length === 0)
+            }
           >
             {isSaving ? "Saving..." : "Save Authentication Settings"}
           </Button>

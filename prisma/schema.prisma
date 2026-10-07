@@ -197,6 +197,9 @@ model Teams {
   email       String           @db.VarChar(255) @unique
   loginDomain String?          @db.VarChar(255)
   loginMethod LoginMethod      @default(EMAIL_MAGIC_LINK)
+  emailLoginEnabled Boolean    @default(true)
+  oidcLoginEnabled Boolean     @default(false)
+  oidcButtonLabel String       @default("Sign in with SSO") @db.VarChar(80)
   oidcIssuer  String?          @db.VarChar(500)
   oidcClientId String?         @db.VarChar(255)
   oidcClientSecret String?     @db.Text

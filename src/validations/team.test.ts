@@ -76,3 +76,29 @@ test("updateTeamSchema only validates the OIDC fields that are provided", () => 
   assert.equal(parsed.loginMethod, "OIDC");
   assert.equal(parsed.oidcClientSecret, undefined);
 });
+
+test("updateTeamSchema accepts email and OIDC login together", () => {
+  const parsed = updateTeamSchema.parse({
+    emailLoginEnabled: true,
+    oidcLoginEnabled: true,
+    oidcButtonLabel: "Continue with Sea-Watch SSO",
+    loginDomain: "example.org",
+    oidcIssuer: "https://auth.example.org/realms/main",
+    oidcClientId: "client-id",
+  });
+
+  assert.equal(parsed.emailLoginEnabled, true);
+  assert.equal(parsed.oidcLoginEnabled, true);
+  assert.equal(parsed.oidcButtonLabel, "Continue with Sea-Watch SSO");
+});
+
+test("updateTeamSchema rejects disabling every login method", () => {
+  assert.throws(
+    () =>
+      updateTeamSchema.parse({
+        emailLoginEnabled: false,
+        oidcLoginEnabled: false,
+      }),
+    /At least one login method must be enabled/,
+  );
+});

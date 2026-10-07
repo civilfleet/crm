@@ -91,6 +91,7 @@ export async function PATCH(
       oidcIssuer: normalizeOptionalString(body?.oidcIssuer),
       oidcClientId: normalizeOptionalString(body?.oidcClientId),
       oidcClientSecret: normalizeOptionalString(body?.oidcClientSecret),
+      oidcButtonLabel: normalizeOptionalString(body?.oidcButtonLabel),
       defaultOidcGroupId: normalizeOptionalString(body?.defaultOidcGroupId),
     };
     const validatedData = updateTeamSchema.parse(normalizedBody);
@@ -98,6 +99,9 @@ export async function PATCH(
       name,
       email,
       loginMethod,
+      emailLoginEnabled,
+      oidcLoginEnabled,
+      oidcButtonLabel,
       oidcIssuer,
       oidcClientId,
       oidcClientSecret,
@@ -115,6 +119,14 @@ export async function PATCH(
       user,
     } = validatedData;
     const hasLoginDomain = Object.hasOwn(normalizedBody, "loginDomain");
+    const hasEmailLoginEnabled = Object.hasOwn(
+      normalizedBody,
+      "emailLoginEnabled",
+    );
+    const hasOidcLoginEnabled = Object.hasOwn(
+      normalizedBody,
+      "oidcLoginEnabled",
+    );
     const hasAutoProvisionUsersFromOidc = Object.hasOwn(
       normalizedBody,
       "autoProvisionUsersFromOidc",
@@ -152,6 +164,10 @@ export async function PATCH(
         where: { id: teamId },
         select: {
           loginDomain: true,
+          loginMethod: true,
+          emailLoginEnabled: true,
+          oidcLoginEnabled: true,
+          oidcButtonLabel: true,
           domainVerifiedAt: true,
           domainLastCheckedAt: true,
           domainVerificationToken: true,
@@ -198,10 +214,22 @@ export async function PATCH(
 
       const resolvedOidcClientSecret =
         oidcClientSecret ?? existingTeamAuth?.oidcClientSecret ?? undefined;
+      const resolvedEmailLoginEnabled =
+        emailLoginEnabled ??
+        existingTeamAuth?.emailLoginEnabled ??
+        existingTeamAuth?.loginMethod !== "OIDC";
+      const resolvedOidcLoginEnabled =
+        oidcLoginEnabled ??
+        existingTeamAuth?.oidcLoginEnabled ??
+        existingTeamAuth?.loginMethod === "OIDC";
 
-      if (loginMethod === "OIDC" && !resolvedOidcClientSecret) {
+      if (!resolvedEmailLoginEnabled && !resolvedOidcLoginEnabled) {
+        throw new Error("At least one login method must be enabled");
+      }
+
+      if (resolvedOidcLoginEnabled && !resolvedOidcClientSecret) {
         throw new Error(
-          "OIDC client secret is required when login method is OIDC",
+          "OIDC client secret is required when OIDC login is enabled",
         );
       }
 
@@ -213,7 +241,19 @@ export async function PATCH(
         data: {
           name,
           email,
-          loginMethod,
+          loginMethod:
+            hasEmailLoginEnabled || hasOidcLoginEnabled
+              ? resolvedOidcLoginEnabled && !resolvedEmailLoginEnabled
+                ? "OIDC"
+                : "EMAIL_MAGIC_LINK"
+              : loginMethod,
+          ...(hasEmailLoginEnabled
+            ? { emailLoginEnabled: resolvedEmailLoginEnabled }
+            : {}),
+          ...(hasOidcLoginEnabled
+            ? { oidcLoginEnabled: resolvedOidcLoginEnabled }
+            : {}),
+          oidcButtonLabel,
           oidcIssuer,
           oidcClientId,
           oidcClientSecret: resolvedOidcClientSecret,
@@ -305,7 +345,11 @@ export async function PATCH(
       );
     }
     if (error instanceof Error) {
-      if (error.message.includes("default OIDC group")) {
+      if (
+        error.message.includes("default OIDC group") ||
+        error.message.includes("login method") ||
+        error.message.includes("OIDC client secret")
+      ) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
     }

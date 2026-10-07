@@ -13,13 +13,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { createTeamSchema } from "@/validations/team";
 import ButtonControl from "../helper/button-control";
@@ -39,6 +33,9 @@ interface TeamFormProps {
     email: string;
     loginDomain?: string | null;
     loginMethod?: "EMAIL_MAGIC_LINK" | "OIDC" | null;
+    emailLoginEnabled?: boolean | null;
+    oidcLoginEnabled?: boolean | null;
+    oidcButtonLabel?: string | null;
     oidcIssuer?: string | null;
     oidcClientId?: string | null;
     hasOidcClientSecret?: boolean;
@@ -74,6 +71,9 @@ export default function TeamForm({ team }: TeamFormProps) {
       email: "",
       loginDomain: "",
       loginMethod: "EMAIL_MAGIC_LINK",
+      emailLoginEnabled: true,
+      oidcLoginEnabled: false,
+      oidcButtonLabel: "Sign in with SSO",
       oidcIssuer: "",
       oidcClientId: "",
       oidcClientSecret: "",
@@ -99,6 +99,10 @@ export default function TeamForm({ team }: TeamFormProps) {
         email: team.email || "",
         loginDomain: team.loginDomain || "",
         loginMethod: team.loginMethod || "EMAIL_MAGIC_LINK",
+        emailLoginEnabled:
+          team.emailLoginEnabled ?? team.loginMethod !== "OIDC",
+        oidcLoginEnabled: team.oidcLoginEnabled ?? team.loginMethod === "OIDC",
+        oidcButtonLabel: team.oidcButtonLabel || "Sign in with SSO",
         oidcIssuer: team.oidcIssuer || "",
         oidcClientId: team.oidcClientId || "",
         oidcClientSecret: "",
@@ -124,6 +128,10 @@ export default function TeamForm({ team }: TeamFormProps) {
       const method = team ? "PATCH" : "POST";
       const payload = {
         ...values,
+        loginMethod:
+          values.oidcLoginEnabled && !values.emailLoginEnabled
+            ? ("OIDC" as const)
+            : ("EMAIL_MAGIC_LINK" as const),
         loginDomain: values.loginDomain?.trim() || undefined,
         oidcIssuer: values.oidcIssuer?.trim() || undefined,
         oidcClientId: values.oidcClientId?.trim() || undefined,
@@ -207,48 +215,67 @@ export default function TeamForm({ team }: TeamFormProps) {
               />
               <FormField
                 control={form.control}
-                name="loginMethod"
+                name="emailLoginEnabled"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Login method</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select login method" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="EMAIL_MAGIC_LINK">
-                          Email magic link
-                        </SelectItem>
-                        <SelectItem value="OIDC">OIDC</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <FormItem className="flex items-center justify-between rounded-md border p-3">
+                    <FormLabel>Email magic-link login</FormLabel>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <FormInputControl
-                form={form}
-                name="oidcIssuer"
-                placeholder="OIDC issuer (https://idp.example.com)"
+              <FormField
+                control={form.control}
+                name="oidcLoginEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-md border p-3">
+                    <FormLabel>OIDC login</FormLabel>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
               />
-              <FormInputControl
-                form={form}
-                name="oidcClientId"
-                placeholder="OIDC client ID"
-              />
-              <FormInputControl
-                form={form}
-                name="oidcClientSecret"
-                placeholder="OIDC client secret"
-                type="password"
-              />
-              {team?.hasOidcClientSecret && (
-                <p className="col-span-2 -mt-2 text-xs text-muted-foreground">
-                  Leave OIDC client secret empty to keep the existing secret.
-                </p>
-              )}
+              {form.watch("oidcLoginEnabled") ? (
+                <>
+                  <FormInputControl
+                    form={form}
+                    name="oidcButtonLabel"
+                    placeholder="SSO button label"
+                  />
+                  <FormInputControl
+                    form={form}
+                    name="oidcIssuer"
+                    placeholder="OIDC issuer (https://idp.example.com)"
+                  />
+                  <FormInputControl
+                    form={form}
+                    name="oidcClientId"
+                    placeholder="OIDC client ID"
+                  />
+                  <FormInputControl
+                    form={form}
+                    name="oidcClientSecret"
+                    placeholder="OIDC client secret"
+                    type="password"
+                  />
+                  {team?.hasOidcClientSecret && (
+                    <p className="col-span-2 -mt-2 text-xs text-muted-foreground">
+                      Leave OIDC client secret empty to keep the existing
+                      secret.
+                    </p>
+                  )}
+                </>
+              ) : null}
               <FormInputControl
                 form={form}
                 name="phone"

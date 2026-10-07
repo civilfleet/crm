@@ -1,7 +1,10 @@
 "use server";
 
 import { signIn } from "@/auth";
-import { resolveExpectedProviderByEmail } from "@/lib/auth-routing";
+import {
+  isSignInProviderAllowed,
+  resolveExpectedProviderByEmail,
+} from "@/lib/auth-routing";
 import logger from "@/lib/logger";
 
 export type LoginStrategyResult =
@@ -53,12 +56,23 @@ export async function sendMagicLoginLink(formData: FormData) {
   const email = formData.get("email")?.toString().trim() ?? "";
 
   try {
+    const isAllowed = await isSignInProviderAllowed(email, "nodemailer");
+    if (!isAllowed) {
+      throw new Error("Email login is disabled for this team.");
+    }
+
     await signIn("nodemailer", {
       redirect: false,
       redirectTo: "/organizations",
       email,
     });
-  } catch {
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === "Email login is disabled for this team."
+    ) {
+      throw error;
+    }
     throw new Error("Unable to sign in with this email.");
   }
 }

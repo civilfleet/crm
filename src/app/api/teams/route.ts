@@ -74,6 +74,7 @@ export async function POST(request: Request) {
       oidcIssuer: normalizeOptionalString(body?.oidcIssuer),
       oidcClientId: normalizeOptionalString(body?.oidcClientId),
       oidcClientSecret: normalizeOptionalString(body?.oidcClientSecret),
+      oidcButtonLabel: normalizeOptionalString(body?.oidcButtonLabel),
       defaultOidcGroupId: normalizeOptionalString(body?.defaultOidcGroupId),
     };
     const validatedData = createTeamSchema.parse(normalizedBody);
@@ -81,6 +82,9 @@ export async function POST(request: Request) {
       name,
       email,
       loginMethod,
+      emailLoginEnabled,
+      oidcLoginEnabled,
+      oidcButtonLabel,
       oidcIssuer,
       oidcClientId,
       oidcClientSecret,
@@ -103,6 +107,9 @@ export async function POST(request: Request) {
           name,
           email,
           loginMethod,
+          emailLoginEnabled: emailLoginEnabled ?? loginMethod !== "OIDC",
+          oidcLoginEnabled: oidcLoginEnabled ?? loginMethod === "OIDC",
+          oidcButtonLabel: oidcButtonLabel ?? "Sign in with SSO",
           loginDomain,
           oidcIssuer,
           oidcClientId,

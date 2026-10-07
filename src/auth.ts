@@ -5,9 +5,9 @@ import authConfig from "./config/auth";
 import mailConfig from "./config/mail";
 import {
   extractEmailDomain,
+  isSignInProviderAllowed,
   loadTeamOidcProviders,
   normalizeLoginDomain,
-  resolveExpectedProviderByEmail,
 } from "./lib/auth-routing";
 import logger from "./lib/logger";
 import prisma from "./lib/prisma";
@@ -86,7 +86,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
             where: { id: teamId },
             select: {
               id: true,
-              loginMethod: true,
+              oidcLoginEnabled: true,
               loginDomain: true,
               domainVerifiedAt: true,
               autoProvisionUsersFromOidc: true,
@@ -97,8 +97,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
           const userEmailDomain = extractEmailDomain(user.email);
           const teamLoginDomain = normalizeLoginDomain(team?.loginDomain);
           const canAutoProvision = Boolean(
-            team &&
-              team.loginMethod === "OIDC" &&
+            team?.oidcLoginEnabled &&
               team.domainVerifiedAt &&
               team.autoProvisionUsersFromOidc &&
               userEmailDomain &&
@@ -113,7 +112,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
                 provider: providerId,
                 teamId,
                 hasTeam: Boolean(team),
-                loginMethod: team?.loginMethod,
+                oidcLoginEnabled: Boolean(team?.oidcLoginEnabled),
                 domainVerified: Boolean(team?.domainVerifiedAt),
                 autoProvisionUsersFromOidc: Boolean(
                   team?.autoProvisionUsersFromOidc,
@@ -201,17 +200,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
         }
 
         try {
-          const expectedProvider = await resolveExpectedProviderByEmail(
+          const isProviderAllowed = await isSignInProviderAllowed(
             user.email,
+            account.provider,
           );
-          if (expectedProvider !== account.provider) {
+          if (!isProviderAllowed) {
             logger.warn(
               {
                 email: user.email,
-                expectedProvider,
                 actualProvider: account.provider,
               },
-              "Sign-in denied due to provider mismatch",
+              "Sign-in denied because the provider is disabled or mismatched",
             );
             return false;
           }

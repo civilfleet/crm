@@ -13,6 +13,14 @@ const teamSchemaBase = z.object({
     )
     .optional(),
   loginMethod: z.enum(teamLoginMethods),
+  emailLoginEnabled: z.boolean().optional(),
+  oidcLoginEnabled: z.boolean().optional(),
+  oidcButtonLabel: z
+    .string()
+    .trim()
+    .min(1, "OIDC button label is required")
+    .max(80, "OIDC button label must be 80 characters or fewer")
+    .optional(),
   oidcIssuer: z.string().optional(),
   oidcClientId: z.string().optional(),
   oidcClientSecret: z.string().optional(),
@@ -49,6 +57,9 @@ const teamSchemaBase = z.object({
 const requireOidcFields = (
   value: {
     loginMethod?: (typeof teamLoginMethods)[number];
+    emailLoginEnabled?: boolean;
+    oidcLoginEnabled?: boolean;
+    oidcButtonLabel?: string;
     loginDomain?: string;
     oidcIssuer?: string;
     oidcClientId?: string;
@@ -57,13 +68,22 @@ const requireOidcFields = (
   ctx: z.RefinementCtx,
   options?: { requireClientSecret?: boolean },
 ) => {
+  const isOidcEnabled = value.oidcLoginEnabled ?? value.loginMethod === "OIDC";
   const hasDomain = Boolean(value.loginDomain?.trim());
   const hasOidcIssuer = Boolean(value.oidcIssuer?.trim());
   const isOidcIssuerValid = hasOidcIssuer
     ? z.string().url().safeParse(value.oidcIssuer?.trim()).success
     : false;
 
-  if (value.loginMethod === "OIDC" && !hasDomain) {
+  if (value.emailLoginEnabled === false && value.oidcLoginEnabled === false) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["emailLoginEnabled"],
+      message: "At least one login method must be enabled",
+    });
+  }
+
+  if (isOidcEnabled && !hasDomain) {
     ctx.addIssue({
       code: "custom",
       path: ["loginDomain"],
@@ -71,14 +91,14 @@ const requireOidcFields = (
     });
   }
 
-  if (value.loginMethod === "OIDC" && !value.oidcIssuer?.trim()) {
+  if (isOidcEnabled && !value.oidcIssuer?.trim()) {
     ctx.addIssue({
       code: "custom",
       path: ["oidcIssuer"],
       message: "OIDC issuer is required when login method is OIDC",
     });
   }
-  if (value.loginMethod === "OIDC" && hasOidcIssuer && !isOidcIssuerValid) {
+  if (isOidcEnabled && hasOidcIssuer && !isOidcIssuerValid) {
     ctx.addIssue({
       code: "custom",
       path: ["oidcIssuer"],
@@ -86,7 +106,7 @@ const requireOidcFields = (
     });
   }
 
-  if (value.loginMethod === "OIDC" && !value.oidcClientId?.trim()) {
+  if (isOidcEnabled && !value.oidcClientId?.trim()) {
     ctx.addIssue({
       code: "custom",
       path: ["oidcClientId"],
@@ -96,7 +116,7 @@ const requireOidcFields = (
 
   if (
     options?.requireClientSecret &&
-    value.loginMethod === "OIDC" &&
+    isOidcEnabled &&
     !value.oidcClientSecret?.trim()
   ) {
     ctx.addIssue({

@@ -3,17 +3,24 @@
 import { useSearchParams } from "next/navigation";
 import { signIn as authSignIn } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
-import { resolveLoginStrategy, sendMagicLoginLink } from "@/app/actions/auth";
+import { sendMagicLoginLink } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
+import type { PublicOidcLoginOption } from "@/lib/auth-routing";
 import { cn } from "@/lib/utils";
 
 export function LoginForm({
   className,
+  oidcLoginOptions = [],
   ...props
-}: React.ComponentPropsWithoutRef<"form">) {
+}: React.ComponentPropsWithoutRef<"form"> & {
+  oidcLoginOptions?: PublicOidcLoginOption[];
+}) {
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [isLinkSent, setIsLinkSent] = useState(false);
+  const [pendingOidcProvider, setPendingOidcProvider] = useState<string | null>(
+    null,
+  );
   const [error, setError] = useState("");
 
   const authError = searchParams.get("error");
@@ -61,9 +68,44 @@ export function LoginForm({
       <div className="space-y-1.5">
         <h1 className="text-xl font-bold sm:text-2xl">Login to your account</h1>
         <p className="text-sm text-muted-foreground">
-          Enter your work email to continue.
+          Choose single sign-on or request a login link by email.
         </p>
       </div>
+
+      {oidcLoginOptions.length > 0 ? (
+        <div className="flex w-full min-w-0 flex-col gap-3">
+          {oidcLoginOptions.map((option) => (
+            <Button
+              key={option.providerId}
+              type="button"
+              className="w-full"
+              disabled={pendingOidcProvider !== null || isLoading}
+              onClick={async () => {
+                setError("");
+                setPendingOidcProvider(option.providerId);
+                try {
+                  await authSignIn(option.providerId, {
+                    callbackUrl: "/organizations",
+                  });
+                } catch {
+                  setError("Could not start OIDC sign-in. Please try again.");
+                  setPendingOidcProvider(null);
+                }
+              }}
+            >
+              {pendingOidcProvider === option.providerId
+                ? "Redirecting..."
+                : option.label}
+            </Button>
+          ))}
+
+          <div className="flex items-center gap-3" aria-hidden="true">
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs uppercase text-muted-foreground">or</span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+        </div>
+      ) : null}
 
       <form
         className={cn("flex w-full min-w-0 flex-col gap-3", className)}
@@ -77,16 +119,6 @@ export function LoginForm({
           }
           setError("");
           try {
-            const strategy = await resolveLoginStrategy(formData);
-
-            if (strategy.strategy === "OIDC") {
-              await authSignIn(strategy.provider, {
-                callbackUrl: "/organizations",
-                login_hint: email,
-              });
-              return;
-            }
-
             await sendMagicLoginLink(formData);
             setIsLinkSent(true);
           } catch (loginError) {
@@ -129,7 +161,7 @@ export function LoginForm({
               className="w-full sm:mx-auto sm:w-44"
               disabled={isLoading}
             >
-              {isLoading ? "Sending..." : "Login"}
+              {isLoading ? "Sending..." : "Send login link"}
             </Button>
           </>
         ) : (

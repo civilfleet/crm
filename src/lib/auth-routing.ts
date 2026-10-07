@@ -4,6 +4,11 @@ import prisma from "@/lib/prisma";
 
 export type SignInProviderId = "nodemailer" | `oidc-${string}`;
 
+export type PublicOidcLoginOption = {
+  providerId: `oidc-${string}`;
+  label: string;
+};
+
 const OIDC_LOGIN_METHOD = "OIDC";
 const MAGIC_LINK_PROVIDER_ID: SignInProviderId = "nodemailer";
 
@@ -30,6 +35,9 @@ export const extractEmailDomain = (email?: string | null) => {
 type TeamAuthConfig = {
   id: string;
   loginMethod?: string;
+  emailLoginEnabled?: boolean;
+  oidcLoginEnabled?: boolean;
+  oidcButtonLabel?: string | null;
   loginDomain?: string | null;
   domainVerifiedAt?: Date | null;
   oidcIssuer?: string | null;
@@ -50,6 +58,9 @@ const getTeamByEmailDomain = async (
     select: {
       id: true,
       loginMethod: true,
+      emailLoginEnabled: true,
+      oidcLoginEnabled: true,
+      oidcButtonLabel: true,
       loginDomain: true,
       domainVerifiedAt: true,
       oidcIssuer: true,
@@ -63,6 +74,37 @@ const getTeamByEmailDomain = async (
 
 const hasOidcCredentials = (team?: TeamAuthConfig | null) =>
   Boolean(team?.oidcIssuer && team?.oidcClientId && team?.oidcClientSecret);
+
+const isEmailLoginEnabled = (team: TeamAuthConfig) =>
+  team.emailLoginEnabled ?? team.loginMethod !== OIDC_LOGIN_METHOD;
+
+const isOidcLoginEnabled = (team: TeamAuthConfig) =>
+  team.oidcLoginEnabled ?? team.loginMethod === OIDC_LOGIN_METHOD;
+
+export const isSignInProviderAllowed = async (
+  email: string | null | undefined,
+  provider: string,
+) => {
+  const domain = extractEmailDomain(email);
+  if (!domain) {
+    return false;
+  }
+
+  const team = await getTeamByEmailDomain(domain);
+  if (!team) {
+    return provider === MAGIC_LINK_PROVIDER_ID;
+  }
+
+  if (provider === MAGIC_LINK_PROVIDER_ID) {
+    return isEmailLoginEnabled(team);
+  }
+
+  return (
+    provider === buildOidcProviderId(team.id) &&
+    isOidcLoginEnabled(team) &&
+    hasOidcCredentials(team)
+  );
+};
 
 export const resolveExpectedProviderByEmail = async (
   email?: string | null,
@@ -80,12 +122,16 @@ export const resolveExpectedProviderByEmail = async (
     return MAGIC_LINK_PROVIDER_ID;
   }
 
-  if (team.loginMethod !== OIDC_LOGIN_METHOD) {
+  if (isEmailLoginEnabled(team)) {
     logger.debug(
-      { domain, teamId: team.id, loginMethod: team.loginMethod },
-      "Team login method is not OIDC for domain",
+      { domain, teamId: team.id },
+      "Email login is enabled for team domain",
     );
     return MAGIC_LINK_PROVIDER_ID;
+  }
+
+  if (!isOidcLoginEnabled(team)) {
+    throw new Error("No login method is enabled for this team domain.");
   }
 
   if (!hasOidcCredentials(team)) {
@@ -112,7 +158,7 @@ export const loadTeamOidcProviders = async (): Promise<
 > => {
   const teams = await prisma.teams.findMany({
     where: {
-      loginMethod: OIDC_LOGIN_METHOD,
+      oidcLoginEnabled: true,
       domainVerifiedAt: {
         not: null,
       },
@@ -128,6 +174,7 @@ export const loadTeamOidcProviders = async (): Promise<
     },
     select: {
       id: true,
+      oidcButtonLabel: true,
       domainVerifiedAt: true,
       oidcIssuer: true,
       oidcClientId: true,
@@ -145,7 +192,7 @@ export const loadTeamOidcProviders = async (): Promise<
 
   return teams.map((team) => ({
     id: buildOidcProviderId(team.id),
-    name: `OIDC (${team.id})`,
+    name: team.oidcButtonLabel,
     type: "oidc",
     allowDangerousEmailAccountLinking: true,
     issuer: team.oidcIssuer ?? undefined,
@@ -169,5 +216,29 @@ export const loadTeamOidcProviders = async (): Promise<
         image: typeof profile.picture === "string" ? profile.picture : null,
       };
     },
+  }));
+};
+
+export const getPublicOidcLoginOptions = async (): Promise<
+  PublicOidcLoginOption[]
+> => {
+  const teams = await prisma.teams.findMany({
+    where: {
+      oidcLoginEnabled: true,
+      domainVerifiedAt: { not: null },
+      oidcIssuer: { not: null },
+      oidcClientId: { not: null },
+      oidcClientSecret: { not: null },
+    },
+    select: {
+      id: true,
+      oidcButtonLabel: true,
+    },
+    orderBy: [{ oidcButtonLabel: "asc" }, { id: "asc" }],
+  });
+
+  return teams.map((team) => ({
+    providerId: buildOidcProviderId(team.id),
+    label: team.oidcButtonLabel,
   }));
 };
