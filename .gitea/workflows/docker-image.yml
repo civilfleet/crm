@@ -10,7 +10,26 @@ on:
   workflow_dispatch:
 
 jobs:
+  test:
+    runs-on: docker-build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run tests and typecheck
+        run: |
+          set -euo pipefail
+          docker build \
+            --target test \
+            -t "crm-ci-test:${GITHUB_SHA}" \
+            .
+
+      - name: Cleanup test image
+        if: always()
+        run: docker image rm -f "crm-ci-test:${GITHUB_SHA}" 2>/dev/null || true
+
   build:
+    needs: test
     runs-on: docker-build
     env:
       PACKAGE_REGISTRY: ${{ vars.PACKAGE_REGISTRY }}

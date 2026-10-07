@@ -15,6 +15,12 @@ COPY .yarn ./.yarn
 COPY prisma ./prisma
 RUN yarn install --immutable
 
+FROM deps AS test
+
+COPY . .
+
+RUN yarn ci:verify
+
 FROM base AS builder
 
 COPY --from=deps /app/node_modules ./node_modules
