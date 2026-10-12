@@ -46,7 +46,6 @@ services:
           sleep 1
         done
         aws --endpoint-url=http://seaweedfs:8333 s3api head-bucket --bucket "$${NEXT_AWS_S3_BUCKET_NAME}" >/dev/null 2>&1 || aws --endpoint-url=http://seaweedfs:8333 s3api create-bucket --bucket "$${NEXT_AWS_S3_BUCKET_NAME}"
-    command: []
     environment:
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local-secret
