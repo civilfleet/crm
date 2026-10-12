@@ -1,29 +1,17 @@
-x-app-env: &app-env
-  DATABASE_URL: postgresql://crm:crm@postgres:5432/crm
-  AUTH_SECRET: local-docker-auth-secret-change-me
-  AUTH_URL: http://localhost:3000/api/auth
-  NEXTAUTH_URL: http://localhost:3000/api/auth
-  NEXT_PUBLIC_BASE_URL: http://localhost:3000
-  NEXT_PUBLIC_APP_URL: http://localhost:3000
-  NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Sea-Watch CRM}
-  CHIBIGEO_SECRET: ${CHIBIGEO_SECRET:-}
-  PHOTON_BASE_URL: ${PHOTON_BASE_URL:-https://app.chibigeo.com/v1/photon}
-  LOG_LEVEL: debug
-  SMTP_HOST: smtp.example.com
-  SMTP_PORT: "587"
-  SMTP_SECURE: "false"
-  SMTP_USER: local
-  SMTP_PASS: local
-  SMTP_FROM: noreply@example.com
-  BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
-  BOOTSTRAP_ADMIN_EMAILS: ${BOOTSTRAP_ADMIN_EMAILS:-}
-  BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Local Admin}
+x-database-env: &database-env
+  DATABASE_URL: ${DATABASE_URL:-postgresql://crm:crm@postgres:5432/crm}
+
+x-storage-env: &storage-env
   NEXT_AWS_S3_ACCESS_KEY: ${NEXT_AWS_S3_ACCESS_KEY:-local}
   NEXT_AWS_S3_ACCESS_SECRET: ${NEXT_AWS_S3_ACCESS_SECRET:-local-secret}
   NEXT_AWS_S3_BUCKET_NAME: ${NEXT_AWS_S3_BUCKET_NAME:-crm}
   NEXT_AWS_S3_BUCKET_REGION: ${NEXT_AWS_S3_BUCKET_REGION:-us-east-1}
   NEXT_AWS_S3_ENDPOINT: ${NEXT_AWS_S3_ENDPOINT:-http://seaweedfs:8333}
-  NEXT_AWS_S3_PUBLIC_ENDPOINT: ${NEXT_AWS_S3_PUBLIC_ENDPOINT:-http://localhost:8333}
+
+x-bootstrap-env: &bootstrap-env
+  BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+  BOOTSTRAP_ADMIN_EMAILS: ${BOOTSTRAP_ADMIN_EMAILS:-}
+  BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Local Admin}
 
 services:
   seaweedfs:
@@ -62,7 +50,7 @@ services:
       target: runner-tools
     command: [ "node", "--import", "tsx", "scripts/manage-s3-cors.ts", "apply" ]
     environment:
-      <<: *app-env
+      <<: *storage-env
       S3_CORS_ALLOWED_ORIGINS: ${S3_CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       S3_CORS_ALLOWED_METHODS: ${S3_CORS_ALLOWED_METHODS:-GET,HEAD,PUT}
       S3_CORS_ALLOWED_HEADERS: "${S3_CORS_ALLOWED_HEADERS:-*}"
@@ -95,7 +83,7 @@ services:
       target: runner-tools
     command: [ "node", "node_modules/prisma/build/index.js", "migrate", "deploy" ]
     environment:
-      <<: *app-env
+      <<: *database-env
     depends_on:
       postgres:
         condition: service_healthy
@@ -108,7 +96,8 @@ services:
       target: runner-tools
     command: [ "node", "--import", "tsx", "scripts/bootstrap-admin.ts" ]
     environment:
-      <<: *app-env
+      <<: [ *database-env, *bootstrap-env ]
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -120,7 +109,23 @@ services:
       target: runner-app
     command: [ "node", "server.js" ]
     environment:
-      <<: *app-env
+      <<: [ *database-env, *storage-env ]
+      AUTH_SECRET: ${AUTH_SECRET:-local-docker-auth-secret-change-me}
+      AUTH_URL: ${AUTH_URL:-http://localhost:3000/api/auth}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000/api/auth}
+      NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Sea-Watch CRM}
+      CHIBIGEO_SECRET: ${CHIBIGEO_SECRET:-}
+      PHOTON_BASE_URL: ${PHOTON_BASE_URL:-https://app.chibigeo.com/v1/photon}
+      SMTP_HOST: ${SMTP_HOST:-smtp.example.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-local}
+      SMTP_PASS: ${SMTP_PASS:-local}
+      SMTP_FROM: ${SMTP_FROM:-noreply@example.com}
+      NEXT_AWS_S3_PUBLIC_ENDPOINT: ${NEXT_AWS_S3_PUBLIC_ENDPOINT:-http://localhost:8333}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
     depends_on:
       bootstrap:
         condition: service_completed_successfully
@@ -134,9 +139,12 @@ services:
       target: runner-tools
     command: [ "node", "--import", "tsx", "scripts/background-worker.ts" ]
     environment:
-      <<: *app-env
+      <<: [ *database-env, *storage-env ]
+      # Used only as the legacy fallback when INBOUND_EMAIL_ENCRYPTION_KEY is unset.
+      AUTH_SECRET: ${AUTH_SECRET:-local-docker-auth-secret-change-me}
       BACKGROUND_WORKER_POLL_INTERVAL_MS: "5000"
       BACKGROUND_WORKER_STALE_LOCK_MS: "3600000"
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
     depends_on:
       bootstrap:
         condition: service_completed_successfully

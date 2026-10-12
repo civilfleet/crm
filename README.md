@@ -118,6 +118,17 @@ docker compose up --build
 
 The `seaweedfs` service provides local S3-compatible storage, `seaweedfs-init` creates the default `crm` bucket, and `seaweedfs-cors` applies the upload CORS policy before the web app and worker start. The `migrate` service runs `prisma migrate deploy` before the web app and worker start. The `worker` service runs the background worker from the matching tools image and processes queued jobs and maintenance tasks outside API requests.
 
+The Compose file assigns database, storage, authentication, SMTP, and bootstrap
+settings only to the services that consume them. Coolify's normal managed
+Compose deployment adds its generated `.env` file to every service, so the
+Coolify UI/runtime may still show all application variables in every container.
+Strict per-container environment isolation requires Coolify's Raw Compose mode;
+that mode also requires maintaining the proxy labels and network configuration
+in this repository, so do not enable it without adding and validating those
+settings first. Secrets should be runtime-only in Coolify. Only values needed by
+the Next.js client bundle, such as `NEXT_PUBLIC_*`, should be enabled at build
+time.
+
 The worker records a database heartbeat every 30 seconds. Check both heartbeat
 freshness and eligible email queue lag with:
 
