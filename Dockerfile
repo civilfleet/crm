@@ -48,3 +48,7 @@ COPY --from=builder /app/.next/standalone ./
 EXPOSE 3000
 
 CMD ["node", "server.js"]
+
+FROM chrislusf/seaweedfs:latest AS runner-seaweedfs
+
+COPY config/seaweedfs-s3.json /etc/seaweedfs/s3.json

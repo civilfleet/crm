@@ -26,7 +26,10 @@ x-app-env: &app-env
 
 services:
   seaweedfs:
-    image: chrislusf/seaweedfs:latest
+    image: crm-seaweedfs:local
+    build:
+      context: .
+      target: runner-seaweedfs
     command: [ "server", "-dir=/data", "-s3", "-s3.config=/etc/seaweedfs/s3.json" ]
     ports:
       - "8333:8333"
@@ -34,10 +37,10 @@ services:
       - "9333:9333"
     volumes:
       - seaweedfs-data:/data
-      - ./config/seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
 
   seaweedfs-init:
     image: amazon/aws-cli:latest
+    restart: "no"
     entrypoint:
       - /bin/sh
       - -ec
@@ -56,6 +59,7 @@ services:
 
   seaweedfs-cors:
     image: crm-tools:local
+    restart: "no"
     build:
       context: .
       target: runner-tools
@@ -90,6 +94,7 @@ services:
 
   migrate:
     image: crm-tools:local
+    restart: "no"
     build:
       context: .
       target: runner-tools
@@ -102,6 +107,7 @@ services:
 
   bootstrap:
     image: crm-tools:local
+    restart: "no"
     build:
       context: .
       target: runner-tools
