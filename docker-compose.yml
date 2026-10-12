@@ -111,8 +111,9 @@ services:
     environment:
       <<: [ *database-env, *storage-env ]
       AUTH_SECRET: ${AUTH_SECRET:-local-docker-auth-secret-change-me}
-      AUTH_URL: ${AUTH_URL:-http://localhost:3000/api/auth}
-      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000/api/auth}
+      AUTH_URL: ${AUTH_URL:-}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-}
+      AUTH_TRUST_HOST: ${AUTH_TRUST_HOST:-true}
       NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Sea-Watch CRM}
