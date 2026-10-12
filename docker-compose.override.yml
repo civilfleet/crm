@@ -1,0 +1,14 @@
+services:
+  seaweedfs:
+    ports:
+      - "8333:8333"
+      - "8888:8888"
+      - "9333:9333"
+
+  postgres:
+    ports:
+      - "5432:5432"
+
+  app:
+    ports:
+      - "3000:3000"
