@@ -67,7 +67,8 @@ const run = async () => {
     ),
   );
 
-  const { transporter } = await import("@/lib/nodemailer");
+  const { getTransporter } = await import("@/lib/nodemailer");
+  const transporter = getTransporter();
 
   await transporter.verify();
   console.log("SMTP verify succeeded.");

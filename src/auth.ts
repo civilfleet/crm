@@ -2,7 +2,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter";
 import NextAuth, { type DefaultSession, type NextAuthConfig } from "next-auth";
 import Nodemailer from "next-auth/providers/nodemailer";
 import authConfig from "./config/auth";
-import mailConfig from "./config/mail";
+import { resolveMailConfiguration } from "./config/mail";
 import {
   extractEmailDomain,
   isSignInProviderAllowed,
@@ -28,6 +28,7 @@ declare module "next-auth" {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
+  const { config: mailConfig } = resolveMailConfiguration(process.env);
   let teamOidcProviders: Awaited<ReturnType<typeof loadTeamOidcProviders>> = [];
 
   try {

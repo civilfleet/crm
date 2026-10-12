@@ -60,8 +60,3 @@ export const resolveMailConfiguration = (env: MailEnvironment) => {
     },
   };
 };
-
-const resolved = resolveMailConfiguration(process.env);
-
-export const mailProvider = resolved.mailProvider;
-export default resolved.config;

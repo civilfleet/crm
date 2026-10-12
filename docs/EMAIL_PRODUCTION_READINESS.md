@@ -18,6 +18,14 @@ automated checks, and any required live verification have completed.
 enable CRM bulk sending until all P0 items are `DONE` and the live rollout
 checklist has passed with a dedicated test mailbox and test recipients.
 
+The database configured by this checkout has six current migrations present in
+the schema but absent from Prisma history and seven nullable tag columns that
+should be non-null. Historical rows predating the intentional consolidated
+baseline remain in the database and do not need their deleted migration files
+restored. Confirm that this managed database is the one used by the deployed
+containers, then complete
+`docs/PRISMA_MIGRATION_RECONCILIATION.md` before any migration deployment.
+
 ## Work items
 
 | ID | Priority | Status | Issue | Completion evidence |
@@ -34,6 +42,7 @@ checklist has passed with a dedicated test mailbox and test recipients.
 | EMAIL-010 | P1 | READY FOR LIVE TEST | Inbound and reply attachments use private storage, authenticated downloads, secure global blocklist defaults, inline safe raster images, provider-specific limits, and retry-safe IMAP checkpoints. Replies honor the first valid `Reply-To` with a visible warning. Sent replies remain CRM-only. | Migration/schema validation, attachment-policy, storage-failure, `Reply-To`, idempotency/security, provider, typecheck, focused Biome, and production-build checks pass. Apply the migration and complete live IMAP/S3/SMTP/Scaleway attachment tests before marking `DONE`. |
 | EMAIL-011 | P1 | READY FOR LIVE TEST | Scaleway, Klaviyo, Zammad, IMAP, and inbox SMTP operations have configurable bounded deadlines. Worker health now fails on eligible Zammad queue lag and stale enabled-inbox syncs in addition to bulk-email queue lag. | Timeout configuration and health-threshold tests, schema validation, typecheck, focused Biome, and production build passed. Apply the heartbeat extension migration and verify timeout/lag alerts live before marking `DONE`. |
 | EMAIL-012 | P1 | READY FOR LIVE TEST | Production startup rejects missing or invalid global SMTP host, credentials, sender, port, and TLS-mode configuration. Global SMTP also uses bounded connection, greeting, and socket deadlines. | Startup configuration tests, typecheck, focused Biome, and production build passed. Complete live magic-link and application-email smoke tests before marking `DONE`. |
+| EMAIL-013 | P0 | BLOCKED | The production Compose template does not yet pass the security and operational environment added by EMAIL-004, EMAIL-005, EMAIL-007, EMAIL-008, EMAIL-010, and EMAIL-011, and the worker has no health check. | Update and apply the infrastructure role, then inspect the rendered container configuration without exposing secrets and prove the worker health alert path. This change belongs to the separate `datacenter-infra` repository. |
 
 ## Baseline validation (2026-10-05)
 
@@ -50,7 +59,12 @@ checklist has passed with a dedicated test mailbox and test recipients.
 
 ## Live rollout checklist
 
-- [ ] Apply and verify all email-related Prisma migrations.
+- [ ] Reconcile production migration history using
+      `docs/PRISMA_MIGRATION_RECONCILIATION.md`, then apply and verify all
+      pending email-related Prisma migrations.
+- [ ] Update the production infrastructure role to pass the new encryption,
+      inbound-auth, SNS, timeout, attachment-policy, and worker-health settings
+      to web and worker containers; add the worker health check and monitoring.
 - [ ] Deploy the web image and matching tools/worker image from the same commit.
 - [ ] Configure `INTEGRATION_SECRET_ENCRYPTION_KEYS` in web and worker, run
       `yarn secrets:rotate-integrations`, and complete the smoke tests in
@@ -204,6 +218,24 @@ checklist has passed with a dedicated test mailbox and test recipients.
   identity and used by the server, with a warning in both reply interfaces when
   they differ. Sent replies remain CRM-only by product decision.
 - Remaining unresolved items require controlled live rollout evidence.
+- Read-only migration inspection found historical database rows for migrations
+  intentionally superseded by the consolidated 2026 baseline. Their deleted
+  SQL files must remain deleted: restoring them ahead of the baseline would
+  make clean database creation fail on duplicate objects. Prisma production
+  deployment ignores applied migrations missing from the filesystem, so those
+  legacy history rows do not require modification.
+- A deeper read-only schema preflight on 2026-10-07 found that all objects from
+  the six July-September migrations already exist even though their Prisma
+  history entries are absent. Every expected column, index, foreign key,
+  primary key, and enum label is present. The seven tag-array columns are the
+  only detected mismatch: they are nullable instead of `NOT NULL`, but contain
+  zero null values. The reconciliation runbook now repairs that constraint and
+  records those six migrations as applied before deploying the six genuinely
+  pending October email migrations.
+- Target identity is not yet proven: this checkout uses managed PostgreSQL,
+  while the current Ansible role defines an internal PostgreSQL container. A
+  read-only SSH check failed at authentication. No database row, constraint, or
+  migration-history record was changed.
 
 ## Production worker deployment handoff
 
@@ -215,8 +247,28 @@ The worker uses the tools image with the same tag and database configuration as
 the web app, starts `scripts/background-worker.ts`, and has
 `restart: unless-stopped`.
 
-The remaining infrastructure change is to make the worker container run this
-probe after the heartbeat migration has been applied:
+The production Compose template currently exposes only the legacy SMTP and S3
+settings. It must be extended in the infrastructure repository to pass the new
+email settings to both runtime services and make the worker run this probe after
+the heartbeat migration has been applied:
+
+- required secrets and trust policy:
+  `INTEGRATION_SECRET_ENCRYPTION_KEYS`, `INBOUND_EMAIL_ENCRYPTION_KEY`,
+  `INBOUND_EMAIL_TRUSTED_AUTHSERV_IDS`, `SCALEWAY_EMAIL_SNS_TOPIC_ARNS`, and one
+  of `SCALEWAY_SNS_TRUST_CHAIN_PEM` or
+  `SCALEWAY_SNS_TRUST_CHAIN_PEM_BASE64`;
+- explicit SMTP and provider policy: `SMTP_REQUIRE_TLS`,
+  `EMAIL_PROVIDER_REQUEST_TIMEOUT_MS`, `EMAIL_CONNECTION_TIMEOUT_MS`,
+  `EMAIL_GREETING_TIMEOUT_MS`, and `EMAIL_SOCKET_TIMEOUT_MS`;
+- worker scheduling and monitoring: `BACKGROUND_WORKER_HEARTBEAT_INTERVAL_MS`,
+  `BACKGROUND_WORKER_HEALTH_MAX_AGE_MS`,
+  `BACKGROUND_WORKER_EMAIL_QUEUE_MAX_LAG_MS`,
+  `BACKGROUND_WORKER_ZAMMAD_QUEUE_MAX_LAG_MS`, and
+  `BACKGROUND_WORKER_INBOX_SYNC_MAX_LAG_MS`;
+- inbound limits and policy, when overriding the secure defaults:
+  `INBOUND_EMAIL_SYNC_INTERVAL_MS`, `INBOUND_EMAIL_SYNC_LIMIT`,
+  `EMAIL_INBOUND_MAX_MESSAGE_BYTES`, `EMAIL_ATTACHMENT_BLOCKED_EXTENSIONS`, and
+  `EMAIL_ATTACHMENT_BLOCKED_MIME_TYPES`.
 
 ```yaml
 healthcheck:

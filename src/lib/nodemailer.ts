@@ -2,19 +2,25 @@ import fs from "node:fs";
 import path from "node:path";
 import handlebars from "handlebars";
 import nodemailer from "nodemailer";
+import { resolveMailConfiguration } from "@/config/mail";
 import logger from "@/lib/logger";
 import type { EMAIL_CONTENT } from "@/types";
-import config, { mailProvider } from "../config/mail";
 
-const transporter = nodemailer.createTransport({
-  ...config,
-});
+let transporter: ReturnType<typeof nodemailer.createTransport> | undefined;
 
-// Log the email provider being used
-logger.info({ provider: mailProvider }, "Email provider configured");
-if (mailProvider === "None") {
-  logger.warn("SMTP is not configured; email delivery will fail");
-}
+export const getTransporter = () => {
+  if (transporter) return transporter;
+
+  const { config, mailProvider } = resolveMailConfiguration(process.env);
+  transporter = nodemailer.createTransport(config);
+
+  logger.info({ provider: mailProvider }, "Email provider configured");
+  if (mailProvider === "None") {
+    logger.warn("SMTP is not configured; email delivery will fail");
+  }
+
+  return transporter;
+};
 
 const templateCache = new Map<string, handlebars.TemplateDelegate>();
 
@@ -69,7 +75,7 @@ async function sendEmail(
     const senderEmail =
       emailContent?.from ?? process.env.SMTP_FROM ?? process.env.SMTP_USER;
 
-    const info = await transporter.sendMail({
+    const info = await getTransporter().sendMail({
       from: senderEmail,
       to: emailContent.to,
       subject: emailContent.subject,
@@ -116,4 +122,4 @@ async function sendEmail(
   }
 }
 
-export { sendEmail, transporter };
+export { sendEmail };
