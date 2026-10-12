@@ -13,7 +13,8 @@ FROM base AS deps
 COPY package.json yarn.lock .yarnrc.yml prisma.config.ts ./
 COPY .yarn ./.yarn
 COPY prisma ./prisma
-RUN yarn install --immutable
+RUN --mount=type=cache,target=/root/.yarn/berry/cache,sharing=locked \
+  yarn install --immutable
 
 FROM deps AS test
 
@@ -27,13 +28,14 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/package.json /app/yarn.lock /app/.yarnrc.yml ./
 COPY . .
 
-RUN yarn build
+RUN --mount=type=cache,target=/app/.next/cache,sharing=locked \
+  yarn build
 
-FROM base AS runner-tools
+FROM deps AS runner-tools
 
 ENV NODE_ENV=production
 
-COPY --from=builder /app ./
+COPY . .
 
 FROM base AS runner-app
 
