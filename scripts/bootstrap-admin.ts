@@ -1,22 +1,21 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, Roles } from "@prisma/client";
 import { Pool } from "pg";
+import { resolveBootstrapAdminEmails } from "@/config/bootstrap-admin";
 import logger from "@/lib/logger";
 
-const bootstrapAdminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim();
+const bootstrapAdminEmails = resolveBootstrapAdminEmails({
+  BOOTSTRAP_ADMIN_EMAIL: process.env.BOOTSTRAP_ADMIN_EMAIL,
+  BOOTSTRAP_ADMIN_EMAILS: process.env.BOOTSTRAP_ADMIN_EMAILS,
+});
 const bootstrapAdminName = process.env.BOOTSTRAP_ADMIN_NAME?.trim();
 
-const isValidEmail = (email: string) =>
-  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
 async function main() {
-  if (!bootstrapAdminEmail) {
-    logger.info("BOOTSTRAP_ADMIN_EMAIL is not set; skipping admin bootstrap");
+  if (bootstrapAdminEmails.length === 0) {
+    logger.info(
+      "BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_EMAILS are not set; skipping admin bootstrap",
+    );
     return;
-  }
-
-  if (!isValidEmail(bootstrapAdminEmail)) {
-    throw new Error("BOOTSTRAP_ADMIN_EMAIL must be a valid email address");
   }
 
   const pool = new Pool({
@@ -32,47 +31,57 @@ async function main() {
   const prisma = new PrismaClient({ adapter });
 
   try {
-    const existingUser = await prisma.user.findUnique({
-      where: {
-        email: bootstrapAdminEmail,
-      },
-      select: {
-        id: true,
-        roles: true,
-      },
-    });
-
-    if (existingUser) {
-      const roles = Array.from(
-        new Set<Roles>([...existingUser.roles, Roles.Admin]),
-      );
-
-      await prisma.user.update({
+    for (const bootstrapAdminEmail of bootstrapAdminEmails) {
+      const existingUser = await prisma.user.findUnique({
         where: {
-          id: existingUser.id,
+          email: bootstrapAdminEmail,
         },
+        select: {
+          id: true,
+          roles: true,
+        },
+      });
+
+      if (existingUser) {
+        const roles = Array.from(
+          new Set<Roles>([...existingUser.roles, Roles.Admin]),
+        );
+
+        await prisma.user.update({
+          where: {
+            id: existingUser.id,
+          },
+          data: {
+            roles,
+            ...(bootstrapAdminEmails.length === 1 && bootstrapAdminName
+              ? { name: bootstrapAdminName }
+              : {}),
+          },
+        });
+
+        logger.info(
+          { email: bootstrapAdminEmail },
+          "Ensured existing user has Admin role",
+        );
+        continue;
+      }
+
+      await prisma.user.create({
         data: {
-          roles,
-          ...(bootstrapAdminName ? { name: bootstrapAdminName } : {}),
+          email: bootstrapAdminEmail,
+          name:
+            bootstrapAdminEmails.length === 1
+              ? bootstrapAdminName || null
+              : null,
+          roles: [Roles.Admin],
         },
       });
 
       logger.info(
         { email: bootstrapAdminEmail },
-        "Ensured existing user has Admin role",
+        "Created bootstrap admin user",
       );
-      return;
     }
-
-    await prisma.user.create({
-      data: {
-        email: bootstrapAdminEmail,
-        name: bootstrapAdminName || null,
-        roles: [Roles.Admin],
-      },
-    });
-
-    logger.info({ email: bootstrapAdminEmail }, "Created bootstrap admin user");
   } finally {
     await prisma.$disconnect();
     await pool.end();

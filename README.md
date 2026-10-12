@@ -140,13 +140,13 @@ Scaleway delivery and bounce events are received at
 subscription. See [docs/EMAIL_SENDING_POLICY.md](docs/EMAIL_SENDING_POLICY.md)
 for the sending boundary, suppression behavior, and rollout checks.
 
-To bootstrap an initial admin on a fresh database, set `BOOTSTRAP_ADMIN_EMAIL` and optionally `BOOTSTRAP_ADMIN_NAME`:
+To bootstrap admins on a fresh database, set `BOOTSTRAP_ADMIN_EMAILS` to a comma-separated list. The legacy `BOOTSTRAP_ADMIN_EMAIL` is also supported and is combined with the list:
 
 ```bash
-BOOTSTRAP_ADMIN_EMAIL=admin@example.com BOOTSTRAP_ADMIN_NAME="Local Admin" docker compose up --build
+BOOTSTRAP_ADMIN_EMAILS="alice@example.com,bob@example.com" docker compose up --build
 ```
 
-If `BOOTSTRAP_ADMIN_EMAIL` is unset, bootstrap exits without changing data. No password is created; the admin signs in through the configured SMTP magic link.
+Whitespace and duplicate addresses are removed, and every configured user receives the Admin role. `BOOTSTRAP_ADMIN_NAME` is applied only when exactly one bootstrap email is configured. If neither email variable is set, bootstrap exits without changing data. No passwords are created; admins sign in through their configured SMTP magic links.
 
 ## Available Scripts
 
