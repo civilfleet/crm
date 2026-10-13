@@ -1,12 +1,12 @@
 x-database-env: &database-env
-  DATABASE_URL: ${DATABASE_URL:-postgresql://crm:crm@postgres:5432/crm}
+  DATABASE_URL: ${DATABASE_URL:-postgresql://crm:crm@${SERVICE_NAME_POSTGRES:-postgres}:5432/crm}
 
 x-storage-env: &storage-env
   NEXT_AWS_S3_ACCESS_KEY: ${NEXT_AWS_S3_ACCESS_KEY:-local}
   NEXT_AWS_S3_ACCESS_SECRET: ${NEXT_AWS_S3_ACCESS_SECRET:-local-secret}
   NEXT_AWS_S3_BUCKET_NAME: ${NEXT_AWS_S3_BUCKET_NAME:-crm}
   NEXT_AWS_S3_BUCKET_REGION: ${NEXT_AWS_S3_BUCKET_REGION:-us-east-1}
-  NEXT_AWS_S3_ENDPOINT: ${NEXT_AWS_S3_ENDPOINT:-http://seaweedfs:8333}
+  NEXT_AWS_S3_ENDPOINT: ${NEXT_AWS_S3_ENDPOINT:-http://${SERVICE_NAME_SEAWEEDFS:-seaweedfs}:8333}
 
 x-bootstrap-env: &bootstrap-env
   BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
@@ -30,14 +30,15 @@ services:
       - /bin/sh
       - -ec
       - |
-        until aws --endpoint-url=http://seaweedfs:8333 s3api list-buckets >/dev/null 2>&1; do
+        until aws --endpoint-url="$${SEAWEEDFS_ENDPOINT}" s3api list-buckets >/dev/null 2>&1; do
           sleep 1
         done
-        aws --endpoint-url=http://seaweedfs:8333 s3api head-bucket --bucket "$${NEXT_AWS_S3_BUCKET_NAME}" >/dev/null 2>&1 || aws --endpoint-url=http://seaweedfs:8333 s3api create-bucket --bucket "$${NEXT_AWS_S3_BUCKET_NAME}"
+        aws --endpoint-url="$${SEAWEEDFS_ENDPOINT}" s3api head-bucket --bucket "$${NEXT_AWS_S3_BUCKET_NAME}" >/dev/null 2>&1 || aws --endpoint-url="$${SEAWEEDFS_ENDPOINT}" s3api create-bucket --bucket "$${NEXT_AWS_S3_BUCKET_NAME}"
     environment:
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local-secret
       AWS_DEFAULT_REGION: us-east-1
+      SEAWEEDFS_ENDPOINT: http://${SERVICE_NAME_SEAWEEDFS:-seaweedfs}:8333
       NEXT_AWS_S3_BUCKET_NAME: ${SEAWEEDFS_BUCKET_NAME:-crm}
     depends_on:
       - seaweedfs
