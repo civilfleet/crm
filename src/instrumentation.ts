@@ -2,11 +2,11 @@ import * as Sentry from "@sentry/nextjs";
 
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
-    await import("./sentry.server.config");
+    await import("../sentry.server.config");
 
     const [{ default: logger }, { isPreviewDemoEnabled }] = await Promise.all([
-      import("./src/lib/logger"),
-      import("./src/config/preview-demo"),
+      import("./lib/logger"),
+      import("./config/preview-demo"),
     ]);
     const previewDemoEnabled = isPreviewDemoEnabled(
       process.env.PREVIEW_DEMO_ENABLED,
@@ -22,7 +22,7 @@ export async function register() {
   }
 
   if (process.env.NEXT_RUNTIME === "edge") {
-    await import("./sentry.edge.config");
+    await import("../sentry.edge.config");
   }
 }
 
