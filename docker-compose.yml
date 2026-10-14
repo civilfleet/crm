@@ -109,6 +109,12 @@ services:
       context: .
       target: runner-app
     command: [ "node", "server.js" ]
+    healthcheck:
+      test: [ "CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((response) => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     environment:
       <<: [ *database-env, *storage-env ]
       AUTH_SECRET: ${AUTH_SECRET:-local-docker-auth-secret-change-me}
