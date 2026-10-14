@@ -118,6 +118,7 @@ services:
       NEXT_PUBLIC_BASE_URL: ${NEXT_PUBLIC_BASE_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Sea-Watch CRM}
+      PREVIEW_DEMO_ENABLED: ${PREVIEW_DEMO_ENABLED:-false}
       CHIBIGEO_SECRET: ${CHIBIGEO_SECRET:-}
       PHOTON_BASE_URL: ${PHOTON_BASE_URL:-https://app.chibigeo.com/v1/photon}
       SMTP_HOST: ${SMTP_HOST:-smtp.example.com}
