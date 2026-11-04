@@ -9,19 +9,20 @@ export default function EventsPage({
   version: string;
 }) {
   return (
-    <main className="events-page">
+    <main id="main-content" className="events-page">
       <header className="events-header">
-        <div className="header-labels">
-          <span className="public-badge">Public Events</span>
-          <span className="team-name">{team.name}</span>
+        <div className="site-container">
+          <h1>Find the next action near you</h1>
+          <p className="intro">
+            Browse public workshops, talks, and actions. Filter by place, type,
+            or distance to discover events that match your interests.
+          </p>
+          <p className="team-name">{team.name} · Public Events</p>
         </div>
-        <h1>Find the next action near you</h1>
-        <p className="intro">
-          Browse public workshops, talks, and actions. Filter by place, type, or
-          distance to discover events that match your interests.
-        </p>
       </header>
-      <Explorer teamId={team.id} version={version} />
+      <div className="site-container events-content">
+        <Explorer teamId={team.id} version={version} />
+      </div>
     </main>
   );
 }

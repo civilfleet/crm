@@ -170,16 +170,21 @@ for infrastructure-only tests.
 ## Current public deployment
 
 Published on 2026-11-04 at https://seawatch-events.netlify.app/ (site ID
-`ef0bcb3b-e04c-400d-889b-028af45b349a`). Production deployment
-`6aeaeb530f07fb64eb93457b` restores the original public listing's Fraunces and
-IBM Plex Sans fonts, cream/green/amber background, visible filter rows, rounded
-panels, and event cards. Fonts are self-hosted in the static output. The homepage
-opens the configured team's listing directly. Event details retain the original
-simple gray background and white cards. Upcoming/archive controls and static
-search remain available; search filters update after a 300 ms debounce.
+`ef0bcb3b-e04c-400d-889b-028af45b349a`). Active production deployment
+`6aeb47a48ac2c89adfd88446` applies the user-selected sea-watch.org identity:
+official logo, locally served Inter 400/700, navy/cyan/white palette, square
+controls, shared header/footer, and consistent listing/detail styling. The design
+is documented in `public-events/DESIGN.md` and its app-scoped Impeccable sidecar.
+The preceding deployment `6aeaeb530f07fb64eb93457b` remains the rollback reference.
 
-Public HTTPS checks returned 200 for the homepage, team listing, and a detail
-page. The deployed UI was checked at 390px and 1280px, including live text
-search, with no horizontal overflow or browser console errors. Registration
-intake and automatic publishing remain disabled pending live infrastructure
-configuration; the current site's four public events are all historical.
+This publication uploaded the tested static output without re-exporting or
+changing event data, enabling registration, or altering the private CRM. The
+homepage opens the configured team's listing directly. Upcoming/archive controls,
+text search and date/geographic filtering remain available; search filters update
+after a 300 ms debounce. The four existing public events are historical.
+
+Netlify's published deployment pointer was verified against the new ID. Public
+HTTPS checks returned 200 for the homepage, team listing, detail page, logo and
+Pagefind script. Live desktop browsing showed all four events without horizontal
+overflow or browser console errors. Registration intake and automatic publishing
+remain disabled pending live infrastructure configuration.

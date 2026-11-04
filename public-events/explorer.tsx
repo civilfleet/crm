@@ -1,15 +1,15 @@
 "use client";
-import { Calendar, MapPin, Search, Sparkles } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ArrowRight, Calendar, MapPin, Search } from "lucide-react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { distanceKm, intersectsRadius } from "../src/lib/public-events/geo";
 import {
-  eventPath,
-  normalizePostal,
-  postalShard,
   type EventManifest,
+  eventPath,
   type GeoPoint,
   type GeoShard,
+  normalizePostal,
   type PublicEvent,
+  postalShard,
 } from "../src/lib/public-events/types";
 
 type ResultData = { url: string; meta: Record<string, string> };
@@ -346,11 +346,11 @@ export default function Explorer({
             </select>
           </label>
           <label className="date-filter">
-            <span className="sr-only">From date</span>
+            <span>From date</span>
             <input type="date" name="from" />
           </label>
           <label className="date-filter">
-            <span className="sr-only">Until date</span>
+            <span>Until date</span>
             <input type="date" name="to" />
           </label>
         </div>
@@ -376,7 +376,7 @@ export default function Explorer({
             </select>
           </label>
           <label className="radius-filter">
-            <span className="sr-only">Radius (km)</span>
+            <span>Radius (km)</span>
             <input
               name="radius"
               type="number"
@@ -398,6 +398,7 @@ export default function Explorer({
         <button
           type="button"
           className={scope === "upcoming" ? "selected" : ""}
+          aria-pressed={scope === "upcoming"}
           onClick={() => {
             setScope("upcoming");
             setPage(1);
@@ -408,6 +409,7 @@ export default function Explorer({
         <button
           type="button"
           className={scope === "all" ? "selected" : ""}
+          aria-pressed={scope === "all"}
           onClick={() => {
             setScope("all");
             setPage(1);
@@ -440,7 +442,7 @@ export default function Explorer({
             : `${total} public event${total === 1 ? "" : "s"}`}
         </span>
         <span className="updated-label">
-          <Sparkles size={16} aria-hidden="true" />
+          <Calendar size={16} aria-hidden="true" />
           Updated daily
         </span>
       </div>
@@ -452,8 +454,8 @@ export default function Explorer({
       <div className="cards" aria-busy={busy}>
         {cards.map((card) => (
           <a className="card" href={card.url} key={card.id}>
+            <h2>{card.title}</h2>
             {card.type && <span className="event-badge">{card.type}</span>}
-            <h3>{card.title}</h3>
             <time dateTime={card.date}>
               {new Intl.DateTimeFormat("en-GB", {
                 weekday: "short",
@@ -477,6 +479,9 @@ export default function Explorer({
                 {card.format}
               </span>
             </div>
+            <span className="card-action">
+              View event <ArrowRight size={18} aria-hidden="true" />
+            </span>
           </a>
         ))}
       </div>

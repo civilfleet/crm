@@ -1,12 +1,23 @@
+import localFont from "next/font/local";
 import type { ReactNode } from "react";
-import { Fraunces, IBM_Plex_Sans } from "next/font/google";
+import { SiteFooter, SiteHeader } from "../site-chrome";
 import "./style.css";
 
-const display = Fraunces({ subsets: ["latin"], variable: "--font-display" });
-const body = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const inter = localFont({
+  src: [
+    {
+      path: "../public/brand/inter-regular-latin.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../public/brand/inter-bold-latin.woff2",
+      weight: "700",
+      style: "normal",
+    },
+  ],
   variable: "--font-body",
+  display: "swap",
 });
 
 export const metadata = {
@@ -18,7 +29,11 @@ export const metadata = {
 export default function Layout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${display.variable} ${body.variable}`}>{children}</body>
+      <body className={inter.variable}>
+        <SiteHeader />
+        {children}
+        <SiteFooter />
+      </body>
     </html>
   );
 }

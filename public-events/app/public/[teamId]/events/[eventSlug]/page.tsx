@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
-import { snapshot } from "../../../../../snapshot";
-import Registration from "../../../../../registration";
 import { isPast } from "../../../../../../src/lib/public-events/types";
+import Registration from "../../../../../registration";
+import { snapshot } from "../../../../../snapshot";
 
 export function generateStaticParams() {
   return snapshot().events.map((event) => ({
@@ -31,7 +31,7 @@ export default async function EventPage({
     }).format(new Date(date));
   return (
     <div className="detail-background">
-      <main className="event-detail">
+      <main id="main-content" className="event-detail">
         <a className="back" href={`/public/${teamId}/events/`}>
           ← All events
         </a>
@@ -58,11 +58,12 @@ export default async function EventPage({
               {value}
             </span>
           ))}
-          <p className="eyebrow">
+          <h1 data-pagefind-meta="title">{event.title}</h1>
+          <p className="event-classification">
             {event.eventType || "EVENT"}
             {past ? " / PAST EVENT" : ""}
           </p>
-          <h1 data-pagefind-meta="title">{event.title}</h1>
+
           {team && (
             <p className="event-host">
               Hosted by <strong>{team.name}</strong>
