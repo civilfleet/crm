@@ -54,3 +54,10 @@ yarn-error.log*
 /public-events/next-env.d.ts
 /.netlify/
 /public-api/dist/
+
+# Local Impeccable tooling
+.agents/skills/impeccable/scripts/bin/
+.impeccable/config.local.json
+.impeccable/hook.cache.json
+.impeccable/backups/
+.impeccable/review/

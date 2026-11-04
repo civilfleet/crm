@@ -16,3 +16,8 @@ public-events/.snapshot.json
 public-events/public/data
 public-api/dist
 .netlify
+
+# Local Impeccable tooling
+.agents
+.codex
+.impeccable

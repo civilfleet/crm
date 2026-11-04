@@ -15,6 +15,7 @@
     "includes": [
       "**",
       "!node_modules",
+      "!.agents",
       "!.next",
       "!dist",
       "!build",
