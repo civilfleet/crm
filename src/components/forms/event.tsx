@@ -79,6 +79,7 @@ interface EventFormProps {
     address?: string;
     city?: string;
     postalCode?: string;
+    countryCode?: string;
     state?: string;
     timeZone?: string;
     merchNeeded?: boolean;
@@ -217,6 +218,7 @@ export default function EventForm({
           address: event?.address || "",
           city: event?.city || "",
           postalCode: event?.postalCode || "",
+          countryCode: event?.countryCode || "",
           state: event?.state || "",
           timeZone: event?.timeZone || "",
           merchNeeded: event?.merchNeeded ?? false,
@@ -243,6 +245,7 @@ export default function EventForm({
           address: "",
           city: "",
           postalCode: "",
+          countryCode: "",
           state: "",
           timeZone: "",
           merchNeeded: false,
@@ -260,12 +263,16 @@ export default function EventForm({
 
   useEffect(() => {
     if (initialPublicBaseUrl) {
-      setPublicBaseUrl(initialPublicBaseUrl);
+      setPublicBaseUrl(
+        process.env.NEXT_PUBLIC_EVENTS_BASE_URL || initialPublicBaseUrl,
+      );
       return;
     }
 
     if (typeof window !== "undefined") {
-      setPublicBaseUrl(window.location.origin);
+      setPublicBaseUrl(
+        process.env.NEXT_PUBLIC_EVENTS_BASE_URL || window.location.origin,
+      );
     }
   }, [initialPublicBaseUrl]);
 
@@ -781,6 +788,27 @@ export default function EventForm({
                               />
                             </FormControl>
                             <FormDescription>e.g., 10115</FormDescription>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={control}
+                        name="countryCode"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Country code</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="DE"
+                                maxLength={2}
+                                {...field}
+                                value={field.value ?? ""}
+                              />
+                            </FormControl>
+                            <FormDescription>
+                              Two-letter country code, used for radius search.
+                            </FormDescription>
                             <FormMessage />
                           </FormItem>
                         )}

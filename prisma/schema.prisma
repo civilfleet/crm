@@ -1242,6 +1242,7 @@ model Event {
   address       String?             @db.VarChar(255)
   city          String?             @db.VarChar(255)
   postalCode    String?             @db.VarChar(255)
+  countryCode   String?             @db.Char(2)
   state         String?             @db.VarChar(255)
   timeZone      String?             @db.VarChar(255)
   merchNeeded   Boolean             @default(false)
@@ -1325,6 +1326,7 @@ model EventRole {
 
 model EventRegistration {
   id          String   @id @default(uuid()) @unique
+  submissionId String? @unique @db.Uuid
   eventId     String
   event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   contactId   String

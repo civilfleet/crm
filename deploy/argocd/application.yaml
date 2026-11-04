@@ -1,0 +1,14 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: seawatch-api, namespace: argocd }
+spec:
+  project: seawatch-api
+  destination: { name: in-cluster, namespace: seawatch-api }
+  source:
+    repoURL: gitea@git.sea.watch:IT-Department/crm.git
+    targetRevision: main
+    path: deploy/kubernetes
+    directory: { recurse: true }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, PruneLast=true]

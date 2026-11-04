@@ -1736,6 +1736,52 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@nats-io/jetstream@npm:^3.4.0":
+  version: 3.4.0
+  resolution: "@nats-io/jetstream@npm:3.4.0"
+  dependencies:
+    "@nats-io/nats-core": "npm:3.4.0"
+  checksum: 10c0/50d6d3abbad35167c253bf555a0ba80cd74654d76d12bdcd91ef5ba37f2dc630865c9bef9f0c7e6e73d8eafd1057495d9bf4eeebabca82f32e81661c5f4627bb
+  languageName: node
+  linkType: hard
+
+"@nats-io/nats-core@npm:3.4.0, @nats-io/nats-core@npm:^3.4.0":
+  version: 3.4.0
+  resolution: "@nats-io/nats-core@npm:3.4.0"
+  dependencies:
+    "@nats-io/nkeys": "npm:2.0.3"
+    "@nats-io/nuid": "npm:3.0.0"
+  checksum: 10c0/9cd00245405028d7ac734907ef0c27282e496859fdf715b319cda431f123a57727d4fda27fd03ff57d0bd1d7c5b5d031e8c5e4323b971802e2817e22110593be
+  languageName: node
+  linkType: hard
+
+"@nats-io/nkeys@npm:2.0.3":
+  version: 2.0.3
+  resolution: "@nats-io/nkeys@npm:2.0.3"
+  dependencies:
+    tweetnacl: "npm:^1.0.3"
+  checksum: 10c0/51b80313573d3378f6af57eaad2af34d2974425951fabd42abc0a1e10c5d04ce06ed26bef8c8bf6eb7803eb233d8b0c6b44ccefb1d26168ef249545879c93426
+  languageName: node
+  linkType: hard
+
+"@nats-io/nuid@npm:3.0.0":
+  version: 3.0.0
+  resolution: "@nats-io/nuid@npm:3.0.0"
+  checksum: 10c0/6e768c0966627e6a72488ab5ca3ff183ab11fa574b6fc1cf603e98b16661c3de08a7c47625a621afb29cb7f8074f3f45efd8b4d0e635bdb294ee9704a58e959e
+  languageName: node
+  linkType: hard
+
+"@nats-io/transport-node@npm:^3.4.0":
+  version: 3.4.0
+  resolution: "@nats-io/transport-node@npm:3.4.0"
+  dependencies:
+    "@nats-io/nats-core": "npm:3.4.0"
+    "@nats-io/nkeys": "npm:2.0.3"
+    "@nats-io/nuid": "npm:3.0.0"
+  checksum: 10c0/c35b678ee65ba162d72425c002a3b7155edaf3fb978ee9397e19415e79f24dd3cb933e0b569e287842812c5539904cf22a4347cf0e4935455f54396b9a7c3212
+  languageName: node
+  linkType: hard
+
 "@next/env@npm:16.3.5":
   version: 16.3.5
   resolution: "@next/env@npm:16.3.5"
@@ -1933,6 +1979,55 @@ __metadata:
   version: 1.41.1
   resolution: "@opentelemetry/semantic-conventions@npm:1.41.1"
   checksum: 10c0/c54b1edf845766e93026d30fd95e15da9dba8d7a5b58f8c320c5d36ab542c77b37868f3e8e3d78ec162da8ee2afd24781f0a65934c9bdbc1aea86b47b12f074c
+  languageName: node
+  linkType: hard
+
+"@pagefind/darwin-arm64@npm:1.6.0":
+  version: 1.6.0
+  resolution: "@pagefind/darwin-arm64@npm:1.6.0"
+  conditions: os=darwin & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@pagefind/darwin-x64@npm:1.6.0":
+  version: 1.6.0
+  resolution: "@pagefind/darwin-x64@npm:1.6.0"
+  conditions: os=darwin & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@pagefind/freebsd-x64@npm:1.6.0":
+  version: 1.6.0
+  resolution: "@pagefind/freebsd-x64@npm:1.6.0"
+  conditions: os=freebsd & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@pagefind/linux-arm64@npm:1.6.0":
+  version: 1.6.0
+  resolution: "@pagefind/linux-arm64@npm:1.6.0"
+  conditions: os=linux & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@pagefind/linux-x64@npm:1.6.0":
+  version: 1.6.0
+  resolution: "@pagefind/linux-x64@npm:1.6.0"
+  conditions: os=linux & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@pagefind/windows-arm64@npm:1.6.0":
+  version: 1.6.0
+  resolution: "@pagefind/windows-arm64@npm:1.6.0"
+  conditions: os=win32 & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@pagefind/windows-x64@npm:1.6.0":
+  version: 1.6.0
+  resolution: "@pagefind/windows-x64@npm:1.6.0"
+  conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
@@ -5482,7 +5577,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"esbuild@npm:~0.28.0":
+"esbuild@npm:^0.28.2, esbuild@npm:~0.28.0":
   version: 0.28.2
   resolution: "esbuild@npm:0.28.2"
   dependencies:
@@ -5918,6 +6013,13 @@ __metadata:
     picomatch:
       optional: true
   checksum: 10c0/e345083c4306b3aed6cb8ec551e26c36bab5c511e99ea4576a16750ddc8d3240e63826cc624f5ae17ad4dc82e68a253213b60d556c11bfad064b7607847ed07f
+  languageName: node
+  linkType: hard
+
+"fflate@npm:^0.8.3":
+  version: 0.8.3
+  resolution: "fflate@npm:0.8.3"
+  checksum: 10c0/eab181ca37f5348ae76d4b6f840e0026e30220e33153289ac942222d8b9638237d486507dbcc09878d724095bd354993a2ee48bbee99c8f2c6440d4448719aa7
   languageName: node
   linkType: hard
 
@@ -7475,6 +7577,9 @@ __metadata:
     "@lexical/rich-text": "npm:^0.44.0"
     "@lexical/selection": "npm:^0.44.0"
     "@lexical/utils": "npm:^0.44.0"
+    "@nats-io/jetstream": "npm:^3.4.0"
+    "@nats-io/nats-core": "npm:^3.4.0"
+    "@nats-io/transport-node": "npm:^3.4.0"
     "@pipobscure/vcard": "npm:^1.0.1"
     "@prisma/adapter-pg": "npm:^7.8.0"
     "@prisma/client": "npm:^7.8.0"
@@ -7513,7 +7618,9 @@ __metadata:
     cmdk: "npm:1.1.1"
     date-fns: "npm:^4.1.0"
     dotenv: "npm:^17.4.2"
+    esbuild: "npm:^0.28.2"
     eslint-config-next: "npm:16.3.5"
+    fflate: "npm:^0.8.3"
     handlebars: "npm:^4.7.9"
     imapflow: "npm:1.7.8"
     jsonwebtoken: "npm:^9.0.3"
@@ -7525,6 +7632,7 @@ __metadata:
     next-auth: "npm:^5.0.0-beta.32"
     nextjs-toploader: "npm:^3.9.17"
     nodemailer: "npm:^9.1.1"
+    pagefind: "npm:^1.6.0"
     pg: "npm:^8.20.0"
     pg-copy-streams: "npm:^7.0.0"
     pino: "npm:^10.3.1"
@@ -7810,6 +7918,38 @@ __metadata:
   dependencies:
     p-limit: "npm:^3.0.2"
   checksum: 10c0/2290d627ab7903b8b70d11d384fee714b797f6040d9278932754a6860845c4d3190603a0772a663c8cb5a7b21d1b16acb3a6487ebcafa9773094edc3dfe6009a
+  languageName: node
+  linkType: hard
+
+"pagefind@npm:^1.6.0":
+  version: 1.6.0
+  resolution: "pagefind@npm:1.6.0"
+  dependencies:
+    "@pagefind/darwin-arm64": "npm:1.6.0"
+    "@pagefind/darwin-x64": "npm:1.6.0"
+    "@pagefind/freebsd-x64": "npm:1.6.0"
+    "@pagefind/linux-arm64": "npm:1.6.0"
+    "@pagefind/linux-x64": "npm:1.6.0"
+    "@pagefind/windows-arm64": "npm:1.6.0"
+    "@pagefind/windows-x64": "npm:1.6.0"
+  dependenciesMeta:
+    "@pagefind/darwin-arm64":
+      optional: true
+    "@pagefind/darwin-x64":
+      optional: true
+    "@pagefind/freebsd-x64":
+      optional: true
+    "@pagefind/linux-arm64":
+      optional: true
+    "@pagefind/linux-x64":
+      optional: true
+    "@pagefind/windows-arm64":
+      optional: true
+    "@pagefind/windows-x64":
+      optional: true
+  bin:
+    pagefind: lib/runner/bin.cjs
+  checksum: 10c0/7bb388910d3271f274d25054eff34a33dfffb6b1b22ee366a1cbb389e9f86e0a0b72e715c958ac8a0afe8446cea6c65c33d87b8392ed2db2924302880e5126df
   languageName: node
   linkType: hard
 
@@ -9344,6 +9484,13 @@ __metadata:
   bin:
     tsx: dist/cli.mjs
   checksum: 10c0/dc99c8988b42ec2443963a0b9051f42d068bc7e2a44e82f3b94b40539a991c5c01ea3ee049cf317d1040b2245711dd4c64ace9ac875f3b07edee29f610702e3c
+  languageName: node
+  linkType: hard
+
+"tweetnacl@npm:^1.0.3":
+  version: 1.0.3
+  resolution: "tweetnacl@npm:1.0.3"
+  checksum: 10c0/069d9df51e8ad4a89fbe6f9806c68e06c65be3c7d42f0701cc43dba5f0d6064686b238bbff206c5addef8854e3ce00c643bff59432ea2f2c639feab0ee1a93f9
   languageName: node
   linkType: hard
 

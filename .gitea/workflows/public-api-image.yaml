@@ -1,0 +1,50 @@
+name: Public API image
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: docker-build
+    permissions: { contents: write, packages: write }
+    env:
+      IMAGE: git.sea.watch/it-department/seawatch-api
+      SOURCE_COMMIT: ${{ gitea.sha }}
+      REGISTRY_USERNAME: ${{ secrets.PACKAGE_USER }}
+      REGISTRY_TOKEN: ${{ secrets.PACKAGE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify
+        run: docker build --target test -t seawatch-api-tests .
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: git.sea.watch
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ env.REGISTRY_TOKEN }}
+      - uses: docker/build-push-action@v6
+        id: image
+        with:
+          context: .
+          target: runner-public-api
+          push: true
+          tags: ${{ env.IMAGE }}:${{ env.SOURCE_COMMIT }}
+      - name: Record image digest
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -eu
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$SOURCE_COMMIT" || exit 0
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          p = Path('deploy/kubernetes/api.yaml')
+          text, count = re.subn(r'image: git\.sea\.watch/it-department/seawatch-api:[^\s]+|image: git\.sea\.watch/it-department/seawatch-api@sha256:[a-f0-9]+', 'image: ' + os.environ['IMAGE'] + '@' + os.environ['IMAGE_DIGEST'], p.read_text())
+          assert count == 2, 'Expected API deployment and stream initializer images'
+          p.write_text(text)
+          PY
+          git config user.name 'Sea-Watch API deploy'
+          git config user.email 'it@sea-watch.org'
+          git add deploy/kubernetes/api.yaml
+          git diff --cached --quiet && exit 0
+          git commit -m "Deploy public API ${SOURCE_COMMIT} [skip ci]"
+          git push origin HEAD:main

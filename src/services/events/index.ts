@@ -29,6 +29,7 @@ type CreateEventInput = {
   address?: string;
   city?: string;
   postalCode?: string;
+  countryCode?: string;
   state?: string;
   timeZone?: string;
   merchNeeded?: boolean;
@@ -53,6 +54,7 @@ type UpdateEventInput = {
   address?: string;
   city?: string;
   postalCode?: string;
+  countryCode?: string;
   state?: string;
   timeZone?: string;
   merchNeeded?: boolean;
@@ -113,6 +115,7 @@ type EventType = {
   address?: string;
   city?: string;
   postalCode?: string;
+  countryCode?: string;
   state?: string;
   timeZone?: string;
   merchNeeded?: boolean;
@@ -174,6 +177,7 @@ const mapEvent = (event: EventWithContacts): EventType => ({
   address: event.address ?? undefined,
   city: event.city ?? undefined,
   postalCode: event.postalCode ?? undefined,
+  countryCode: event.countryCode ?? undefined,
   state: event.state ?? undefined,
   timeZone: event.timeZone ?? undefined,
   merchNeeded: event.merchNeeded,
@@ -394,6 +398,7 @@ export const createEvent = async (input: CreateEventInput) => {
     address,
     city,
     postalCode,
+    countryCode,
     state,
     timeZone,
     merchNeeded = false,
@@ -428,6 +433,7 @@ export const createEvent = async (input: CreateEventInput) => {
         address: address?.trim() || null,
         city: city?.trim() || null,
         postalCode: postalCode?.trim() || null,
+        countryCode: countryCode?.trim().toUpperCase() || null,
         state: state?.trim() || null,
         timeZone: timeZone?.trim() || null,
         merchNeeded,
@@ -547,6 +553,7 @@ export const updateEvent = async (input: UpdateEventInput) => {
     address,
     city,
     postalCode,
+    countryCode,
     state,
     timeZone,
     merchNeeded,
@@ -598,6 +605,10 @@ export const updateEvent = async (input: UpdateEventInput) => {
         city: city === undefined ? existingEvent.city : city,
         postalCode:
           postalCode === undefined ? existingEvent.postalCode : postalCode,
+        countryCode:
+          countryCode === undefined
+            ? existingEvent.countryCode
+            : countryCode?.trim().toUpperCase() || null,
         state: state === undefined ? existingEvent.state : state,
         timeZone: timeZone === undefined ? existingEvent.timeZone : timeZone,
         merchNeeded:
@@ -813,6 +824,7 @@ const getPublicEventIdsWithinRadius = async (
       JOIN "PostalCodeCentroid" pc
         ON pc."countryCode" = ${normalizedCountry}
        AND pc."postalCode" = e."postalCode"
+       AND e."countryCode" = pc."countryCode"
       CROSS JOIN origin
       WHERE e."teamId" = ${teamId}
         AND e."isPublic" = true
@@ -956,6 +968,7 @@ export const getPublicEventBySlug = async (teamId: string, slug: string) => {
 };
 // Create a new event registration
 type CreateEventRegistrationInput = {
+  submissionId?: string;
   eventId: string;
   name: string;
   email: string;
@@ -966,13 +979,24 @@ type CreateEventRegistrationInput = {
 export const createEventRegistration = async (
   input: CreateEventRegistrationInput,
 ) => {
-  const { eventId, name, email, phone, notes, customData } = input;
+  const { eventId, name, email, phone, notes, customData, submissionId } =
+    input;
 
   return prisma.$transaction(async (tx) => {
+    if (submissionId) {
+      const existing = await tx.eventRegistration.findUnique({
+        where: { submissionId },
+      });
+      if (existing) return existing;
+    }
     const event = await tx.event.findFirst({
       where: {
         id: eventId,
         isPublic: true,
+        OR: [
+          { endDate: { gte: new Date() } },
+          { endDate: null, startDate: { gte: new Date() } },
+        ],
       },
       select: {
         teamId: true,
@@ -1123,6 +1147,7 @@ export const createEventRegistration = async (
     const registration = await tx.eventRegistration.create({
       data: {
         eventId,
+        submissionId,
         contactId: contact.id,
         name: trimmedName,
         email: trimmedEmail,
@@ -1139,6 +1164,37 @@ export const createEventRegistration = async (
       },
     });
 
+    if (submissionId) {
+      const escapeHtml = (value: string) =>
+        value.replace(
+          /[&<>"']/g,
+          (char) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[char] ?? char,
+        );
+      await tx.emailBatch.create({
+        data: {
+          teamId: event.teamId,
+          provider: "SCALEWAY_TEM",
+          subject: `Registration confirmed: ${event.title}`.slice(0, 500),
+          html: `<p>Hello ${escapeHtml(trimmedName)},</p><p>Your registration for ${escapeHtml(event.title)} is confirmed.</p>`,
+          text: `Your registration for ${event.title} is confirmed.`,
+          requestedCount: 1,
+          recipients: {
+            create: {
+              contactId: contact.id,
+              email: trimmedEmail,
+              name: trimmedName,
+            },
+          },
+        },
+      });
+    }
     return registration;
   });
 };

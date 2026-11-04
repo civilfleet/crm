@@ -45,6 +45,13 @@ export const createEventSchema = z.object({
   address: optionalText(z.string()),
   city: optionalText(z.string()),
   postalCode: optionalText(z.string()),
+  countryCode: optionalText(
+    z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{2}$/, "Use a two-letter country code"),
+  ),
   state: optionalText(z.string()),
   timeZone: optionalText(z.string()),
   merchNeeded: z
@@ -93,6 +100,13 @@ export const updateEventSchema = z.object({
   address: optionalText(z.string()),
   city: optionalText(z.string()),
   postalCode: optionalText(z.string()),
+  countryCode: optionalText(
+    z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{2}$/, "Use a two-letter country code"),
+  ),
   state: optionalText(z.string()),
   timeZone: optionalText(z.string()),
   merchNeeded: z

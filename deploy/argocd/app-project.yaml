@@ -1,0 +1,7 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata: { name: seawatch-api, namespace: argocd }
+spec:
+  sourceRepos: ["gitea@git.sea.watch:IT-Department/crm.git"]
+  destinations: [{ name: in-cluster, namespace: seawatch-api }]
+  clusterResourceWhitelist: [{ group: "", kind: Namespace }]

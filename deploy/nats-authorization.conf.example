@@ -1,0 +1,27 @@
+# Substitute strong, independent credentials, then seal this whole file as
+# Secret seawatch-nats-auth, key authorization.conf. Never commit the result
+# before sealing. Bootstrap is only used by the stream initialization Job.
+authorization {
+  users: [
+    { user: bootstrap, password: "REPLACE_BOOTSTRAP_PASSWORD", permissions: {
+      publish: ["$JS.API.>"], subscribe: ["_INBOX.bootstrap.>"]
+    } },
+    { user: api, password: "REPLACE_API_PASSWORD", permissions: {
+      publish: ["$JS.API.INFO", "seawatch.events.registrations.v1", "seawatch.ratelimit.events.*"],
+      subscribe: ["_INBOX.api.>"]
+    } },
+    { user: crm, password: "REPLACE_CRM_PASSWORD", permissions: {
+      publish: [
+        "$JS.API.INFO",
+        "$JS.API.STREAM.INFO.SEAWATCH_EVENT_REGISTRATIONS",
+        "$JS.API.CONSUMER.INFO.SEAWATCH_EVENT_REGISTRATIONS.crm-event-registrations-v1",
+        "$JS.API.CONSUMER.CREATE.SEAWATCH_EVENT_REGISTRATIONS.>",
+        "$JS.API.CONSUMER.DURABLE.CREATE.SEAWATCH_EVENT_REGISTRATIONS.crm-event-registrations-v1",
+        "$JS.API.CONSUMER.MSG.NEXT.SEAWATCH_EVENT_REGISTRATIONS.crm-event-registrations-v1",
+        "$JS.ACK.>",
+        "seawatch.events.registrations.failed.v1"
+      ],
+      subscribe: ["_INBOX.crm.>"]
+    } }
+  ]
+}

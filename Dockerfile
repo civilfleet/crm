@@ -54,3 +54,17 @@ CMD ["node", "server.js"]
 FROM chrislusf/seaweedfs:latest AS runner-seaweedfs
 
 COPY config/seaweedfs-s3.json /etc/seaweedfs/s3.json
+
+# Public intake contains no CRM routes, database client, or production secrets.
+FROM deps AS builder-public-api
+COPY scripts/public-api.ts ./scripts/public-api.ts
+COPY src/lib/public-events/registration.ts ./src/lib/public-events/registration.ts
+RUN yarn api:build
+
+FROM base AS runner-public-api
+ENV NODE_ENV=production
+ENV PORT=8080
+COPY --from=builder-public-api /app/public-api/dist/server.cjs ./server.cjs
+USER node
+EXPOSE 8080
+CMD ["node", "server.cjs"]

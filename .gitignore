@@ -45,3 +45,12 @@ yarn-error.log*
 # Sentry Config File
 .env.sentry-build-plugin
 .claude/settings.local.json
+
+# Generated public event exports and local deploy state
+/public-events/.snapshot.json
+/public-events/.next/
+/public-events/out/
+/public-events/public/data/
+/public-events/next-env.d.ts
+/.netlify/
+/public-api/dist/

@@ -13,7 +13,9 @@ const buildPublicEventsUrl = (teamId: string) => {
   if (typeof window === "undefined") {
     return "";
   }
-  return `${window.location.origin}/public/${teamId}/events`;
+  const base =
+    process.env.NEXT_PUBLIC_EVENTS_BASE_URL || window.location.origin;
+  return `${base.replace(/\/$/, "")}/public/${teamId}/events`;
 };
 
 export default function PublicEventsLinkButton({

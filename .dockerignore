@@ -8,3 +8,11 @@ docker-compose.yml
 npm-debug.log
 yarn-error.log
 *.tsbuildinfo
+
+# Generated exports and local deployment state
+public-events/.next
+public-events/out
+public-events/.snapshot.json
+public-events/public/data
+public-api/dist
+.netlify
