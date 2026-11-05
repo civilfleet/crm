@@ -1,19 +1,19 @@
 import "dotenv/config";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
-import { connect } from "@nats-io/transport-node";
 import {
+  DiscardPolicy,
   jetstream,
   jetstreamManager,
-  DiscardPolicy,
-  StorageType,
   RetentionPolicy,
+  StorageType,
 } from "@nats-io/jetstream";
+import { connect } from "@nats-io/transport-node";
 import { z } from "zod";
 import {
-  registrationPayload,
   REGISTRATION_STREAM,
   REGISTRATION_SUBJECT,
+  registrationPayload,
 } from "../src/lib/public-events/registration";
 
 async function main() {
@@ -99,8 +99,10 @@ async function main() {
   let stopping = false;
   const server = createServer(async (req, res) => {
     const origin = req.headers.origin;
-    if (origin && origins.has(origin))
+    if (origin && origins.has(origin)) {
       res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Expose-Headers", "Retry-After");
+    }
     res.setHeader("Vary", "Origin");
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("X-Content-Type-Options", "nosniff");
