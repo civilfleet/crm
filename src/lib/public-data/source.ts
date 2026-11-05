@@ -15,6 +15,17 @@ type EventRow = Omit<
   endDate: Date | null;
 };
 
+export function publicEventTimeZone(value: string): string {
+  const timeZone = value.trim() || "Europe/Berlin";
+  try {
+    new Intl.DateTimeFormat("en", { timeZone });
+    return timeZone;
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    return "Europe/Berlin";
+  }
+}
+
 // The caller holds a REPEATABLE READ, READ ONLY transaction. Never SELECT * here.
 export async function readPublicData(
   client: PoolClient,
@@ -90,9 +101,14 @@ export async function readPublicData(
       : candidates.length === 1
         ? candidates[0]
         : undefined;
-    new Intl.DateTimeFormat("en", { timeZone: row.timeZone });
+    const timeZone = publicEventTimeZone(row.timeZone);
+    if (timeZone !== row.timeZone.trim())
+      console.warn(
+        `Public event ${row.id} has an invalid or empty timezone; exporting Europe/Berlin. Correct the event timezone in the CRM.`,
+      );
     return {
       ...row,
+      timeZone,
       countryCode: country ?? point?.country ?? null,
       latitude: point?.lat ?? null,
       longitude: point?.lon ?? null,
