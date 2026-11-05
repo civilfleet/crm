@@ -22,6 +22,7 @@ has a stable `/teams/<team-id>/manifest.json` linking its profile and scopes:
 manifest.json
 teams/index/<directory-version>/1.json
 teams/<team-id>/manifest.json
+teams/<team-id>/events/<event-id>/manifest.json
 teams/<team-id>/data/profile/<hash>.json
 teams/<team-id>/data/events/<event-id>/<hash>.json
 teams/<team-id>/data/listings/upcoming/<scope-version>/manifest.json
@@ -35,6 +36,54 @@ reference/postal/<reference-version>/manifest.json
 URLs in JSON begin with `/` and are relative to the **feed origin**, not the
 custom website. Follow the supplied links; do not construct hashed paths.
 Public TypeScript contracts are in `src/lib/public-data/types.ts`.
+
+### Resolving saved event links
+
+Use the team and event UUIDs for durable website URLs. Each team manifest exposes
+`eventLookupUrlTemplate`, for example
+`/teams/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/events/{eventId}/manifest.json`.
+Only `{eventId}` is a placeholder; the team UUID is already substituted.
+Each public event's stable lookup returns exactly:
+
+```json
+{
+  "schemaVersion": 1,
+  "teamId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "eventId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  "detailUrl": "/teams/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/data/events/cccccccc-cccc-4ccc-8ccc-cccccccccccc/<current-content-hash>.json"
+}
+```
+
+Browser resolution:
+
+1. Fetch the stable team manifest with `cache: "no-cache"` to revalidate it.
+2. Expand its `eventLookupUrlTemplate` with the event UUID (URL-encoded).
+3. Revalidate the lookup manifest with `cache: "no-cache"`, then fetch its
+   `detailUrl` relative to the feed origin. Never construct a content hash or
+   scan listing pages, archive years, or search indexes to resolve a UUID.
+4. If that versioned detail returns HTTP 404, revalidate the team and lookup
+   manifests and retry the detail fetch once. This handles publication between
+   requests. Do not retry indefinitely or retain an old pointer as authoritative.
+5. A 404 from the revalidated team or lookup manifest means the public event is
+   unavailable (including deletion, unpublishing or a team without public events).
+   Network failures, HTTP 429/5xx and invalid responses are service failures,
+   not evidence of an unavailable event. If the detail is still missing after
+   the one retry while its lookup exists, report a temporary feed inconsistency
+   and allow a later retry.
+
+Team and event identity in returned JSON must match the requested UUIDs.
+Lookup manifests contain no registration or attendee data. They have public
+CORS and `Cache-Control: public, max-age=0, must-revalidate`; versioned detail
+JSON remains immutable. Edits update the pointer from the current event
+descriptor. Archive transitions preserve the stable lookup URL; a time-only
+rollover reuses the unchanged pointer and event JSON.
+
+Pointers and targets are validated and published in the same atomic deployment.
+Unpublishing/deletion removes the lookup and target from the active inventory,
+including removal of a team's last public event. The data deployment contains no
+HTML or catch-all rewrite, so missing lookup paths return HTTP 404, not a frontend
+fallback. Consumers that encounter an older feed without `eventLookupUrlTemplate`
+should report unsupported lookup until that feed has been updated.
 
 A scope manifest contains counts, page size, page URL template, facets, search
 configuration and a geographic index link. Listing pages contain at most 12

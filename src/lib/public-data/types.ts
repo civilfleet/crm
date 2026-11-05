@@ -56,7 +56,14 @@ export type TeamManifest = {
   teamId: string;
   version: string;
   team: string;
+  eventLookupUrlTemplate: string;
   scopes: Record<string, { manifest: string; count: number }>;
+};
+export type EventLookupManifest = {
+  schemaVersion: number;
+  teamId: string;
+  eventId: string;
+  detailUrl: string;
 };
 export type ScopeManifest = {
   schemaVersion: number;

@@ -10,6 +10,7 @@ import {
 } from "../public-events/types";
 import {
   type Digests,
+  type EventLookupManifest,
   type FeedManifest,
   type FeedState,
   PAGE_SIZE,
@@ -258,6 +259,20 @@ export async function buildFeed(options: {
       if (!scopes.has(scope)) scopes.set(scope, []);
       scopes.get(scope)?.push(event);
     }
+    const eventLookupUrlTemplate = `/teams/${id}/events/{eventId}/manifest.json`;
+    for (const [eventId, descriptor] of Object.entries(descriptors)) {
+      const lookup: EventLookupManifest = {
+        schemaVersion: SCHEMA_VERSION,
+        teamId: id,
+        eventId,
+        detailUrl: descriptor.path,
+      };
+      await out.json(
+        eventLookupUrlTemplate.replace("{eventId}", eventId).slice(1),
+        lookup,
+        files,
+      );
+    }
     const builtScopes: Record<string, ScopeState> = {};
     for (const [scope, items] of [...scopes].sort(([a], [b]) =>
       a.localeCompare(b),
@@ -365,6 +380,7 @@ export async function buildFeed(options: {
     }
     const teamVersion = contentHash({
       profile,
+      eventLookupUrlTemplate,
       events: descriptors,
       scopes: Object.fromEntries(
         Object.entries(builtScopes).map(([key, value]) => [key, value.hash]),
@@ -382,6 +398,7 @@ export async function buildFeed(options: {
         teamId: id,
         version: teamVersion,
         team: metadata,
+        eventLookupUrlTemplate,
         scopes: Object.fromEntries(
           Object.entries(builtScopes).map(([key, value]) => [
             key,
@@ -431,7 +448,7 @@ export async function buildFeed(options: {
   });
   await out.bytes(
     "_headers",
-    `/*\n  Access-Control-Allow-Origin: *\n  X-Content-Type-Options: nosniff\n  X-Robots-Tag: noindex\n/manifest.json\n  Cache-Control: public, max-age=0, must-revalidate\n/teams/:teamId/manifest.json\n  Cache-Control: public, max-age=0, must-revalidate\n/teams/:teamId/data/*\n  Cache-Control: public, max-age=31536000, immutable\n/teams/index/*\n  Cache-Control: public, max-age=31536000, immutable\n/reference/*\n  Cache-Control: public, max-age=31536000, immutable\n`,
+    `/*\n  Access-Control-Allow-Origin: *\n  X-Content-Type-Options: nosniff\n  X-Robots-Tag: noindex\n/manifest.json\n  Cache-Control: public, max-age=0, must-revalidate\n/teams/:teamId/manifest.json\n  Cache-Control: public, max-age=0, must-revalidate\n/teams/:teamId/events/:eventId/manifest.json\n  Cache-Control: public, max-age=0, must-revalidate\n/teams/:teamId/data/*\n  Cache-Control: public, max-age=31536000, immutable\n/teams/index/*\n  Cache-Control: public, max-age=31536000, immutable\n/reference/*\n  Cache-Control: public, max-age=31536000, immutable\n`,
   );
   const state: FeedState = {
     schemaVersion: SCHEMA_VERSION,
@@ -477,6 +494,11 @@ export async function validateFeed(directory: string, files: Digests) {
       throw new Error("Invalid public data artifact");
     if (/^teams\/[^/]+\/manifest\.json$/.test(path)) {
       const team = await json<TeamManifest>(`/${path}`);
+      if (
+        team.eventLookupUrlTemplate !==
+        `/teams/${team.teamId}/events/{eventId}/manifest.json`
+      )
+        throw new Error("Invalid event lookup template");
       requireAsset(team.team);
       for (const entry of Object.values(team.scopes)) {
         const scope = await json<ScopeManifest>(entry.manifest);
@@ -485,6 +507,38 @@ export async function validateFeed(directory: string, files: Digests) {
         for (let page = 1; page <= scope.pages; page++)
           requireAsset(scope.pageUrlTemplate.replace("{page}", String(page)));
       }
+    }
+    const lookupPath = /^teams\/([^/]+)\/events\/([^/]+)\/manifest\.json$/.exec(
+      path,
+    );
+    if (lookupPath) {
+      const lookup = await json<EventLookupManifest>(`/${path}`);
+      if (
+        lookup.schemaVersion !== SCHEMA_VERSION ||
+        lookup.teamId !== lookupPath[1] ||
+        lookup.eventId !== lookupPath[2] ||
+        !lookup.detailUrl.startsWith(
+          `/teams/${lookup.teamId}/data/events/${lookup.eventId}/`,
+        )
+      )
+        throw new Error("Invalid event lookup manifest");
+      const target = await json<{ event: { id: string; teamId: string } }>(
+        lookup.detailUrl,
+      );
+      if (
+        target.event.id !== lookup.eventId ||
+        target.event.teamId !== lookup.teamId
+      )
+        throw new Error("Event lookup target identity mismatch");
+    }
+    const detailPath =
+      /^teams\/([^/]+)\/data\/events\/([^/]+)\/[^/]+\.json$/.exec(path);
+    if (detailPath) {
+      const lookup = await json<EventLookupManifest>(
+        `/teams/${detailPath[1]}/events/${detailPath[2]}/manifest.json`,
+      );
+      if (lookup.detailUrl !== `/${path}`)
+        throw new Error("Event detail has no matching lookup pointer");
     }
   }
   for (let page = 1; page <= manifest.teams.pages; page++)
