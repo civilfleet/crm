@@ -1,0 +1,47 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: crm-existing-hostnames
+  namespace: crm
+spec:
+  secretName: crm-existing-hostnames-tls
+  dnsNames:
+  - crm.vpn.sea.watch
+  - crm-s3.vpn.sea.watch
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: crm-web
+  namespace: crm
+spec:
+  entryPoints:
+  - vpnwebsecure
+  routes:
+  - kind: Rule
+    match: Host(`crm.vpn.sea.watch`)
+    services:
+    - name: crm-web
+      port: http
+  tls:
+    secretName: crm-existing-hostnames-tls
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: crm-storage
+  namespace: crm
+spec:
+  entryPoints:
+  - vpnwebsecure
+  routes:
+  - kind: Rule
+    match: Host(`crm-s3.vpn.sea.watch`)
+    services:
+    - name: crm-storage
+      port: s3
+  tls:
+    secretName: crm-existing-hostnames-tls

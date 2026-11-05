@@ -1,0 +1,121 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: crm-postgres
+  namespace: crm
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/part-of: crm
+    app.kubernetes.io/component: database
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: crm-postgres
+  namespace: crm
+spec:
+  serviceName: crm-postgres
+  replicas: 1
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: crm
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: crm
+        app.kubernetes.io/component: database
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: postgres
+        image: postgis/postgis:16-3.6@sha256:d07ce3f06f657b6516c7511412232e97174d7e9dcf4c9fe520109b682b44a201
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        env:
+        - name: POSTGRES_DB
+          value: crm
+        - name: POSTGRES_USER
+          value: crm
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: crm-postgres
+              key: POSTGRES_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        ports:
+        - name: postgres
+          containerPort: 5432
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: '2'
+            memory: 2Gi
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        - name: socket
+          mountPath: /var/run/postgresql
+        - name: tmp
+          mountPath: /tmp
+        startupProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - crm
+            - -d
+            - crm
+          periodSeconds: 5
+          failureThreshold: 60
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - crm
+            - -d
+            - crm
+          periodSeconds: 10
+          timeoutSeconds: 5
+      terminationGracePeriodSeconds: 120
+      volumes:
+      - name: socket
+        emptyDir: {}
+      - name: tmp
+        emptyDir:
+          sizeLimit: 256Mi
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      annotations:
+        argocd.argoproj.io/sync-options: Prune=false,Delete=false
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: ceph-rbd
+      resources:
+        requests:
+          storage: 20Gi

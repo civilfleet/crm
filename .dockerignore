@@ -21,3 +21,15 @@ public-api/dist
 .agents
 .codex
 .impeccable
+
+# CRM Kubernetes tooling and local state
+.aws
+.idea
+.claude
+**/.env*
+*.key
+*.pem
+**/__pycache__
+prisma/migrations/20250316161751_
+prisma/migrations/20250320054707_
+prisma/migrations/20250320055613_

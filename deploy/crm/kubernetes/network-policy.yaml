@@ -1,0 +1,103 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: crm
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-web
+  namespace: crm
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: crm
+      app.kubernetes.io/component: web
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: crm
+          app.kubernetes.io/component: reminders
+    ports:
+    - protocol: TCP
+      port: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-storage
+  namespace: crm
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: crm
+      app.kubernetes.io/component: storage
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: traefik
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: traefik
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: crm
+          app.kubernetes.io/component: web
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: crm
+          app.kubernetes.io/component: worker
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: crm
+          app.kubernetes.io/component: maintenance
+    ports:
+    - protocol: TCP
+      port: 8333
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-database
+  namespace: crm
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: crm
+      app.kubernetes.io/component: database
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: crm
+          app.kubernetes.io/component: web
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: crm
+          app.kubernetes.io/component: worker
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: crm
+          app.kubernetes.io/component: maintenance
+    ports:
+    - protocol: TCP
+      port: 5432

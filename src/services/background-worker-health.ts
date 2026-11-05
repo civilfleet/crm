@@ -204,7 +204,8 @@ export const recordBackgroundWorkerHeartbeat = async (
   });
 };
 
-export const getLatestBackgroundWorkerHeartbeat = async () =>
+export const getLatestBackgroundWorkerHeartbeat = async (workerId?: string) =>
   await prisma.backgroundWorkerHeartbeat.findFirst({
+    ...(workerId ? { where: { workerId } } : {}),
     orderBy: { lastSeenAt: "desc" },
   });

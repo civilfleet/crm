@@ -24,7 +24,9 @@ const main = async () => {
     process.env.BACKGROUND_WORKER_EMAIL_QUEUE_MAX_LAG_MS,
     DEFAULT_MAX_EMAIL_QUEUE_LAG_MS,
   );
-  const snapshot = await getLatestBackgroundWorkerHeartbeat();
+  const snapshot = await getLatestBackgroundWorkerHeartbeat(
+    process.env.BACKGROUND_WORKER_ID,
+  );
   const maxZammadQueueLagMs = parsePositiveInteger(
     process.env.BACKGROUND_WORKER_ZAMMAD_QUEUE_MAX_LAG_MS,
     DEFAULT_MAX_ZAMMAD_QUEUE_LAG_MS,

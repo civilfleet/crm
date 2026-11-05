@@ -61,3 +61,6 @@ yarn-error.log*
 .impeccable/hook.cache.json
 .impeccable/backups/
 .impeccable/review/
+
+# CRM Kubernetes deployment helpers
+/deploy/crm/scripts/__pycache__/

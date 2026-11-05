@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crm-web
+  namespace: crm
+spec:
+  replicas: 0
+  revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: crm
+      app.kubernetes.io/component: web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: crm
+        app.kubernetes.io/component: web
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: web
+        image: git.sea.watch/it-department/crm:bootstrap-required
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+        envFrom:
+        - configMapRef:
+            name: crm-config
+        - secretRef:
+            name: crm-runtime
+        env:
+        - name: HOSTNAME
+          value: '::'
+        - name: PORT
+          value: '3000'
+        ports:
+        - name: http
+          containerPort: 3000
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: '2'
+            memory: 2Gi
+        volumeMounts:
+        - name: cache
+          mountPath: /app/.next/cache
+        - name: tmp
+          mountPath: /tmp
+        startupProbe:
+          httpGet:
+            path: /api/health/live
+            port: http
+          periodSeconds: 5
+          failureThreshold: 36
+        livenessProbe:
+          httpGet:
+            path: /api/health/live
+            port: http
+          periodSeconds: 20
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 5
+      imagePullSecrets:
+      - name: gitea-registry
+      terminationGracePeriodSeconds: 45
+      volumes:
+      - name: cache
+        emptyDir:
+          sizeLimit: 512Mi
+      - name: tmp
+        emptyDir:
+          sizeLimit: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: crm-web
+  namespace: crm
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/part-of: crm
+    app.kubernetes.io/component: web
+  ports:
+  - name: http
+    port: 3000
+    targetPort: http

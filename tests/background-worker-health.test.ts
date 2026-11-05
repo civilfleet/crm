@@ -1,6 +1,30 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { evaluateBackgroundWorkerHealth } from "@/services/background-worker-health";
+import { loadModule } from "./helpers/load-module";
+
+test("a pod health probe cannot use another worker's heartbeat", async () => {
+  let query: unknown;
+  const module = loadModule<{
+    getLatestBackgroundWorkerHeartbeat: (workerId?: string) => Promise<unknown>;
+  }>("src/services/background-worker-health.ts", {
+    "@/lib/prisma": {
+      backgroundWorkerHeartbeat: {
+        findFirst: async (input: unknown) => {
+          query = input;
+          return null;
+        },
+      },
+    },
+  });
+  await module.getLatestBackgroundWorkerHeartbeat("target-pod");
+  assert.deepEqual(query, {
+    where: { workerId: "target-pod" },
+    orderBy: { lastSeenAt: "desc" },
+  });
+  await module.getLatestBackgroundWorkerHeartbeat();
+  assert.deepEqual(query, { orderBy: { lastSeenAt: "desc" } });
+});
 
 const now = new Date("2026-10-05T12:00:00.000Z");
 const limits = {

@@ -28,6 +28,13 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/package.json /app/yarn.lock /app/.yarnrc.yml ./
 COPY . .
 
+ARG NEXT_PUBLIC_BASE_URL
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_APP_NAME
+ENV NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}
+ENV NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+ENV NEXT_PUBLIC_APP_NAME=${NEXT_PUBLIC_APP_NAME}
+
 RUN --mount=type=cache,target=/app/.next/cache,sharing=locked \
   yarn build
 
@@ -50,6 +57,15 @@ COPY --from=builder /app/.next/standalone ./
 EXPOSE 3000
 
 CMD ["node", "server.js"]
+
+# The VM targets remain available while the Kubernetes migration is rehearsed.
+FROM runner-app AS runner-kubernetes-app
+RUN mkdir -p /app/.next/cache && chown -R node:node /app/.next
+ENV HOSTNAME=::
+USER node
+
+FROM runner-tools AS runner-kubernetes-tools
+USER node
 
 FROM chrislusf/seaweedfs:latest AS runner-seaweedfs
 

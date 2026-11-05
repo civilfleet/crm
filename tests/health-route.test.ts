@@ -35,3 +35,15 @@ test("reports unavailable when the database query fails", async () => {
   assert.equal(response.status, 503);
   assert.deepEqual(await response.json(), { status: "unavailable" });
 });
+
+test("process liveness stays healthy during a database outage", async () => {
+  const readiness = loadHealthRoute(async () => {
+    throw new Error("database unavailable");
+  });
+  const liveness = loadModule<HealthRoute>(
+    "src/app/api/health/live/route.ts",
+    {},
+  );
+  assert.equal((await readiness.GET()).status, 503);
+  assert.equal((await liveness.GET()).status, 200);
+});

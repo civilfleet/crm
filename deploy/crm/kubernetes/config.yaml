@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crm-config
+  namespace: crm
+data:
+  NODE_ENV: production
+  AUTH_URL: https://crm.vpn.sea.watch/api/auth
+  NEXTAUTH_URL: https://crm.vpn.sea.watch/api/auth
+  AUTH_TRUST_HOST: 'true'
+  NEXT_PUBLIC_BASE_URL: https://crm.vpn.sea.watch
+  NEXT_PUBLIC_APP_URL: https://crm.vpn.sea.watch
+  NEXT_PUBLIC_APP_NAME: Sea-Watch CRM
+  NEXT_AWS_S3_ENDPOINT: http://crm-storage:8333
+  NEXT_AWS_S3_PUBLIC_ENDPOINT: https://crm-s3.vpn.sea.watch
+  NEXT_AWS_S3_BUCKET_NAME: crm
+  NEXT_AWS_S3_BUCKET_REGION: us-east-1
+  S3_CORS_ALLOWED_ORIGINS: https://crm.vpn.sea.watch
+  S3_CORS_ALLOWED_METHODS: GET,HEAD,PUT
+  S3_CORS_ALLOWED_HEADERS: '*'
+  S3_CORS_EXPOSE_HEADERS: ETag
+  S3_CORS_MAX_AGE_SECONDS: '3000'
+  S3_FORCE_PATH_STYLE: 'true'
+  LOG_LEVEL: info
+  PREVIEW_DEMO_ENABLED: 'false'
+  BACKGROUND_WORKER_POLL_INTERVAL_MS: '5000'
+  BACKGROUND_WORKER_STALE_LOCK_MS: '3600000'
+  BACKGROUND_WORKER_HEARTBEAT_INTERVAL_MS: '30000'
+  INBOUND_EMAIL_SYNC_INTERVAL_MS: '60000'
+  INBOUND_EMAIL_SYNC_LIMIT: '25'
+  EMAIL_INBOUND_MAX_MESSAGE_BYTES: '104857600'

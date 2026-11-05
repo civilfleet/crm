@@ -37,14 +37,14 @@ jobs:
           python3 - <<'PY'
           import os, re
           from pathlib import Path
-          p = Path('deploy/kubernetes/api.yaml')
+          p = Path('deploy/seawatch-api/kubernetes/api.yaml')
           text, count = re.subn(r'image: git\.sea\.watch/it-department/seawatch-api:[^\s]+|image: git\.sea\.watch/it-department/seawatch-api@sha256:[a-f0-9]+', 'image: ' + os.environ['IMAGE'] + '@' + os.environ['IMAGE_DIGEST'], p.read_text())
           assert count == 2, 'Expected API deployment and stream initializer images'
           p.write_text(text)
           PY
           git config user.name 'Sea-Watch API deploy'
           git config user.email 'it@sea-watch.org'
-          git add deploy/kubernetes/api.yaml
+          git add deploy/seawatch-api/kubernetes/api.yaml
           git diff --cached --quiet && exit 0
           git commit -m "Deploy public API ${SOURCE_COMMIT} [skip ci]"
           git push origin HEAD:main

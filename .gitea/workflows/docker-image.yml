@@ -8,6 +8,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      runtime_target:
+        description: Build the Kubernetes profiles for rehearsal without switching the VM deployment target
+        type: choice
+        default: auto
+        options: [auto, vm, kubernetes]
 
 jobs:
   test:
@@ -31,7 +37,14 @@ jobs:
   build:
     needs: test
     runs-on: docker-build
+    outputs:
+      target: ${{ steps.images.outputs.target }}
+      app: ${{ steps.digests.outputs.app }}
+      tools: ${{ steps.digests.outputs.tools }}
     env:
+      CRM_DEPLOY_TARGET: ${{ vars.CRM_DEPLOY_TARGET }}
+      CRM_REQUESTED_RUNTIME: ${{ github.event.inputs.runtime_target }}
+      CRM_APP_URL: ${{ vars.CRM_APP_URL }}
       PACKAGE_REGISTRY: ${{ vars.PACKAGE_REGISTRY }}
       PACKAGE_IMAGE: ${{ vars.PACKAGE_IMAGE }}
       PACKAGE_USER: ${{ secrets.PACKAGE_USER }}
@@ -61,7 +74,10 @@ jobs:
             exit 1
           fi
 
+      - uses: docker/setup-buildx-action@v3
+
       - name: Build image
+        id: images
         env:
           IMAGE_TAG: sha-${{ github.sha }}
         run: |
@@ -72,21 +88,52 @@ jobs:
             | tr -c 'a-z0-9_.-' '-' \
             | sed 's/^-*//; s/-*$//; s/^$/ref/')
 
+          app_target=runner-app
+          tools_target=runner-tools
+          build_args=()
+          runtime_target="${CRM_DEPLOY_TARGET:-vm}"
+          case "${CRM_REQUESTED_RUNTIME:-auto}" in
+            auto) ;;
+            vm|kubernetes) runtime_target="$CRM_REQUESTED_RUNTIME" ;;
+            *) echo 'Invalid runtime target' >&2; exit 1 ;;
+          esac
+          case "$runtime_target" in
+            vm|kubernetes) ;;
+            *) echo 'Invalid CRM_DEPLOY_TARGET' >&2; exit 1 ;;
+          esac
+          printf 'target=%s\n' "$runtime_target" >> "$GITHUB_OUTPUT"
+          if [ "$runtime_target" = kubernetes ]; then
+            app_target=runner-kubernetes-app
+            tools_target=runner-kubernetes-tools
+            app_url="${CRM_APP_URL:-https://crm.vpn.sea.watch}"
+            test "$app_url" = 'https://crm.vpn.sea.watch' || { echo 'Review the retained CRM hostname before building.' >&2; exit 1; }
+            build_args=(--build-arg "NEXT_PUBLIC_BASE_URL=$app_url" --build-arg "NEXT_PUBLIC_APP_URL=$app_url" --build-arg 'NEXT_PUBLIC_APP_NAME=Sea-Watch CRM')
+          fi
+
+          latest_tag=latest
+          if [ "$runtime_target" = kubernetes ]; then
+            IMAGE_TAG="$IMAGE_TAG-kubernetes"
+            REF_TAG="$REF_TAG-kubernetes"
+            latest_tag=latest-kubernetes
+          fi
+          printf 'image_tag=%s\nref_tag=%s\nlatest_tag=%s\n' "$IMAGE_TAG" "$REF_TAG" "$latest_tag" >> "$GITHUB_OUTPUT"
+
           docker build \
-            --target runner-app \
+            --target "$app_target" \
+            "${build_args[@]}" \
             -t "$PACKAGE_IMAGE:$IMAGE_TAG" \
             -t "$PACKAGE_IMAGE:$REF_TAG" \
             .
 
           docker build \
-            --target runner-tools \
+            --target "$tools_target" \
             -t "$PACKAGE_IMAGE-tools:$IMAGE_TAG" \
             -t "$PACKAGE_IMAGE-tools:$REF_TAG" \
             .
 
           if [ "${GITHUB_REF_NAME}" = "main" ]; then
-            docker tag "$PACKAGE_IMAGE:$IMAGE_TAG" "$PACKAGE_IMAGE:latest"
-            docker tag "$PACKAGE_IMAGE-tools:$IMAGE_TAG" "$PACKAGE_IMAGE-tools:latest"
+            docker tag "$PACKAGE_IMAGE:$IMAGE_TAG" "$PACKAGE_IMAGE:$latest_tag"
+            docker tag "$PACKAGE_IMAGE-tools:$IMAGE_TAG" "$PACKAGE_IMAGE-tools:$latest_tag"
           fi
 
       - name: Login to Gitea container registry
@@ -100,59 +147,53 @@ jobs:
       - name: Push image
         if: github.event_name != 'pull_request'
         env:
-          IMAGE_TAG: sha-${{ github.sha }}
+          IMAGE_TAG: ${{ steps.images.outputs.image_tag }}
+          REF_TAG: ${{ steps.images.outputs.ref_tag }}
+          latest_tag: ${{ steps.images.outputs.latest_tag }}
         run: |
           set -euo pipefail
-          REF_TAG=$(printf '%s' "$GITHUB_REF_NAME" \
-            | tr '[:upper:]' '[:lower:]' \
-            | tr '/:' '--' \
-            | tr -c 'a-z0-9_.-' '-' \
-            | sed 's/^-*//; s/-*$//; s/^$/ref/')
-
           docker push "$PACKAGE_IMAGE:$IMAGE_TAG"
           docker push "$PACKAGE_IMAGE:$REF_TAG"
           docker push "$PACKAGE_IMAGE-tools:$IMAGE_TAG"
           docker push "$PACKAGE_IMAGE-tools:$REF_TAG"
-
           if [ "${GITHUB_REF_NAME}" = "main" ]; then
-            docker push "$PACKAGE_IMAGE:latest"
-            docker push "$PACKAGE_IMAGE-tools:latest"
+            docker push "$PACKAGE_IMAGE:$latest_tag"
+            docker push "$PACKAGE_IMAGE-tools:$latest_tag"
           fi
 
-      - name: Cleanup Docker artifacts
-        if: always()
+      - name: Record Kubernetes image digests
+        id: digests
+        if: github.event_name != 'pull_request' && steps.images.outputs.target == 'kubernetes'
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
         run: |
           set -euo pipefail
+          app_digest=$(docker buildx imagetools inspect "$PACKAGE_IMAGE:sha-$SOURCE_COMMIT-kubernetes" --format '{{.Manifest.Digest}}')
+          tools_digest=$(docker buildx imagetools inspect "$PACKAGE_IMAGE-tools:sha-$SOURCE_COMMIT-kubernetes" --format '{{.Manifest.Digest}}')
+          printf 'app=%s@%s\n' "$PACKAGE_IMAGE" "$app_digest" >> "$GITHUB_OUTPUT"
+          printf 'tools=%s-tools@%s\n' "$PACKAGE_IMAGE" "$tools_digest" >> "$GITHUB_OUTPUT"
 
-          REF_TAG=$(printf '%s' "$GITHUB_REF_NAME" \
-            | tr '[:upper:]' '[:lower:]' \
-            | tr '/:' '--' \
-            | tr -c 'a-z0-9_.-' '-' \
-            | sed 's/^-*//; s/-*$//; s/^$/ref/')
-
-          IMAGE_TAG="sha-${GITHUB_SHA}"
-
+      - name: Cleanup Docker artifacts
+        if: always() && steps.images.outputs.image_tag != ''
+        env:
+          IMAGE_TAG: ${{ steps.images.outputs.image_tag }}
+          REF_TAG: ${{ steps.images.outputs.ref_tag }}
+          latest_tag: ${{ steps.images.outputs.latest_tag }}
+        run: |
+          set -euo pipefail
           docker image rm -f \
             "$PACKAGE_IMAGE:$IMAGE_TAG" \
             "$PACKAGE_IMAGE:$REF_TAG" \
             "$PACKAGE_IMAGE-tools:$IMAGE_TAG" \
             "$PACKAGE_IMAGE-tools:$REF_TAG" \
             2>/dev/null || true
-
           if [ "${GITHUB_REF_NAME}" = "main" ]; then
-            docker image rm -f \
-              "$PACKAGE_IMAGE:latest" \
-              "$PACKAGE_IMAGE-tools:latest" \
-              2>/dev/null || true
+            docker image rm -f "$PACKAGE_IMAGE:$latest_tag" "$PACKAGE_IMAGE-tools:$latest_tag" 2>/dev/null || true
           fi
-
-          docker container prune -f
-          docker network prune -f
-          docker builder prune -af
 
   deploy:
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.CRM_DEPLOY_TARGET != 'kubernetes'
     runs-on: deploy
     env:
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
@@ -216,3 +257,29 @@ jobs:
 
           sudo "$DEPLOY_SCRIPT_PATH" "$DEPLOY_IMAGE_TAG"
           REMOTE
+
+  gitops:
+    needs: build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && needs.build.outputs.target == 'kubernetes'
+    runs-on: docker-build
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update CRM workload digests
+        env:
+          APP_IMAGE: ${{ needs.build.outputs.app }}
+          TOOLS_IMAGE: ${{ needs.build.outputs.tools }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$SOURCE_COMMIT" || exit 0
+          python3 -m unittest discover -s deploy/crm/scripts -p 'test_set_images.py'
+          python3 deploy/crm/scripts/set-images.py --app-image "$APP_IMAGE" --tools-image "$TOOLS_IMAGE"
+          git config user.name 'CRM GitOps'
+          git config user.email 'it@sea-watch.org'
+          git add deploy/crm/kubernetes deploy/crm/operations
+          git diff --cached --quiet && exit 0
+          git commit -m "Deploy CRM ${SOURCE_COMMIT} [skip ci]"
+          git push origin HEAD:main

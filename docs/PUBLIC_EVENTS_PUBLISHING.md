@@ -75,6 +75,10 @@ may need a refresh after publication.
 
 ## Registration intake and Kubernetes
 
+Application directories and the separate CRM migration preparation are mapped in
+[`deploy/README.md`](../deploy/README.md). The API Argo source path is
+`deploy/seawatch-api/kubernetes`; the planned CRM path is `deploy/crm/kubernetes`.
+
 The public service accepts `POST https://api.sea.watch/v1/events/registrations`.
 It requires JSON with `eventId`, `name`, `email`, optional `phone` and `notes`,
 plus a UUID `Idempotency-Key` header. It returns `202` only after a JetStream
@@ -88,7 +92,7 @@ source address per rolling hour across API replicas; it stores salted address
 hashes rather than addresses. Ingress must overwrite/append trusted forwarding
 headers and NetworkPolicy must restrict direct API access to Traefik.
 
-`deploy/kubernetes/` contains the public API, single-replica persistent JetStream,
+`deploy/seawatch-api/kubernetes/` contains the public API, single-replica persistent JetStream,
 stream initialization Job, network policies, public TLS route for api.sea.watch,
 and a private broker WebSocket route at
 `wss://seawatch-api.k8s-vpn.sea.watch`. The private route uses `vpnwebsecure`
@@ -104,7 +108,7 @@ Before bootstrapping Argo CD:
    pushes `runner-public-api`, and replaces both API/initializer placeholders
    with the returned digest. It guards against superseded builds.
 2. Generate independent API, CRM, and bootstrap broker credentials. Render
-   `deploy/nats-authorization.conf.example`, seal it using the platform public
+   `deploy/seawatch-api/nats-authorization.conf.example`, seal it using the platform public
    certificate, and commit only the SealedSecret named `seawatch-nats-auth`
    containing `authorization.conf` in namespace `seawatch-api`.
 3. Seal `seawatch-api-env` containing `API_NATS_PASSWORD`,
@@ -113,7 +117,7 @@ Before bootstrapping Argo CD:
    registry/Git credentials are independent.
 4. Verify cluster prerequisites from `KUBERNETES_GITOPS_DEPLOYMENT_GUIDE.md`,
    namespace access, Ceph PVC provisioning, and DNS/TLS. Bootstrap the AppProject
-   followed by the Application from `deploy/argocd/`.
+   followed by the Application from `deploy/seawatch-api/argocd/`.
 5. Confirm Argo `Synced/Healthy`, running image digests, streams, PVC, probes,
    network restrictions, TLS, and public intake before enabling the frontend.
    Never delete the PVC or purge a stream as a retry mechanism.

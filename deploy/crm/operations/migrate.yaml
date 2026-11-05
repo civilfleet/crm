@@ -1,0 +1,64 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: crm-migrate
+  namespace: crm
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: crm
+        app.kubernetes.io/component: maintenance
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: migrate
+        image: git.sea.watch/it-department/crm-tools:bootstrap-required
+        command:
+        - node
+        - node_modules/prisma/build/index.js
+        - migrate
+        - deploy
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        envFrom:
+        - configMapRef:
+            name: crm-config
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: crm-runtime
+              key: DATABASE_URL
+        - name: HOME
+          value: /tmp
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: '1'
+            memory: 512Mi
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+      restartPolicy: Never
+      imagePullSecrets:
+      - name: gitea-registry
+      volumes:
+      - name: tmp
+        emptyDir:
+          sizeLimit: 256Mi

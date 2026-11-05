@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crm-storage-config
+  namespace: crm
+data:
+  filer.toml: "[leveldb2]\n  enabled = true\n  dir = \"/data/filer\"\n"

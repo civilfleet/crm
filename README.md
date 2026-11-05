@@ -259,6 +259,10 @@ scripts/            Operational and data helper scripts
 npx prisma migrate deploy
 ```
 
+### Kubernetes migration
+
+The staged full-stack Kubernetes deployment, retained hostnames, restore rehearsal and cutover procedure are documented in [deploy/crm/README.md](deploy/crm/README.md). The VM remains the default CI deployment target until `CRM_DEPLOY_TARGET=kubernetes` is explicitly selected.
+
 ### Gitea Image Build And Production Deploy
 
 The GitHub workflow in `.github/workflows/mirror-to-gitea.yml` pushes `main` to Gitea. That Gitea push triggers `.gitea/workflows/docker-image.yml`, which builds and pushes the image to the Gitea container registry, then deploys it from a VPN-connected `act_runner` over SSH. It expects the production Compose file to use `CRM_IMAGE` and `CRM_IMAGE_TAG`, and writes those values to `.env.deploy` on the server before running `docker compose pull` and `docker compose up -d`.

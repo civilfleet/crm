@@ -9,6 +9,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: vars.CRM_DEPLOY_TARGET != 'kubernetes'
     runs-on: deploy
     env:
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}

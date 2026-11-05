@@ -7,7 +7,7 @@ spec:
   source:
     repoURL: gitea@git.sea.watch:IT-Department/crm.git
     targetRevision: main
-    path: deploy/kubernetes
+    path: deploy/seawatch-api/kubernetes
     directory: { recurse: true }
   syncPolicy:
     automated: { prune: true, selfHeal: true }
