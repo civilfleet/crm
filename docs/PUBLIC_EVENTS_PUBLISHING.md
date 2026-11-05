@@ -1,222 +1,210 @@
-# Public events publication
+# Public data publication
 
-Public pages are a separate static Next.js application in `public-events/`.
-The full CRM continues to run independently. `config/public-events.json`
-identifies the dedicated Netlify site and the explicit team allowlist.
+The Netlify target is a data feed, not an attendee website. The existing site ID
+is retained; its intended name is `seawatch-public-data`, at
+`https://seawatch-public-data.netlify.app`. The former `public-events/` frontend
+source remains available for future UI work but is not built or uploaded.
 
-## Build and publish
+All teams with public events are included automatically. There is no team ID
+allowlist. Teams with no public events, including a team whose last event is
+unpublished, disappear from discovery. Only explicit public event fields and
+team ID/name/public email/website are exported. Registrations, contacts, internal
+team settings and credentials are never exported.
 
-Use Node 22 or newer, install with `yarn install --immutable`, and configure
-`DATABASE_URL` (plus `PG_SSL_ROOT_CERT` when needed). The exporter uses a
-read-only repeatable-read transaction and an explicit public-field projection.
-Only `isPublic` events belonging to configured teams are exported; contact
-records, registrations, internal flags, and credentials are never included.
+## Consumer contract
+
+Start at `/manifest.json`. It contains `schemaVersion`, the publication version
+and timestamp, the shared `registrationApi`, paginated team discovery, and a link
+to shared postal references. Team discovery has 50 entries per page. Every team
+has a stable `/teams/<team-id>/manifest.json` linking its profile and scopes:
+
+```text
+manifest.json
+teams/index/<directory-version>/1.json
+teams/<team-id>/manifest.json
+teams/<team-id>/data/profile/<hash>.json
+teams/<team-id>/data/events/<event-id>/<hash>.json
+teams/<team-id>/data/listings/upcoming/<scope-version>/manifest.json
+teams/<team-id>/data/listings/upcoming/<scope-version>/1.json
+teams/<team-id>/data/listings/upcoming/<scope-version>/search/pagefind.js
+teams/<team-id>/data/listings/upcoming/<scope-version>/geo/index.json
+teams/<team-id>/data/listings/archive/<year>/<scope-version>/...
+reference/postal/<reference-version>/manifest.json
+```
+
+URLs in JSON begin with `/` and are relative to the **feed origin**, not the
+custom website. Follow the supplied links; do not construct hashed paths.
+Public TypeScript contracts are in `src/lib/public-data/types.ts`.
+
+A scope manifest contains counts, page size, page URL template, facets, search
+configuration and a geographic index link. Listing pages contain at most 12
+summaries, with a 180-character excerpt and `detailUrl`. Full descriptions are
+only in individual event JSON. Empty upcoming scopes have zero pages and no
+search index. Archive scope names are `archive/<start-year>`; events become past
+at their end date, or start date when no end date is supplied. Daily
+reconciliation moves events into archives.
+
+For example, a custom UI loads an upcoming listing without any historical data:
+
+```js
+const origin = 'https://seawatch-public-data.netlify.app';
+const read = async path => {
+  const response = await fetch(new URL(path, origin));
+  if (!response.ok) throw new Error(`Feed HTTP ${response.status}`);
+  return response.json();
+};
+const team = await read(`/teams/${teamId}/manifest.json`);
+const scope = await read(team.scopes.upcoming.manifest);
+const page = scope.pages ? await read(scope.pageUrlTemplate.replace('{page}', '1')) : { items: [] };
+```
+
+Full-text search uses independent Pagefind bundles per team and scope, generated
+directly from event records. Import `scope.search.moduleUrl` from the feed origin
+and call its `search` API. Results include `meta.eventId`, `meta.teamId` and
+`meta.detailUrl`; your UI defines attendee-facing routes. The index language is
+`en`, matching the previous site. Archive searches load the selected year's
+index; searching multiple years requires loading/merging those indexes.
+
+Geographic indexes are fetched only for geographic searches. The first index
+links coarse-cell index pages (128 leaf descriptors each). Leaf point files
+contain at most 256 records, including overflow pages at maximum geohash
+precision. Use bounds to select cells and verify exact distances against point
+coordinates. Missing or ambiguous country/centroid matches are excluded. Postal
+references are discovered by country, then by encoded two-character postal
+prefix. They are shared rather than copied into every team's feed.
+
+Stable manifests require revalidation. Content-versioned files are immutable.
+All feed and search assets allow anonymous cross-origin reads. An already-open
+client may reference a removed generation after publication: on 404, refresh the
+stable manifest and retry using its current links. Previously downloaded public
+data cannot be recalled from consumers.
+
+## Generation and change queue
+
+`20261105170000_public_data_publication` creates
+`PublicDataPublicationState` and transactional PostgreSQL triggers. Public event
+creation/edits/unpublishing/deletion, exported team metadata, event-type names,
+and team deletion request publication. Non-exported event changes and attendee
+registrations do not. Triggers also cover imports and cascades without separate
+application hooks. Queue rows intentionally have no team foreign key, preserving
+deletion tombstones. Rollback removes the request with the data change.
+
+The worker checks the small queue every five seconds and debounces changes for
+30 seconds. It snapshots requested revisions and acknowledges only those after
+Netlify confirms the candidate is actually published. New changes during a build
+remain pending. Errors retain requests and back off from 30 seconds to 15 minutes.
+Daily/startup reconciliation refreshes geographic references and detects archive
+rollover or writes outside normal change paths.
+
+The publisher caches only public projections, content hashes and artifact
+inventories. Changed teams are read in a repeatable-read, read-only transaction.
+Only changed event detail files and affected upcoming/archive-year scopes are
+regenerated. Other scopes and teams reuse their existing files. Team metadata
+changes do not regenerate event search. A missing/incompatible cache causes a
+full source reconciliation, not an empty publication.
+
+All deployments use Netlify's digest API: the complete desired path/hash map is
+sent, but only requested content hashes are uploaded. Omitting obsolete files
+removes them from the new atomic deployment. A PostgreSQL advisory lock
+serializes publishers using the production database. An interrupted incomplete
+`public-data:` digest upload can be cancelled under that lock and retried;
+published deployments and other deployment types are not cancelled. A deployment
+still processing is inspected on the next attempt. Failed generation/upload
+leaves the old publication intact; errors after Netlify activates a deployment
+require inspecting its active state, and queue revisions remain retryable.
+
+## Commands and cutover
+
+Use Node 22+ and `yarn install --immutable`. Run against the **actual production
+CRM database**, not a developer `.env` dataset. `PG_SSL_ROOT_CERT` is supported
+for databases with a custom CA. Run the additive migration through the normal
+CRM image deployment before enabling the publisher.
 
 ```sh
+# Generate data and indexes locally; prints the candidate output directory.
 yarn events:export
+# Alias for export; no Next.js build is performed.
 yarn events:build
-# Draft by default; requires NETLIFY_AUTH_TOKEN.
+# Export and upload a draft. Does not acknowledge production queue revisions.
 yarn events:publish
-# Production publication, after inspecting the draft.
+# After inspecting the draft, operator-run rename and production publication.
+yarn events:rename
 yarn events:publish --production
 ```
 
-The combined publish command exports and builds before uploading. It uses a
-PostgreSQL advisory lock to serialize publishers across hosts. Complete Netlify
-deploys replace the site, including removal of unpublished and deleted pages.
-Failed builds/uploads retain the last successful production deploy. Keep the
-previous deployment available in Netlify for rollback; rolling it back can
-restore event details that were subsequently unpublished.
+Commands require `NETLIFY_AUTH_TOKEN` except local-only export. For an explicit
+one-off operator action, `EVENTS_USE_LOCAL_NETLIFY_LOGIN=true` uses the existing
+Netlify CLI login. Do not copy that personal owner credential into the publisher.
+Use a dedicated automation credential in the runtime secret store. The rename
+command updates the existing site, not a new site, and is never run by the worker.
+The old Netlify HTML URLs are retired; the feed has no HTML fallback. `/` may
+return 404; `/manifest.json` is the entry point. Do not configure
+`NEXT_PUBLIC_EVENTS_BASE_URL` to this data host: it has no attendee-facing pages.
+Custom event websites and their registration links are separate work.
 
-An operator can explicitly set `EVENTS_USE_LOCAL_NETLIFY_LOGIN=true` for local
-publication using the existing CLI login. Do not copy that personal owner token
-into the CRM deployment. Automated publication needs its own deployment token,
-stored in the private runtime's secret configuration. No Netlify build hook or
-private CRM access from Netlify is required.
+In `datacenter-infra`, the CRM role supports:
 
-Run `yarn events:worker` as a supervised private process using the existing
-`runner-tools` image. It detects database changes every five seconds, debounces
-them for 30 seconds, refreshes daily in UTC, retries failures, and skips a
-deployment when the published snapshot fingerprint is already current. Its
-filesystem must be writable for static build output. Persist/review worker logs
-and alert on repeated publication failures. Source-code changes require a worker
-rollout and publication; redeploying the worker triggers a fresh check.
+```yaml
+crm_public_data_enabled: true
+crm_public_data_autostart: false # manual-only until draft/cutover review
+secret_crm_public_data_netlify_token: <stored only in Ansible Vault>
+```
 
-Configure `NEXT_PUBLIC_EVENTS_BASE_URL=https://seawatch-events.netlify.app` at
-CRM build time to make staff copy the external event links. The existing CRM
-pages remain in place during validation; moving the CRM behind the VPN is a
-separate cutover.
+First configure with `crm_public_data_autostart: false`, run the draft and cutover
+commands with `docker compose run --rm --no-deps public-data-publisher yarn ...`,
+then set `crm_public_data_autostart: true` and apply again to start automation.
+See `datacenter-infra/crm.sea.watch/PUBLIC_DATA.md` for the complete sequence.
 
-## Search and archive
+You apply `ansible-playbook crm.sea.watch/deploy.yml --limit crm.sea.watch` after
+the new tools image and migration are deployed. The role adds
+`public-data-publisher` with the production Compose database URL, its own Netlify
+credential, and persistent `public-data-cache` volume. The normal image deployment
+script subsequently updates it alongside existing workers. It receives no NATS,
+SMTP or storage credentials. Enable it after the draft/rename cutover is ready.
+Inspect `docker compose logs --tail=100 public-data-publisher`; repeated failures
+need attention. Monitor pending revisions, attempts, last error and last
+publication time in `PublicDataPublicationState`. Never clear the queue as a
+retry mechanism or prune the active cache volume. Stop the service before
+setting its Ansible enable flag back to false.
 
-Listings fetch 12 summaries at a time. Past events retain their URLs and are
-browsable by year. An event becomes past at `endDate`, or `startDate` if no end
-is supplied. Daily publication updates listings; the form also checks the
-cutoff in the browser, and the CRM validates eligibility at processing time.
+`PUBLIC_DATA_STATE_DIR` defaults to ignored `.public-data/` locally and is
+`/var/lib/crm-public-data` in the publisher container. Candidates live in
+`runs/<id>/out`; an atomic `current.json` pointer identifies the successful cache.
+Draft candidates are retained for inspection; successful production publication
+retires its previous local cache. Netlify deployment history provides rollback,
+which can restore content since unpublished; reconcile before resuming automation.
 
-Pagefind is built after the static export and loads search chunks on demand.
-Results are scoped to a team and intersect text, type, region, format, and date
-filters. Only the visible result summaries are fetched. Date filters use UTC
-calendar dates; event detail times use the event's timezone, defaulting to
-Europe/Berlin for existing records without a timezone.
+## Registration bridge
 
-Geographic shards use geohashes, split dense cells above 256 coordinate records
-(up to precision 8), and separate upcoming events from archive years. Geographic index manifests
-are also loaded on demand, first by archive scope and then by coarse geohash;
-opening the listing never downloads the historical geographic index. Radius
-search loads intersecting cells and checks spherical distances between postal
-centroids. Unknown or ambiguous event countries/centroids are excluded from
-radius searches. The additive migration infers a country only when a postal
-code has one country in the existing catalogue; staff can correct country codes
-in the event form. Postal lookups are sharded by country and the first two code
-characters. The overall published catalogue may grow without entering the
-initial browser payload. An already open tab whose generation has been removed
-may need a refresh after publication.
+The shared API remains `POST https://api.sea.watch/v1/events/registrations`,
+accepting JSON `eventId`, `name`, `email`, optional `phone`/`notes`, and a UUID
+`Idempotency-Key`. HTTP 202 means JetStream stored the request, not final CRM
+acceptance. Custom UI origins must be explicitly allowed by the API; public feed
+CORS does not grant registration API access. Current eligibility is validated by
+the CRM consumer, including events unpublished since a client loaded its data.
 
-## Registration intake and Kubernetes
+The API/JetStream Argo path remains `deploy/seawatch-api/kubernetes`. The CRM
+consumer connects through `wss://seawatch-api.k8s-vpn.sea.watch`, using the CRM-only
+credential and durable consumer `crm-event-registrations-v1`. The Headscale ACL
+must grant `tag:crm` access to `tag:kubernetes-gateway:53,443`. Consumer configuration
+remains in the infrastructure CRM role. Submission UUID uniqueness prevents
+redelivery duplicates. The registration and confirmation email batch commit in
+one transaction; the existing background worker dispatches through the team's
+Scaleway TEM integration. The registration/email flow was verified live before
+this feed conversion. Feed conversion does not alter registration behavior.
 
-Application directories and the separate CRM migration preparation are mapped in
-[`deploy/README.md`](../deploy/README.md). The API Argo source path is
-`deploy/seawatch-api/kubernetes`; the planned CRM path is `deploy/crm/kubernetes`.
+## Verification
 
-The public service accepts `POST https://api.sea.watch/v1/events/registrations`.
-It requires JSON with `eventId`, `name`, `email`, optional `phone` and `notes`,
-plus a UUID `Idempotency-Key` header. It returns `202` only after a JetStream
-storage acknowledgment. It never connects to the CRM database. Browser
-submission remains disabled until `NEXT_PUBLIC_EVENTS_API_URL=https://api.sea.watch`
-is set during the **static site build**; enable it only after end-to-end checks.
+```sh
+yarn test
+yarn typecheck
+# Explicit isolated localhost PostgreSQL database only:
+PUBLIC_DATA_TEST_DATABASE_URL=postgresql://postgres@127.0.0.1:PORT/postgres \
+  node --import ./tests/register-hooks.mjs --test tests/public-data-postgres.test.ts
+```
 
-The API bounds payloads at 16 KiB and fields independently. CORS permits only
-configured origins. A separate JetStream stream enforces ten attempts per
-source address per rolling hour across API replicas; it stores salted address
-hashes rather than addresses. Ingress must overwrite/append trusted forwarding
-headers and NetworkPolicy must restrict direct API access to Traefik.
-
-`deploy/seawatch-api/kubernetes/` contains the public API, single-replica persistent JetStream,
-stream initialization Job, network policies, public TLS route for api.sea.watch,
-and a private broker WebSocket route at
-`wss://seawatch-api.k8s-vpn.sea.watch`. The private route uses `vpnwebsecure`
-and the shared TLS store; the public API deliberately uses `websecure` and its
-own Certificate. Confirm public DNS targets and the shared issuer before use.
-The public IngressRoute includes an ExternalDNS target annotation pointing to
-`traefik.sea.watch`. The cluster's `traefik-proxy` source reads its Host rule and
-manages `api.sea.watch` as a CNAME to that public gateway. The annotation uses the
-prefix supported by the pinned ExternalDNS v0.21.0. After Argo sync, verify the
-DNS record and ExternalDNS reconciliation; applying the route alone does not
-prove DNS publication. Private broker DNS remains managed by the VPN setup.
-Broker monitoring stays internal. This single-broker setup survives process/pod
-restarts with its PVC but is unavailable during broker/node recovery; it is not
-a replicated high-availability queue.
-
-Before bootstrapping Argo CD:
-
-1. Run the manual **Public API image** Gitea workflow. It tests the repository,
-   pushes `runner-public-api`, and replaces both API/initializer placeholders
-   with the returned digest. It guards against superseded builds.
-2. Generate independent API, CRM, and bootstrap broker credentials. Render
-   `deploy/seawatch-api/nats-authorization.conf.example`, seal it using the platform public
-   certificate, and commit only the SealedSecret named `seawatch-nats-auth`
-   containing `authorization.conf` in namespace `seawatch-api`.
-3. Seal `seawatch-api-env` containing `API_NATS_PASSWORD`,
-   `BOOTSTRAP_NATS_PASSWORD`, and a random `RATE_LIMIT_HASH_KEY`. Seal a separate
-   `gitea-registry` pull secret in the same namespace. Runtime secrets and
-   registry/Git credentials are independent.
-4. Verify cluster prerequisites from `KUBERNETES_GITOPS_DEPLOYMENT_GUIDE.md`,
-   namespace access, Ceph PVC provisioning, and DNS/TLS. Bootstrap the AppProject
-   followed by the Application from `deploy/seawatch-api/argocd/`.
-5. Confirm Argo `Synced/Healthy`, running image digests, streams, PVC, probes,
-   network restrictions, TLS, and public intake before enabling the frontend.
-   Never delete the PVC or purge a stream as a retry mechanism.
-
-The initialization Job creates streams only if absent and does not rewrite
-existing retention policies. Registration and failure streams have no time
-expiry, reject new messages when their 1 GiB limits are reached, and need alerts
-well before full. Establish and test JetStream backups and restore before
-production acceptance; a Ceph PVC is not a backup. Alert on pending count,
-oldest unprocessed submission, consumer inactivity, failure-stream messages,
-disk usage, and repeated API 503 responses. Reconciliation is through the
-broker's authenticated administrative tools, not a public API endpoint.
-
-Apply the committed Prisma migration through the normal CRM migration process
-before running `yarn events:consume`. Configure `NATS_URL` to the private WSS
-route and `NATS_USER=crm` plus its password. The CRM runtime itself needs
-tailnet DNS/network access; operator laptop connectivity does not prove that.
-Supervise this process alongside the publisher and existing background worker.
-For the current VM deployment, the canonical configuration lives in
-`datacenter-infra/roles/crm`. Set `crm_event_registrations_enabled: true` and
-store the existing broker's CRM credential as vaulted `secret_crm_nats_password`.
-The role renders a separate `event-registrations` service with `restart:
-unless-stopped`; only that service receives NATS credentials. Its default URL is
-the private WSS route above. The generated deployment script includes the
-consumer in image pulls and runtime rollouts after successful migrations.
-
-This needs a one-time infrastructure configuration rollout: pushing CRM `main`
-builds the images and invokes the VM's installed `/usr/local/sbin/deploy-crm`,
-but does not update that script, the VM's Compose file, or its secrets. After
-the infrastructure configuration is installed, the normal application pipeline
-updates the consumer alongside the existing worker. Before enabling it, verify
-the installed tools image contains `scripts/consume-event-registrations.ts`, the
-public-events migration succeeded in the actual VM database, and the container
-can resolve/reach the private WSS hostname. A developer `.env` database URL is
-not evidence of the VM's database state. Keep static registration disabled until
-the durable consumer, CRM persistence, and confirmation delivery are verified.
-To disable an existing consumer, stop its Compose service before rendering the
-role with `crm_event_registrations_enabled: false`; removing the service from
-the Compose file alone does not stop its existing container.
-
-The consumer uses a durable pull cursor and acknowledges only after the database
-transaction commits. Submission UUID uniqueness makes redelivery idempotent.
-The same transaction queues a confirmation email through the existing email
-batch worker, requiring the team's enabled Scaleway TEM integration. Validate
-that integration and email-worker health before enabling registration.
-
-Unavailable/ended events and messages failing ten deliveries are copied to the
-persistent failure stream before acknowledgment. They require staff review;
-receiving a submission is not a promise of acceptance. Test an outage/restart,
-redelivery, duplicate submission, final confirmation, and unpublishing before
-cutover. No synthetic registration should be inserted into the production CRM
-for infrastructure-only tests.
-
-## Validation recorded during implementation
-
-- All 156 repository tests passed outside the restrictive sandbox; typecheck
-  and lint for changed application files passed.
-- The static production build indexed four public Sea-Watch events. The source
-  database currently contains historical sample/test events; no upcoming public
-  Sea-Watch event was present. Another team's records were excluded.
-- Desktop/mobile browser checks covered archive browsing, text search and date
-  filtering without horizontal overflow.
-- An isolated 10,000-event Pagefind fixture indexed in about 2.1 seconds.
-  A cold broad search fetched twelve result fragments and 248,883 bytes of
-  search response bodies (19 resources), rather than every event summary.
-  These are local fixture measurements, not production latency guarantees.
-- A disposable JetStream broker accepted ten synthetic HTTP submissions,
-  rejected the eleventh with 429, retained messages across restart, and
-  redelivered an unacknowledged message. The deployment credential template
-  passed a restricted-producer and durable-consumer WebSocket test.
-- Kubernetes deployment, production database migration, confirmation delivery,
-  automated publisher supervision and private CRM network access still require
-  live configuration and verification. No production CRM data was changed by
-  these tests.
-
-## Current public deployment
-
-Published on 2026-11-04 at https://seawatch-events.netlify.app/ (site ID
-`ef0bcb3b-e04c-400d-889b-028af45b349a`). Active production deployment
-`6aeb47a48ac2c89adfd88446` applies the user-selected sea-watch.org identity:
-official logo, locally served Inter 400/700, navy/cyan/white palette, square
-controls, shared header/footer, and consistent listing/detail styling. The design
-is documented in `public-events/DESIGN.md` and its app-scoped Impeccable sidecar.
-The preceding deployment `6aeaeb530f07fb64eb93457b` remains the rollback reference.
-
-This publication uploaded the tested static output without re-exporting or
-changing event data, enabling registration, or altering the private CRM. The
-homepage opens the configured team's listing directly. Upcoming/archive controls,
-text search and date/geographic filtering remain available; search filters update
-after a 300 ms debounce. The four existing public events are historical.
-
-Netlify's published deployment pointer was verified against the new ID. Public
-HTTPS checks returned 200 for the homepage, team listing, detail page, logo and
-Pagefind script. Live desktop browsing showed all four events without horizontal
-overflow or browser console errors. Registration intake and automatic publishing
-remain disabled pending live infrastructure configuration.
+Tests cover incremental reuse, private-field exclusion, empty feeds, deletion,
+archive rollover, 10,000 historical events and dense geographic overflow, digest
+uploads, transactional queue rollback, concurrent changes, draft isolation,
+failed publication recovery and cache reconstruction. The PostgreSQL integration
+test creates/drops only its own random schema and mocks all Netlify requests.

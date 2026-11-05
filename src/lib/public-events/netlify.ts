@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, relative, resolve } from "node:path";
-import { zipSync } from "fflate";
 
 export async function netlifyToken() {
   if (process.env.NETLIFY_AUTH_TOKEN) return process.env.NETLIFY_AUTH_TOKEN;
@@ -59,8 +58,11 @@ export async function netlifyRequest<T>(
     );
   }
   if (!response.ok)
-    throw new Error(
-      `Netlify ${method} ${path.split("?")[0]} failed: HTTP ${response.status}`,
+    throw Object.assign(
+      new Error(
+        `Netlify ${method} ${path.split("?")[0]} failed: HTTP ${response.status}`,
+      ),
+      { code: `NETLIFY_HTTP_${response.status}` },
     );
   return response.json() as Promise<T>;
 }
@@ -79,17 +81,16 @@ export async function deployEvents(
   directory: string,
   version: string,
   draft = true,
+  inventory?: Record<string, string>,
 ) {
   const root = resolve(directory);
   const hashes: Record<string, string> = {};
   const files = new Map<string, string>();
-  let bytes = 0;
   async function walk(dir: string) {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
       const path = join(dir, entry.name);
       if (entry.isDirectory()) await walk(path);
       else if (entry.isFile()) {
-        bytes += (await stat(path)).size;
         const hash = createHash("sha1")
           .update(await readFile(path))
           .digest("hex");
@@ -99,42 +100,34 @@ export async function deployEvents(
       }
     }
   }
-  await walk(root);
-  if (
-    !hashes["/index.html"] ||
-    !Object.keys(hashes).some((key) => key.startsWith("/pagefind/"))
-  )
-    throw new Error("Refusing to deploy an incomplete event site.");
-  let deployment: Deployment;
+  if (inventory) {
+    for (const [path, hash] of Object.entries(inventory)) {
+      if (
+        !/^[a-f0-9]{40}$/.test(hash) ||
+        path.startsWith("/") ||
+        path.split("/").includes("..")
+      )
+        throw new Error("Invalid deployment inventory");
+      hashes[`/${path}`] = hash;
+      files.set(hash, `/${path}`);
+    }
+  } else await walk(root);
+  if (!hashes["/manifest.json"] || !hashes["/_headers"])
+    throw new Error("Refusing to deploy an incomplete public data feed.");
   console.log(
-    `Preparing ${Object.keys(hashes).length} static files (${bytes} bytes) for Netlify.`,
+    `Preparing ${Object.keys(hashes).length} public data assets for Netlify digest deployment.`,
   );
-  if (bytes <= 64 * 1024 ** 2 && Object.keys(hashes).length <= 25000) {
-    // Small deployments avoid thousands of initial API uploads. Larger sites
-    // use digest uploads, bounding memory and reusing unchanged remote files.
-    const entries: Record<string, Uint8Array> = {};
-    for (const name of Object.keys(hashes))
-      entries[name.slice(1)] = new Uint8Array(await readFile(join(root, name)));
-    deployment = await netlifyRequest<Deployment>(
-      `/sites/${siteId}/deploys?draft=${draft}&title=${encodeURIComponent(`public-events:${version}`)}`,
-      token,
-      "POST",
-      new Uint8Array(zipSync(entries, { level: 6 })),
-      "application/zip",
-    );
-  } else {
-    deployment = await netlifyRequest<Deployment>(
-      `/sites/${siteId}/deploys`,
-      token,
-      "POST",
-      JSON.stringify({
-        files: hashes,
-        draft,
-        async: true,
-        title: `public-events:${version}`,
-      }),
-    );
-  }
+  let deployment = await netlifyRequest<Deployment>(
+    `/sites/${siteId}/deploys`,
+    token,
+    "POST",
+    JSON.stringify({
+      files: hashes,
+      draft,
+      async: true,
+      title: `public-data:${version}`,
+    }),
+  );
   for (let i = 0; deployment.state === "preparing" && i < 120; i++) {
     await new Promise((done) => setTimeout(done, 2000));
     deployment = await netlifyRequest<Deployment>(

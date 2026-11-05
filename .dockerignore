@@ -33,3 +33,6 @@ public-api/dist
 prisma/migrations/20250316161751_
 prisma/migrations/20250320054707_
 prisma/migrations/20250320055613_
+
+# Never include the generated publisher cache in an image build context.
+.public-data

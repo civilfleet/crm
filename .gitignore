@@ -64,3 +64,6 @@ yarn-error.log*
 
 # CRM Kubernetes deployment helpers
 /deploy/crm/scripts/__pycache__/
+
+# Public data publisher artifacts and durable local cache
+/.public-data/

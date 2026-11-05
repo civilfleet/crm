@@ -29,12 +29,13 @@
     "uploads:cleanup": "tsx scripts/cleanup-pending-uploads.ts",
     "postinstall": "prisma generate",
     "events:export": "tsx scripts/export-public-events.ts",
-    "events:build": "next build public-events --webpack && pagefind --site public-events/out",
+    "events:build": "tsx scripts/export-public-events.ts",
     "events:publish": "tsx scripts/publish-public-events.ts",
     "events:worker": "tsx scripts/public-events-worker.ts",
     "api:public": "tsx scripts/public-api.ts",
     "events:consume": "tsx scripts/consume-event-registrations.ts",
-    "api:build": "esbuild scripts/public-api.ts --bundle --platform=node --target=node22 --format=cjs --outfile=public-api/dist/server.cjs"
+    "api:build": "esbuild scripts/public-api.ts --bundle --platform=node --target=node22 --format=cjs --outfile=public-api/dist/server.cjs",
+    "events:rename": "tsx scripts/rename-public-data-site.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",

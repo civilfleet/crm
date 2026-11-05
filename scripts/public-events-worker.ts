@@ -1,68 +1,50 @@
 import "dotenv/config";
-import { readFile } from "node:fs/promises";
 import { Pool } from "pg";
+import { reconcilePublication } from "../src/lib/public-data/queue";
+import { databaseOptions } from "../src/lib/public-data/runtime";
 import { publishEvents } from "./publish-public-events";
 
 async function main() {
-  const config = JSON.parse(
-    await readFile("config/public-events.json", "utf8"),
-  ) as { teamIds: string[] };
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    connectionTimeoutMillis: 10000,
-    ssl: process.env.PG_SSL_ROOT_CERT
-      ? {
-          ca: process.env.PG_SSL_ROOT_CERT.replace(/\\n/g, "\n"),
-          rejectUnauthorized: true,
-        }
-      : undefined,
-  });
-  let lastObserved = "";
-  let lastPublished = "";
-  let changedAt = 0;
-  let nextAttemptAt = 0;
-  let retryMs = 30000;
-  let stopping = false;
-  process.once("SIGTERM", () => {
+  const pool = new Pool(databaseOptions());
+  let reconciledDay = "",
+    stopping = false;
+  const stop = () => {
     stopping = true;
-  });
-  process.once("SIGINT", () => {
-    stopping = true;
-  });
+  };
+  process.once("SIGTERM", stop);
+  process.once("SIGINT", stop);
+  let retryAt = 0,
+    retryMs = 30000;
   try {
     while (!stopping) {
-      try {
-        // Read-only polling detects changes made through every write path,
-        // including unpublishing and deleting the final public event.
-        const { rows } = await pool.query<{ fingerprint: string }>(
-          `SELECT md5(jsonb_build_object(
-          'events', (SELECT jsonb_agg(to_jsonb(e) ORDER BY e.id) FROM "Event" e WHERE e."isPublic" AND e."teamId" = ANY($1::text[])),
-          'types', (SELECT jsonb_agg(jsonb_build_object('id', et.id, 'name', et.name) ORDER BY et.id) FROM "EventType" et WHERE et."teamId" = ANY($1::text[])),
-          'teams', (SELECT jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name, 'email', t.email, 'website', t.website) ORDER BY t.id) FROM "Teams" t WHERE t.id = ANY($1::text[])),
-          'day', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD'))::text) AS fingerprint`,
-          [config.teamIds],
-        );
-        const fingerprint = rows[0].fingerprint;
-        if (fingerprint !== lastObserved) {
-          lastObserved = fingerprint;
-          changedAt = Date.now();
-        }
-        if (
-          fingerprint !== lastPublished &&
-          Date.now() - changedAt >= 30000 &&
-          Date.now() >= nextAttemptAt
-        ) {
-          await publishEvents(true);
-          lastPublished = fingerprint;
+      if (Date.now() >= retryAt) {
+        try {
+          const day = new Date().toISOString().slice(0, 10);
+          const reconcile = day !== reconciledDay;
+          if (reconcile) {
+            const client = await pool.connect();
+            try {
+              await reconcilePublication(client);
+            } finally {
+              client.release();
+            }
+          }
+          // Reconciliation refreshes references and catches changes outside event writes.
+          const published = await publishEvents(true, {
+            queued: true,
+            reconcile,
+          });
+          if (published) console.log("Public data publication current.");
+          if (!reconcile || published) reconciledDay = day;
           retryMs = 30000;
-          console.log("Public event publication current.");
+          retryAt = 0;
+        } catch {
+          console.error(
+            "Public data publication failed; queued revisions retained. Check publisher configuration and the active Netlify deployment.",
+          );
+          retryAt = Date.now() + retryMs;
+          retryMs = Math.min(retryMs * 2, 900000);
         }
-      } catch {
-        console.error(
-          "Public event publication failed; previous deployment retained. Check publisher configuration and connectivity.",
-        );
-        nextAttemptAt = Date.now() + retryMs;
-        retryMs = Math.min(retryMs * 2, 15 * 60000);
       }
       await new Promise((done) => setTimeout(done, 5000));
     }
@@ -71,6 +53,8 @@ async function main() {
   }
 }
 main().catch(() => {
-  console.error("Publisher stopped unexpectedly.");
+  console.error(
+    "Public data publisher stopped; check its runtime configuration.",
+  );
   process.exitCode = 1;
 });

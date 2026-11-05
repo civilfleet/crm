@@ -1524,3 +1524,15 @@ model GroupModulePermission {
   @@unique([groupId, module])
   @@index([groupId])
 }
+
+// Durable invalidation state; deliberately independent of the Teams lifecycle.
+model PublicDataPublicationState {
+  teamId            String    @id
+  requestedRevision BigInt    @default(1)
+  publishedRevision BigInt    @default(0)
+  lastChangedAt     DateTime  @default(now()) @db.Timestamptz(6)
+  nextAttemptAt     DateTime  @default(now()) @db.Timestamptz(6)
+  attempts          Int       @default(0)
+  lastError         String?   @db.Text
+  lastPublishedAt   DateTime? @db.Timestamptz(6)
+}

@@ -312,3 +312,11 @@ DEPLOY_SCRIPT_PATH
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Public event data feed
+
+Public events are exported as paginated JSON and independent search/geographic
+indexes under `/teams/<team-id>/` for custom websites. Publication is incremental
+and driven by a durable database queue; the Netlify target serves data only.
+See [public data publication](docs/PUBLIC_EVENTS_PUBLISHING.md) for the format,
+commands, production-data draft cutover, and Ansible publisher configuration.
