@@ -2,10 +2,10 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import { Pool, type PoolClient } from "pg";
+import type { PoolClient } from "pg";
 import { buildFeed } from "../src/lib/public-data/build";
 import {
-  databaseOptions,
+  createPublicDataPool,
   dataDirectory,
   loadPublishedCache,
   producerVersion,
@@ -55,7 +55,7 @@ export async function exportEvents(options: {
 }
 
 if (process.argv[1]?.endsWith("export-public-events.ts")) {
-  const pool = new Pool(databaseOptions());
+  const pool = createPublicDataPool();
   void (async () => {
     const config = JSON.parse(
       await readFile("config/public-events.json", "utf8"),

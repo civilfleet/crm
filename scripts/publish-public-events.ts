@@ -1,6 +1,5 @@
 import "dotenv/config";
 import { readFile, rm } from "node:fs/promises";
-import { Pool } from "pg";
 import { validateFeed } from "../src/lib/public-data/build";
 import {
   completePublication,
@@ -9,7 +8,7 @@ import {
   pendingPublication,
 } from "../src/lib/public-data/queue";
 import {
-  databaseOptions,
+  createPublicDataPool,
   loadPublishedCache,
   promotePublishedCache,
 } from "../src/lib/public-data/runtime";
@@ -27,7 +26,7 @@ export async function publishEvents(
   const config = JSON.parse(
     await readFile("config/public-events.json", "utf8"),
   ) as { siteId: string; registrationApi: string };
-  const pool = new Pool(databaseOptions());
+  const pool = createPublicDataPool();
   const client = await pool.connect().catch(async (error: unknown) => {
     await pool.end();
     console.error("Public data publisher could not connect to its database.");

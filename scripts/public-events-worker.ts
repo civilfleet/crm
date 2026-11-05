@@ -1,11 +1,10 @@
 import "dotenv/config";
-import { Pool } from "pg";
 import { reconcilePublication } from "../src/lib/public-data/queue";
-import { databaseOptions } from "../src/lib/public-data/runtime";
+import { createPublicDataPool } from "../src/lib/public-data/runtime";
 import { publishEvents } from "./publish-public-events";
 
 async function main() {
-  const pool = new Pool(databaseOptions());
+  const pool = createPublicDataPool();
   let reconciledDay = "",
     stopping = false;
   const stop = () => {

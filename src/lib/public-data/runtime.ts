@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { Pool, type PoolConfig } from "pg";
 import { type FeedState, SCHEMA_VERSION } from "./types";
 
 export const dataDirectory = () =>
@@ -90,4 +91,21 @@ export function databaseOptions() {
         }
       : undefined,
   };
+}
+
+// pg removes a failed idle client before emitting this event. Handling it keeps
+// the worker alive; the next checkout creates a replacement connection.
+export function createPublicDataPool(options: PoolConfig = databaseOptions()) {
+  const pool = new Pool(options);
+  pool.on("error", (error: Error & { code?: string }) => {
+    const code =
+      error.code && /^[A-Z0-9_]{1,64}$/.test(error.code)
+        ? error.code
+        : "UNKNOWN";
+    console.error(
+      "Public data idle database connection failed; a replacement will be opened on the next check.",
+      code,
+    );
+  });
+  return pool;
 }
