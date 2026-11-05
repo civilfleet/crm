@@ -98,6 +98,12 @@ and a private broker WebSocket route at
 `wss://seawatch-api.k8s-vpn.sea.watch`. The private route uses `vpnwebsecure`
 and the shared TLS store; the public API deliberately uses `websecure` and its
 own Certificate. Confirm public DNS targets and the shared issuer before use.
+The public IngressRoute includes an ExternalDNS target annotation pointing to
+`traefik.sea.watch`. The cluster's `traefik-proxy` source reads its Host rule and
+manages `api.sea.watch` as a CNAME to that public gateway. The annotation uses the
+prefix supported by the pinned ExternalDNS v0.21.0. After Argo sync, verify the
+DNS record and ExternalDNS reconciliation; applying the route alone does not
+prove DNS publication. Private broker DNS remains managed by the VPN setup.
 Broker monitoring stays internal. This single-broker setup survives process/pod
 restarts with its PVC but is unavailable during broker/node recovery; it is not
 a replicated high-availability queue.

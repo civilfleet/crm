@@ -9,7 +9,11 @@ spec:
 ---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
-metadata: { name: seawatch-api-public, namespace: seawatch-api }
+metadata:
+  name: seawatch-api-public
+  namespace: seawatch-api
+  annotations:
+    external-dns.alpha.kubernetes.io/target: traefik.sea.watch
 spec:
   entryPoints: [websecure]
   routes:
