@@ -142,6 +142,28 @@ before running `yarn events:consume`. Configure `NATS_URL` to the private WSS
 route and `NATS_USER=crm` plus its password. The CRM runtime itself needs
 tailnet DNS/network access; operator laptop connectivity does not prove that.
 Supervise this process alongside the publisher and existing background worker.
+For the current VM deployment, the canonical configuration lives in
+`datacenter-infra/roles/crm`. Set `crm_event_registrations_enabled: true` and
+store the existing broker's CRM credential as vaulted `secret_crm_nats_password`.
+The role renders a separate `event-registrations` service with `restart:
+unless-stopped`; only that service receives NATS credentials. Its default URL is
+the private WSS route above. The generated deployment script includes the
+consumer in image pulls and runtime rollouts after successful migrations.
+
+This needs a one-time infrastructure configuration rollout: pushing CRM `main`
+builds the images and invokes the VM's installed `/usr/local/sbin/deploy-crm`,
+but does not update that script, the VM's Compose file, or its secrets. After
+the infrastructure configuration is installed, the normal application pipeline
+updates the consumer alongside the existing worker. Before enabling it, verify
+the installed tools image contains `scripts/consume-event-registrations.ts`, the
+public-events migration succeeded in the actual VM database, and the container
+can resolve/reach the private WSS hostname. A developer `.env` database URL is
+not evidence of the VM's database state. Keep static registration disabled until
+the durable consumer, CRM persistence, and confirmation delivery are verified.
+To disable an existing consumer, stop its Compose service before rendering the
+role with `crm_event_registrations_enabled: false`; removing the service from
+the Compose file alone does not stop its existing container.
+
 The consumer uses a durable pull cursor and acknowledges only after the database
 transaction commits. Submission UUID uniqueness makes redelivery idempotent.
 The same transaction queues a confirmation email through the existing email
