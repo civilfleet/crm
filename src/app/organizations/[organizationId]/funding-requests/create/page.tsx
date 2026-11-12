@@ -1,5 +1,7 @@
+import { HandCoins } from "lucide-react";
 import { auth } from "@/auth";
 import HybridFundingRequestForm from "@/components/forms/hybrid-funding-request-form";
+import { RecordTopBar } from "@/components/records/record-page";
 import prisma from "@/lib/prisma";
 
 export default async function Page({
@@ -17,22 +19,32 @@ export default async function Page({
   });
 
   return (
-    <div className="flex flex-col w-2/3 p-4">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">
-          Create Funding Request
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Complete the form below to submit your funding request. All required
-          fields marked with * must be filled out.
-        </p>
-      </div>
-
-      <HybridFundingRequestForm
-        organizationId={id}
-        teamId={organization?.teamId || undefined}
-        userEmail={session?.user?.email ?? null}
+    <>
+      <RecordTopBar
+        list={{
+          href: `/organizations/${id}/funding-requests`,
+          label: "Funding Requests",
+          icon: HandCoins,
+        }}
+        title="New funding request"
       />
-    </div>
+      <div className="flex flex-col w-2/3 p-4">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold tracking-tight">
+            Create Funding Request
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Complete the form below to submit your funding request. All required
+            fields marked with * must be filled out.
+          </p>
+        </div>
+
+        <HybridFundingRequestForm
+          organizationId={id}
+          teamId={organization?.teamId || undefined}
+          userEmail={session?.user?.email ?? null}
+        />
+      </div>
+    </>
   );
 }

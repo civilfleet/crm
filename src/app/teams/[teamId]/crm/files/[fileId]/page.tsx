@@ -1,7 +1,8 @@
-import { ArrowLeft, Download, ExternalLink, FileText } from "lucide-react";
+import { Download, ExternalLink, Files, FileText } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
+import { RecordTopBar } from "@/components/records/record-page";
 import { TagPicker } from "@/components/tags/tag-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -116,142 +117,148 @@ export default async function FileDetailPage({ params }: FileDetailPageProps) {
   const downloadUrl = `/api/files/${file.id}`;
 
   return (
-    <div className="space-y-6 p-4">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
-          <Button asChild variant="ghost" size="sm" className="-ml-3 gap-2">
-            <Link href={`/teams/${teamId}/crm/files`}>
-              <ArrowLeft className="h-4 w-4" />
-              Files
+    <>
+      <RecordTopBar
+        list={{
+          href: `/teams/${teamId}/crm/files`,
+          label: "Files",
+          icon: Files,
+        }}
+        title={fileLabel}
+      />
+      <div className="space-y-6 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-2">
+            <div>
+              <h1 className="text-2xl font-semibold">{fileLabel}</h1>
+              <p className="text-sm text-muted-foreground">
+                File details, preview, and download history.
+              </p>
+            </div>
+          </div>
+          <Button asChild>
+            <Link href={downloadUrl}>
+              <Download className="mr-2 h-4 w-4" />
+              Download
             </Link>
           </Button>
-          <div>
-            <h1 className="text-2xl font-semibold">{fileLabel}</h1>
-            <p className="text-sm text-muted-foreground">
-              File details, preview, and download history.
-            </p>
-          </div>
         </div>
-        <Button asChild>
-          <Link href={downloadUrl}>
-            <Download className="mr-2 h-4 w-4" />
-            Download
-          </Link>
-        </Button>
-      </div>
 
-      <div className="grid gap-6 lg:grid-cols-12">
-        <Card className="lg:col-span-8">
-          <CardHeader className="border-b pb-3">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <FileText className="h-5 w-5" />
-              Preview
-            </CardTitle>
-            <CardDescription>{file.url}</CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            <iframe
-              src={previewUrl}
-              title={`Preview of ${fileLabel}`}
-              className="h-[70vh] min-h-[480px] w-full rounded-b-md bg-muted"
-            />
-          </CardContent>
-        </Card>
-
-        <div className="space-y-6 lg:col-span-4">
-          <Card>
+        <div className="grid gap-6 lg:grid-cols-12">
+          <Card className="lg:col-span-8">
             <CardHeader className="border-b pb-3">
-              <CardTitle className="text-lg">Topics</CardTitle>
-              <CardDescription>
-                Connect this file to work happening across the team.
-              </CardDescription>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <FileText className="h-5 w-5" />
+                Preview
+              </CardTitle>
+              <CardDescription>{file.url}</CardDescription>
             </CardHeader>
-            <CardContent className="pt-4">
-              <TagPicker
-                teamId={teamId}
-                entityType="FILE"
-                entityId={fileId}
-                initialTags={file.tags}
+            <CardContent className="p-0">
+              <iframe
+                src={previewUrl}
+                title={`Preview of ${fileLabel}`}
+                className="h-[70vh] min-h-[480px] w-full rounded-b-md bg-muted"
               />
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="border-b pb-3">
-              <CardTitle className="text-lg">Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-4 text-sm">
-              <div>
-                <p className="text-muted-foreground">Type</p>
-                <Badge variant="outline">{file.type}</Badge>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Associated Resource</p>
-                {associatedResource ? (
-                  <Link
-                    className="inline-flex items-center gap-1 text-blue-600 hover:underline"
-                    href={associatedResource.href}
-                  >
-                    {associatedResource.label}
-                    <ExternalLink className="h-3 w-3" />
-                  </Link>
-                ) : (
-                  <p>N/A</p>
-                )}
-              </div>
-              <div>
-                <p className="text-muted-foreground">Created</p>
-                <p>{formatDateTime(file.createdAt)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Created By</p>
-                <p>{file.createdBy.email}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Updated</p>
-                <p>{formatDateTime(file.updatedAt)}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Updated By</p>
-                <p>{file.updatedBy.email}</p>
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardHeader className="border-b pb-3">
-              <CardTitle className="text-lg">Download History</CardTitle>
-              <CardDescription>
-                {file.downloadAudits.length} recorded download
-                {file.downloadAudits.length === 1 ? "" : "s"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              {file.downloadAudits.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">
-                  No downloads recorded yet.
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>User</TableHead>
-                      <TableHead>When</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {file.downloadAudits.map((audit) => (
-                      <TableRow key={audit.id}>
-                        <TableCell>{audit.user.email}</TableCell>
-                        <TableCell>{formatDateTime(audit.createdAt)}</TableCell>
+          <div className="space-y-6 lg:col-span-4">
+            <Card>
+              <CardHeader className="border-b pb-3">
+                <CardTitle className="text-lg">Topics</CardTitle>
+                <CardDescription>
+                  Connect this file to work happening across the team.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <TagPicker
+                  teamId={teamId}
+                  entityType="FILE"
+                  entityId={fileId}
+                  initialTags={file.tags}
+                />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="border-b pb-3">
+                <CardTitle className="text-lg">Details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Type</p>
+                  <Badge variant="outline">{file.type}</Badge>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Associated Resource</p>
+                  {associatedResource ? (
+                    <Link
+                      className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                      href={associatedResource.href}
+                    >
+                      {associatedResource.label}
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  ) : (
+                    <p>N/A</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Created</p>
+                  <p>{formatDateTime(file.createdAt)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Created By</p>
+                  <p>{file.createdBy.email}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Updated</p>
+                  <p>{formatDateTime(file.updatedAt)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Updated By</p>
+                  <p>{file.updatedBy.email}</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="border-b pb-3">
+                <CardTitle className="text-lg">Download History</CardTitle>
+                <CardDescription>
+                  {file.downloadAudits.length} recorded download
+                  {file.downloadAudits.length === 1 ? "" : "s"}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                {file.downloadAudits.length === 0 ? (
+                  <p className="p-4 text-sm text-muted-foreground">
+                    No downloads recorded yet.
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>User</TableHead>
+                        <TableHead>When</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {file.downloadAudits.map((audit) => (
+                        <TableRow key={audit.id}>
+                          <TableCell>{audit.user.email}</TableCell>
+                          <TableCell>
+                            {formatDateTime(audit.createdAt)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -1,6 +1,8 @@
+import { Users } from "lucide-react";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import ContactForm from "@/components/forms/contact";
+import { RecordTopBar } from "@/components/records/record-page";
 import { getContactById } from "@/services/contacts";
 
 interface EditContactPageProps {
@@ -28,10 +30,24 @@ export default async function EditContactPage({
   }
 
   return (
-    <div className="p-4">
-      <div className="mx-auto w-full max-w-3xl">
-        <ContactForm teamId={teamId} contact={contact} />
+    <>
+      <RecordTopBar
+        list={{
+          href: `/teams/${teamId}/crm/contacts`,
+          label: "Contacts",
+          icon: Users,
+        }}
+        parent={{
+          href: `/teams/${teamId}/crm/contacts/${id}`,
+          label: contact.name,
+        }}
+        title="Edit"
+      />
+      <div className="p-4">
+        <div className="mx-auto w-full max-w-3xl">
+          <ContactForm teamId={teamId} contact={contact} />
+        </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -1,4 +1,6 @@
+import { HandHeart } from "lucide-react";
 import TeamOrganizationCreate from "@/components/organizations/team-organization-create";
+import { RecordTopBar } from "@/components/records/record-page";
 
 export default async function FundingOrganizationCreatePage({
   params,
@@ -6,5 +8,17 @@ export default async function FundingOrganizationCreatePage({
   params: Promise<{ teamId: string }>;
 }) {
   const { teamId } = await params;
-  return <TeamOrganizationCreate teamId={teamId} />;
+  return (
+    <>
+      <RecordTopBar
+        list={{
+          href: `/teams/${teamId}/funding/organizations`,
+          label: "Organizations",
+          icon: HandHeart,
+        }}
+        title="New organization"
+      />
+      <TeamOrganizationCreate teamId={teamId} />
+    </>
+  );
 }

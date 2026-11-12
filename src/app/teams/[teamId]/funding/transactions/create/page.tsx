@@ -1,6 +1,6 @@
-import Link from "next/link";
+import { ArrowLeftRight } from "lucide-react";
 import CreateTransaction from "@/components/forms/modal/create-transaction";
-import { Button } from "@/components/ui/button";
+import { RecordTopBar } from "@/components/records/record-page";
 
 interface PageProps {
   params: Promise<{ teamId: string }>;
@@ -12,19 +12,26 @@ export default async function Page({ params, searchParams }: PageProps) {
   const { fundingRequestId } = await searchParams;
 
   return (
-    <div className="p-4">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="my-2 text-2xl">Create Transaction</h1>
-        <Button asChild variant="outline">
-          <Link href={`/teams/${teamId}/funding/transactions`}>Back</Link>
-        </Button>
-      </div>
-      <CreateTransaction
-        fundingRequestId={fundingRequestId}
-        teamId={teamId}
-        inline
-        cancelHref={`/teams/${teamId}/funding/transactions`}
+    <>
+      <RecordTopBar
+        list={{
+          href: `/teams/${teamId}/funding/transactions`,
+          label: "Transactions",
+          icon: ArrowLeftRight,
+        }}
+        title="New transaction"
       />
-    </div>
+      <div className="p-4">
+        <div className="mb-4 flex items-center justify-between">
+          <h1 className="my-2 text-2xl">Create Transaction</h1>
+        </div>
+        <CreateTransaction
+          fundingRequestId={fundingRequestId}
+          teamId={teamId}
+          inline
+          cancelHref={`/teams/${teamId}/funding/transactions`}
+        />
+      </div>
+    </>
   );
 }

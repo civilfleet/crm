@@ -1,6 +1,8 @@
+import { FilePenLine } from "lucide-react";
 import { notFound, redirect } from "next/navigation";
-import { verifyDonationAgreementAccess } from "@/lib/api-guard";
 import SignDonationAgreement from "@/components/forms/sign-donation-agreement";
+import { RecordTopBar } from "@/components/records/record-page";
+import { verifyDonationAgreementAccess } from "@/lib/api-guard";
 import { getDonationAgreementById } from "@/services/donation-agreement";
 import type { DonationAgreement } from "@/types";
 
@@ -24,13 +26,23 @@ export default async function Page({
   ) as DonationAgreement;
 
   return (
-    <div>
-      <div className="container px-5 py-1">
-        <SignDonationAgreement
-          data={donationData}
-          userId={session?.user?.userId ?? null}
-        />
+    <>
+      <RecordTopBar
+        list={{
+          href: `/organizations/${organizationId}/donation-agreements`,
+          label: "Donation Agreements",
+          icon: FilePenLine,
+        }}
+        title="Donation agreement"
+      />
+      <div>
+        <div className="container px-5 py-1">
+          <SignDonationAgreement
+            data={donationData}
+            userId={session?.user?.userId ?? null}
+          />
+        </div>
       </div>
-    </div>
+    </>
   );
 }

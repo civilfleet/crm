@@ -21,6 +21,7 @@ import ContactEngagementHistory from "@/components/contact-engagement-history";
 import ContactResponsiveTabs from "@/components/contact-responsive-tabs";
 import DeleteContactButton from "@/components/forms/delete-contact-button";
 import DeleteContactFileButton from "@/components/forms/delete-contact-file-button";
+import { RecordTopBar } from "@/components/records/record-page";
 import { TagPicker } from "@/components/tags/tag-picker";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -786,56 +787,66 @@ export default async function ContactDetailPage({
   ];
 
   return (
-    <div className="overflow-x-hidden p-4">
-      <div className="mx-auto w-full">
-        <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
-          <div className="space-y-6 lg:col-span-8">
-            <Card className="w-full shadow-sm">
-              <CardHeader className="border-b pb-3">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <CardTitle className="text-xl font-semibold">
-                      {contact.name}
-                    </CardTitle>
-                    <CardDescription>Contact Details</CardDescription>
-                    <TagPicker
-                      teamId={teamId}
-                      entityType="CONTACT"
-                      entityId={id}
-                      initialTags={contact.tags}
-                      className="mt-3"
-                      compact
-                    />
+    <>
+      <RecordTopBar
+        list={{
+          href: `/teams/${teamId}/crm/contacts`,
+          label: "Contacts",
+          icon: Users,
+        }}
+        title={contact.name}
+      />
+      <div className="overflow-x-hidden p-4">
+        <div className="mx-auto w-full">
+          <div className="grid gap-6 lg:grid-cols-12 lg:items-start">
+            <div className="space-y-6 lg:col-span-8">
+              <Card className="w-full shadow-sm">
+                <CardHeader className="border-b pb-3">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <CardTitle className="text-xl font-semibold">
+                        {contact.name}
+                      </CardTitle>
+                      <CardDescription>Contact Details</CardDescription>
+                      <TagPicker
+                        teamId={teamId}
+                        entityType="CONTACT"
+                        entityId={id}
+                        initialTags={contact.tags}
+                        className="mt-3"
+                        compact
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button asChild variant="outline">
+                        <Link href={`/teams/${teamId}/crm/contacts/${id}/edit`}>
+                          Edit Contact
+                        </Link>
+                      </Button>
+                      <DeleteContactButton
+                        teamId={teamId}
+                        contactId={id}
+                        contactName={contact.name}
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button asChild variant="outline">
-                      <Link href={`/teams/${teamId}/crm/contacts/${id}/edit`}>
-                        Edit Contact
-                      </Link>
-                    </Button>
-                    <DeleteContactButton
-                      teamId={teamId}
-                      contactId={id}
-                      contactName={contact.name}
-                    />
-                  </div>
-                </div>
-              </CardHeader>
+                </CardHeader>
 
-              <CardContent className="pt-6">
-                <ContactResponsiveTabs
-                  defaultValue="general"
-                  items={tabItems}
-                />
-              </CardContent>
-            </Card>
-          </div>
+                <CardContent className="pt-6">
+                  <ContactResponsiveTabs
+                    defaultValue="general"
+                    items={tabItems}
+                  />
+                </CardContent>
+              </Card>
+            </div>
 
-          <div className="space-y-6 lg:col-span-4 lg:col-start-9">
-            <ContactChangeHistory contactId={id} />
+            <div className="space-y-6 lg:col-span-4 lg:col-start-9">
+              <ContactChangeHistory contactId={id} />
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

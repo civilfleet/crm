@@ -1,6 +1,8 @@
+import { Calendar } from "lucide-react";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import EventForm from "@/components/forms/event";
+import { RecordTopBar } from "@/components/records/record-page";
 import type { EventRegistrationRow } from "@/components/table/event-registration-columns";
 import EventRegistrationsTable from "@/components/table/event-registrations-table";
 import {
@@ -52,35 +54,45 @@ export default async function EventDetailPage({
   );
 
   return (
-    <div className="p-4">
-      <div className="mx-auto w-full">
-        <div className="grid w-full gap-x-6 gap-y-3 lg:grid-cols-12 lg:items-start">
-          <EventForm
-            teamId={teamId}
-            event={event}
-            publicBaseUrl={publicBaseUrl}
-            rightRailAppend={
-              <Card className="w-full shadow-sm lg:sticky lg:top-6">
-                <CardHeader className="border-b pb-3">
-                  <CardTitle>
-                    Registrations ({registrationRows.length})
-                  </CardTitle>
-                  <CardDescription>
-                    Track everyone who registered for this event. Each entry
-                    links to the CRM contact.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <EventRegistrationsTable
-                    teamId={teamId}
-                    registrations={registrationRows}
-                  />
-                </CardContent>
-              </Card>
-            }
-          />
+    <>
+      <RecordTopBar
+        list={{
+          href: `/teams/${teamId}/crm/events`,
+          label: "Events",
+          icon: Calendar,
+        }}
+        title={event.title}
+      />
+      <div className="p-4">
+        <div className="mx-auto w-full">
+          <div className="grid w-full gap-x-6 gap-y-3 lg:grid-cols-12 lg:items-start">
+            <EventForm
+              teamId={teamId}
+              event={event}
+              publicBaseUrl={publicBaseUrl}
+              rightRailAppend={
+                <Card className="w-full shadow-sm lg:sticky lg:top-6">
+                  <CardHeader className="border-b pb-3">
+                    <CardTitle>
+                      Registrations ({registrationRows.length})
+                    </CardTitle>
+                    <CardDescription>
+                      Track everyone who registered for this event. Each entry
+                      links to the CRM contact.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-4">
+                    <EventRegistrationsTable
+                      teamId={teamId}
+                      registrations={registrationRows}
+                    />
+                  </CardContent>
+                </Card>
+              }
+            />
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }

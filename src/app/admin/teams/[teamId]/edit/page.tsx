@@ -1,6 +1,8 @@
+import { Users } from "lucide-react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import TeamForm from "@/components/forms/team";
+import { RecordTopBar } from "@/components/records/record-page";
 import prisma from "@/lib/prisma";
 import { Roles } from "@/types";
 
@@ -28,8 +30,14 @@ export default async function EditTeamPage({
     return redirect("/admin/teams");
   }
   return (
-    <div className="m-2 w-full">
-      <TeamForm team={team} />
-    </div>
+    <>
+      <RecordTopBar
+        list={{ href: "/admin/teams", label: "Teams", icon: Users }}
+        title="Edit team"
+      />
+      <div className="m-2 w-full">
+        <TeamForm team={team} />
+      </div>
+    </>
   );
 }

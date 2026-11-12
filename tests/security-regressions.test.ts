@@ -449,6 +449,7 @@ test("agreement pages authorize the agreement and reject mismatched parent scope
         __esModule: true,
         default: () => null,
       },
+      "@/components/records/record-page": { RecordTopBar: () => null },
       "@/services/donation-agreement": {
         getDonationAgreementById: async () => {
           reads++;

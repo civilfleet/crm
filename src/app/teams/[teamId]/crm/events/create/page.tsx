@@ -1,5 +1,7 @@
+import { Calendar } from "lucide-react";
 import { headers } from "next/headers";
 import EventForm from "@/components/forms/event";
+import { RecordTopBar } from "@/components/records/record-page";
 
 interface CreateEventPageProps {
   params: Promise<{ teamId: string }>;
@@ -17,10 +19,20 @@ export default async function CreateEventPage({
   const publicBaseUrl = host ? `${protocol}://${host}` : fallbackBaseUrl;
 
   return (
-    <div className="p-4">
-      <div className="mx-auto w-full max-w-3xl">
-        <EventForm teamId={teamId} publicBaseUrl={publicBaseUrl} />
+    <>
+      <RecordTopBar
+        list={{
+          href: `/teams/${teamId}/crm/events`,
+          label: "Events",
+          icon: Calendar,
+        }}
+        title="New event"
+      />
+      <div className="p-4">
+        <div className="mx-auto w-full max-w-3xl">
+          <EventForm teamId={teamId} publicBaseUrl={publicBaseUrl} />
+        </div>
       </div>
-    </div>
+    </>
   );
 }

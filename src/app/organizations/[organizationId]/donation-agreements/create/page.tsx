@@ -1,5 +1,7 @@
+import { FilePenLine } from "lucide-react";
 import { redirect } from "next/navigation";
 import DonationAgreement from "@/components/forms/donation-agreement";
+import { RecordTopBar } from "@/components/records/record-page";
 import { getOrganizationById } from "@/services/organizations";
 
 export default async function Page({
@@ -13,8 +15,18 @@ export default async function Page({
   if (!teamId) redirect("/organizations");
 
   return (
-    <div className="flex flex-col p-4">
-      <DonationAgreement teamId={teamId} />
-    </div>
+    <>
+      <RecordTopBar
+        list={{
+          href: `/organizations/${organizationId}/donation-agreements`,
+          label: "Donation Agreements",
+          icon: FilePenLine,
+        }}
+        title="New donation agreement"
+      />
+      <div className="flex flex-col p-4">
+        <DonationAgreement teamId={teamId} />
+      </div>
+    </>
   );
 }
