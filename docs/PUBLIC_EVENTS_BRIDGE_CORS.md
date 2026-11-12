@@ -10,7 +10,8 @@ The configured origins are:
 
 - `https://seawatch-events.netlify.app` (preserved existing entry)
 - `https://sea-watch.org`
-- `https://dev-bridge-integration--seawatch.netlify.app`
+- `https://dev-bridge-integration--seawatch.netlify.app` (website publisher alias on sea-watch-cms-deploy `main`)
+- `https://staging--seawatch.netlify.app` (website publisher alias `staging` on sea-watch-cms-deploy `staging`, since the staging stream replaced the dev stream)
 
 On 2026-11-06, a read-only Netlify API lookup confirmed the website site name
 `seawatch`, site ID `e0ebee07-e5b1-48c7-ab11-8a75499b9bfa`, and custom domain
@@ -71,6 +72,7 @@ for origin in \
   https://seawatch-events.netlify.app \
   https://sea-watch.org \
   https://dev-bridge-integration--seawatch.netlify.app \
+  https://staging--seawatch.netlify.app \
   https://unapproved.example
 do
   printf '\nOrigin: %s\n' "$origin"
