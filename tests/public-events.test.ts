@@ -18,6 +18,7 @@ function registrationService() {
   const batches: Record<string, unknown>[] = [];
   let available = true;
   let failEmailQueue = false;
+  const proposals: Array<Record<string, unknown>> = [];
   const tx = {
     event: {
       findFirst: async () =>
@@ -71,10 +72,25 @@ function registrationService() {
       },
     },
     "@/services/contact-emails": { primaryContactEmailSelect: {} },
-    "@/services/contact-change-logs": {},
-    "@/services/contacts": {
-      findContactByIdentityEmail: async () => ({ id: "contact" }),
-    },
+    // Real shared intake matching, with its own boundaries mocked.
+    "@/services/contact-intake": loadModule(
+      "src/services/contact-intake/index.ts",
+      {
+        "@/services/contact-change-logs": {
+          proposeFieldChange: async (
+            _tx: unknown,
+            proposal: Record<string, unknown>,
+          ) => {
+            proposals.push(proposal);
+            return true;
+          },
+        },
+        "@/services/contacts": {
+          findContactByIdentityEmail: async () => ({ id: "contact" }),
+        },
+        "@/types": { ContactEmailKind: { PRIMARY: "PRIMARY" } },
+      },
+    ),
     "@/types": { ContactEmailKind: { PRIMARY: "PRIMARY" } },
   });
   return {
@@ -87,6 +103,7 @@ function registrationService() {
       failEmailQueue = value;
     },
     saved: () => registration,
+    proposals,
   };
 }
 
@@ -103,6 +120,26 @@ test("queue redelivery returns the committed registration and queues confirmatio
   assert.deepEqual(await harness.service.createEventRegistration(input), first);
   assert.equal(harness.batches.length, 1);
   assert.match(String(harness.batches[0].html), /A &lt;public&gt; event/);
+  // The existing name is kept; the registration's differing name is proposed.
+  assert.equal(harness.proposals.length, 1);
+  assert.deepEqual(
+    {
+      fieldName: harness.proposals[0].fieldName,
+      oldValue: harness.proposals[0].oldValue,
+      newValue: harness.proposals[0].newValue,
+      userName: harness.proposals[0].userName,
+    },
+    {
+      fieldName: "name",
+      oldValue: "Existing",
+      newValue: "Person",
+      userName: "Event registration",
+    },
+  );
+  assert.equal(
+    (harness.proposals[0].metadata as Record<string, unknown>).submissionId,
+    "submission",
+  );
 });
 
 test("failed confirmation enqueue rolls back registration; unpublished events are rejected", async () => {

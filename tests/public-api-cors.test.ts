@@ -8,6 +8,7 @@ import {
   REGISTRATION_SUBJECT,
   registrationPayload,
 } from "../src/lib/public-events/registration";
+import * as publicForms from "../src/lib/public-forms/submission";
 import { loadModule } from "./helpers/load-module";
 
 const allowedOrigins = [
@@ -40,6 +41,7 @@ test("bridge exact-origin CORS covers preflight and all registration error paths
         REGISTRATION_STREAM,
         REGISTRATION_SUBJECT,
       },
+      "../src/lib/public-forms/submission": publicForms,
       "node:http": {
         createServer: (handler: Handler) => {
           capture(handler);

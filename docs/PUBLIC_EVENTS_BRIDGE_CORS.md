@@ -93,3 +93,9 @@ preflight. Do not submit registrations to test CORS or induce a live rate limit.
 Local tests execute the actual bridge handler with HTTP/NATS boundaries mocked,
 covering allowed/rejected preflights, validation errors, 429/503, and cooldown
 exposure. The public JSON feed has separate CORS configuration and is unchanged.
+
+## Website form submissions
+
+`POST /v1/forms/submissions` on the same bridge uses this exact allowlist and
+the same CORS behaviour; no origin change is needed for it. See
+[`PUBLIC_FORMS_INTAKE.md`](PUBLIC_FORMS_INTAKE.md).

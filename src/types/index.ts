@@ -366,6 +366,7 @@ export enum EngagementSource {
   TODO = "TODO",
   NOTE = "NOTE",
   OTHER = "OTHER",
+  FORM = "FORM",
 }
 
 export enum TodoStatus {
@@ -434,6 +435,8 @@ export enum ChangeAction {
   CREATED = "CREATED",
   UPDATED = "UPDATED",
   DELETED = "DELETED",
+  PROPOSED = "PROPOSED",
+  PROPOSAL_REJECTED = "PROPOSAL_REJECTED",
 }
 
 export interface ContactChangeLog {
@@ -446,6 +449,8 @@ export interface ContactChangeLog {
   userId?: string;
   userName?: string;
   metadata?: Record<string, unknown>;
+  /** On the entry that resolves a PROPOSED entry (its id). */
+  proposalId?: string;
   createdAt: Date;
 }
 

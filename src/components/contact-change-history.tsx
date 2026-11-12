@@ -1,7 +1,14 @@
 "use client";
 
 import { format } from "date-fns";
-import { Edit, History, Plus, Trash } from "lucide-react";
+import {
+  Ban,
+  Edit,
+  GitPullRequestArrow,
+  History,
+  Plus,
+  Trash,
+} from "lucide-react";
 import useSWR from "swr";
 import { Loader } from "@/components/helper/loader";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +36,10 @@ const getActionIcon = (action: ChangeAction) => {
       return Edit;
     case ChangeAction.DELETED:
       return Trash;
+    case ChangeAction.PROPOSED:
+      return GitPullRequestArrow;
+    case ChangeAction.PROPOSAL_REJECTED:
+      return Ban;
     default:
       return History;
   }
@@ -42,6 +53,8 @@ const getActionColor = (action: ChangeAction) => {
       return "bg-blue-100 text-blue-800 border-blue-200";
     case ChangeAction.DELETED:
       return "bg-red-100 text-red-800 border-red-200";
+    case ChangeAction.PROPOSED:
+      return "bg-amber-100 text-amber-800 border-amber-200";
     default:
       return "bg-gray-100 text-gray-800 border-gray-200";
   }
@@ -55,9 +68,35 @@ const getActionLabel = (action: ChangeAction) => {
       return "Updated";
     case ChangeAction.DELETED:
       return "Deleted";
+    case ChangeAction.PROPOSED:
+      return "Proposed";
+    case ChangeAction.PROPOSAL_REJECTED:
+      return "Proposal rejected";
     default:
       return action;
   }
+};
+
+/** A proposal's status is derived from the entry that resolves it, if any. */
+const getProposalStatus = (
+  proposal: ContactChangeLog,
+  logs: ContactChangeLog[],
+) => {
+  const resolution = logs.find((log) => log.proposalId === proposal.id);
+  if (!resolution)
+    return {
+      label: "Pending review",
+      className: "bg-amber-50 text-amber-800 border-amber-200",
+    };
+  return resolution.action === ChangeAction.PROPOSAL_REJECTED
+    ? {
+        label: "Rejected",
+        className: "bg-gray-100 text-gray-700 border-gray-200",
+      }
+    : {
+        label: "Applied",
+        className: "bg-green-50 text-green-800 border-green-200",
+      };
 };
 
 const formatFieldName = (fieldName?: string) => {
@@ -183,6 +222,14 @@ export default function ContactChangeHistory({
                               {formatFieldName(log.fieldName)}
                             </span>
                           )}
+                          {log.action === ChangeAction.PROPOSED && (
+                            <Badge
+                              variant="outline"
+                              className={`text-xs ${getProposalStatus(log, logs).className}`}
+                            >
+                              {getProposalStatus(log, logs).label}
+                            </Badge>
+                          )}
                         </div>
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                           {format(new Date(log.createdAt), "PPp")}
@@ -221,6 +268,40 @@ export default function ContactChangeHistory({
                             </div>
                           )}
                         </div>
+                      )}
+
+                      {log.action === ChangeAction.PROPOSED &&
+                        log.fieldName && (
+                          <div className="space-y-1 text-sm">
+                            <p className="text-xs text-muted-foreground">
+                              Submitted data differs from the contact. The
+                              contact was not changed.
+                            </p>
+                            <div className="p-2 rounded bg-muted/40 border">
+                              <span className="text-xs font-medium">
+                                Current:
+                              </span>
+                              <pre className="text-xs mt-1 whitespace-pre-wrap">
+                                {formatValue(log.oldValue)}
+                              </pre>
+                            </div>
+                            <div className="p-2 rounded bg-amber-50 border border-amber-200">
+                              <span className="text-xs font-medium text-amber-800">
+                                Proposed:
+                              </span>
+                              <pre className="text-xs text-amber-800 mt-1 whitespace-pre-wrap">
+                                {formatValue(log.newValue)}
+                              </pre>
+                            </div>
+                          </div>
+                        )}
+
+                      {log.proposalId && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {log.action === ChangeAction.PROPOSAL_REJECTED
+                            ? "Declined a proposed change."
+                            : "Applied from a proposed change."}
+                        </p>
                       )}
 
                       {log.action === ChangeAction.DELETED && (

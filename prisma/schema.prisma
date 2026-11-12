@@ -211,6 +211,7 @@ model Teams {
   oidcClientId String?         @db.VarChar(255)
   oidcClientSecret String?     @db.Text
   autoProvisionUsersFromOidc Boolean @default(false)
+  publicFormsEnabled Boolean   @default(false)
   defaultOidcGroupId String?
   defaultOidcGroup Group? @relation("DefaultOidcGroup", fields: [defaultOidcGroupId], references: [id], onDelete: SetNull)
   domainVerificationToken String? @db.VarChar(255)
@@ -256,6 +257,7 @@ model Teams {
   inboundEmailMessages InboundEmailMessage[]
   contactAccessReviews ContactAccessReview[]
   events       Event[]
+  formSubmissions FormSubmission[]
   eventRoles   EventRole[]
   eventTypes   EventType[]
   groups       Group[]
@@ -590,6 +592,7 @@ model Contact {
   socialLinks       ContactSocialLink[]
   events            EventContact[]
   registrations     EventRegistration[]
+  formSubmissions   FormSubmission[]
   engagements       ContactEngagement[]
   emailRecipients   EmailRecipient[]
   inboundEmailMessages InboundEmailMessage[]
@@ -1344,6 +1347,29 @@ model EventRegistration {
   @@index([contactId])
 }
 
+// Website form submission accepted through the public API bridge.
+model FormSubmission {
+  id           String   @id @default(uuid()) @unique
+  submissionId String   @unique @db.Uuid
+  teamId       String
+  team         Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  formId       String   @db.VarChar(64)
+  formTitle    String   @db.VarChar(255)
+  formRevision String   @db.VarChar(64)
+  locale       String   @db.VarChar(10)
+  page         String?  @db.VarChar(2048)
+  answers      Json
+  submittedAt  DateTime @db.Timestamptz(6)
+  receivedAt   DateTime @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([teamId])
+  @@index([contactId])
+  @@index([formId])
+}
+
 enum EngagementDirection {
   INBOUND   // Message received by contact
   OUTBOUND  // Message sent to contact
@@ -1358,6 +1384,7 @@ enum EngagementSource {
   TODO
   NOTE
   OTHER
+  FORM
 }
 
 enum TodoStatus {
@@ -1455,6 +1482,8 @@ enum ChangeAction {
   CREATED
   UPDATED
   DELETED
+  PROPOSED          // An intake (form, event registration) wanted this change; contact unchanged
+  PROPOSAL_REJECTED // A reviewer declined a proposal; contact unchanged
 }
 
 model ContactChangeLog {
@@ -1468,10 +1497,17 @@ model ContactChangeLog {
   metadata    Json?
   userId      String?      // User who made the change
   userName    String?      @db.VarChar(255) // Store name for display
+  // Set on the UPDATED or PROPOSAL_REJECTED entry that resolves a PROPOSED entry.
+  // A proposal is pending while nothing references it; a partial unique index
+  // (migration SQL) allows one resolution per proposal.
+  proposalId  String?
+  proposal    ContactChangeLog?  @relation("ProposalResolution", fields: [proposalId], references: [id], onDelete: SetNull)
+  resolutions ContactChangeLog[] @relation("ProposalResolution")
   createdAt   DateTime     @default(now()) @db.Timestamptz(6)
 
   @@index([contactId])
   @@index([createdAt])
+  @@index([proposalId])
 }
 
 // Group and UserGroup models for access control

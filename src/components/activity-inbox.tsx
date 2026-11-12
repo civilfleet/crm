@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
+  ClipboardList,
   Inbox,
   Loader2,
   Mail,
@@ -125,6 +126,7 @@ const sourceLabels: Record<EngagementSource, string> = {
   TODO: "Todo",
   NOTE: "Note",
   OTHER: "Other",
+  FORM: "Website form",
 };
 
 const sourceIcons: Record<EngagementSource, typeof Mail> = {
@@ -136,6 +138,7 @@ const sourceIcons: Record<EngagementSource, typeof Mail> = {
   TODO: CheckCheck,
   NOTE: StickyNote,
   OTHER: MoreHorizontal,
+  FORM: ClipboardList,
 };
 
 const containsHtml = (value: string) => /<\/?[a-z][\s\S]*>/i.test(value);

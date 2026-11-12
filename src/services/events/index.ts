@@ -4,11 +4,7 @@ import { normalizePostalCode } from "@/lib/geo";
 import prisma from "@/lib/prisma";
 import { generateSlug } from "@/lib/slug";
 import { primaryContactEmailSelect } from "@/services/contact-emails";
-import {
-  logContactCreation,
-  logFieldUpdate,
-} from "@/services/contact-change-logs";
-import { findContactByIdentityEmail } from "@/services/contacts";
+import { resolveIntakeContact } from "@/services/contact-intake";
 import { ContactEmailKind } from "@/types";
 
 type EventContactInput = {
@@ -1015,134 +1011,24 @@ export const createEventRegistration = async (
     }
     const trimmedPhone = phone?.trim() || undefined;
 
-    const identityContact = await findContactByIdentityEmail(
-      event.teamId,
-      trimmedEmail,
+    const { contact } = await resolveIntakeContact(
       tx,
+      {
+        teamId: event.teamId,
+        email: trimmedEmail,
+        name: trimmedName,
+        phone: trimmedPhone,
+      },
+      {
+        label: "Event registration",
+        metadata: {
+          source: "event-registration",
+          eventId,
+          eventTitle: event.title ?? null,
+          ...(submissionId ? { submissionId } : {}),
+        },
+      },
     );
-    let contact = identityContact
-      ? await tx.contact.findUnique({
-          where: { id: identityContact.id },
-          include: { emails: true },
-        })
-      : null;
-
-    if (!contact && trimmedPhone) {
-      contact = await tx.contact.findFirst({
-        where: {
-          teamId: event.teamId,
-          phone: trimmedPhone,
-          deletedAt: null,
-        },
-        include: { emails: true },
-      });
-    }
-
-    if (contact) {
-      const contactUpdates: Prisma.ContactUpdateInput = {};
-      const updatedFields: Array<{
-        field: string;
-        oldValue: unknown;
-        newValue: unknown;
-      }> = [];
-
-      if ((!contact.name || contact.name.trim().length === 0) && trimmedName) {
-        contactUpdates.name = trimmedName;
-        updatedFields.push({
-          field: "name",
-          oldValue: contact.name,
-          newValue: trimmedName,
-        });
-      }
-
-      const existingPrimaryEmail =
-        contact.emails.find((entry) => entry.kind === ContactEmailKind.PRIMARY)
-          ?.email ?? null;
-      if (!existingPrimaryEmail && trimmedEmail) {
-        updatedFields.push({
-          field: "email",
-          oldValue: existingPrimaryEmail,
-          newValue: trimmedEmail,
-        });
-      }
-
-      if (!contact.phone && trimmedPhone) {
-        contactUpdates.phone = trimmedPhone;
-        updatedFields.push({
-          field: "phone",
-          oldValue: contact.phone,
-          newValue: trimmedPhone,
-        });
-      }
-
-      if (Object.keys(contactUpdates).length > 0) {
-        contact = await tx.contact.update({
-          where: { id: contact.id },
-          data: contactUpdates,
-          include: { emails: true },
-        });
-
-        if (updatedFields.some((field) => field.field === "email")) {
-          await tx.contactEmail.upsert({
-            where: {
-              contactId_email: {
-                contactId: contact.id,
-                email: trimmedEmail,
-              },
-            },
-            create: {
-              teamId: event.teamId,
-              contactId: contact.id,
-              email: trimmedEmail,
-              kind: ContactEmailKind.PRIMARY,
-            },
-            update: {
-              kind: ContactEmailKind.PRIMARY,
-            },
-          });
-        }
-
-        for (const updatedField of updatedFields) {
-          await logFieldUpdate(
-            contact.id,
-            updatedField.field,
-            updatedField.oldValue,
-            updatedField.newValue,
-            undefined,
-            undefined,
-            tx,
-          );
-        }
-      }
-    } else {
-      contact = await tx.contact.create({
-        data: {
-          teamId: event.teamId,
-          name: trimmedName,
-          phone: trimmedPhone,
-          emails: {
-            create: [
-              {
-                teamId: event.teamId,
-                email: trimmedEmail,
-                kind: ContactEmailKind.PRIMARY,
-              },
-            ],
-          },
-        },
-        include: { emails: true },
-      });
-
-      await logContactCreation(contact.id, undefined, undefined, tx, {
-        source: "event-registration",
-        eventId,
-        eventTitle: event.title ?? null,
-      });
-    }
-
-    if (!contact) {
-      throw new Error("Contact could not be resolved for registration.");
-    }
 
     const registration = await tx.eventRegistration.create({
       data: {

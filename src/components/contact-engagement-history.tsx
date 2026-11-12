@@ -8,6 +8,7 @@ import {
   ChevronDown,
   ChevronUp,
   Circle,
+  ClipboardList,
   Clock,
   Loader2,
   MessageSquare,
@@ -117,6 +118,8 @@ const getSourceLabel = (source: EngagementSource, externalSource?: string) => {
       return "Note";
     case EngagementSource.OTHER:
       return "Other";
+    case EngagementSource.FORM:
+      return "Website form";
     default:
       return source;
   }
@@ -539,6 +542,10 @@ function EngagementRow({
           ) : engagement.source === EngagementSource.NOTE ? (
             <div className="rounded-full p-2 bg-emerald-100">
               <StickyNote className="h-4 w-4 text-emerald-600" />
+            </div>
+          ) : engagement.source === EngagementSource.FORM ? (
+            <div className="rounded-full p-2 bg-violet-100">
+              <ClipboardList className="h-4 w-4 text-violet-600" />
             </div>
           ) : (
             <div

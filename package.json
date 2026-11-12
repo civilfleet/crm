@@ -34,6 +34,7 @@
     "events:worker": "tsx scripts/public-events-worker.ts",
     "api:public": "tsx scripts/public-api.ts",
     "events:consume": "tsx scripts/consume-event-registrations.ts",
+    "forms:consume": "tsx scripts/consume-form-submissions.ts",
     "api:build": "esbuild scripts/public-api.ts --bundle --platform=node --target=node22 --format=cjs --outfile=public-api/dist/server.cjs",
     "events:rename": "tsx scripts/rename-public-data-site.ts"
   },

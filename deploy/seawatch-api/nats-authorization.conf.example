@@ -7,7 +7,13 @@ authorization {
       publish: ["$JS.API.>"], subscribe: ["_INBOX.bootstrap.>"]
     } },
     { user: api, password: "REPLACE_API_PASSWORD", permissions: {
-      publish: ["$JS.API.INFO", "seawatch.events.registrations.v1", "seawatch.ratelimit.events.*"],
+      publish: [
+        "$JS.API.INFO",
+        "seawatch.events.registrations.v1",
+        "seawatch.ratelimit.events.*",
+        "seawatch.forms.submissions.v1",
+        "seawatch.ratelimit.forms.*"
+      ],
       subscribe: ["_INBOX.api.>"]
     } },
     { user: crm, password: "REPLACE_CRM_PASSWORD", permissions: {
@@ -18,8 +24,14 @@ authorization {
         "$JS.API.CONSUMER.CREATE.SEAWATCH_EVENT_REGISTRATIONS.>",
         "$JS.API.CONSUMER.DURABLE.CREATE.SEAWATCH_EVENT_REGISTRATIONS.crm-event-registrations-v1",
         "$JS.API.CONSUMER.MSG.NEXT.SEAWATCH_EVENT_REGISTRATIONS.crm-event-registrations-v1",
+        "$JS.API.STREAM.INFO.SEAWATCH_FORM_SUBMISSIONS",
+        "$JS.API.CONSUMER.INFO.SEAWATCH_FORM_SUBMISSIONS.crm-form-submissions-v1",
+        "$JS.API.CONSUMER.CREATE.SEAWATCH_FORM_SUBMISSIONS.>",
+        "$JS.API.CONSUMER.DURABLE.CREATE.SEAWATCH_FORM_SUBMISSIONS.crm-form-submissions-v1",
+        "$JS.API.CONSUMER.MSG.NEXT.SEAWATCH_FORM_SUBMISSIONS.crm-form-submissions-v1",
         "$JS.ACK.>",
-        "seawatch.events.registrations.failed.v1"
+        "seawatch.events.registrations.failed.v1",
+        "seawatch.forms.submissions.failed.v1"
       ],
       subscribe: ["_INBOX.crm.>"]
     } }

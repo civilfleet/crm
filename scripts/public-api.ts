@@ -15,6 +15,45 @@ import {
   REGISTRATION_SUBJECT,
   registrationPayload,
 } from "../src/lib/public-events/registration";
+import {
+  FORM_RATE_LIMIT_STREAM,
+  FORM_RATE_LIMIT_SUBJECT_PREFIX,
+  FORM_SUBMISSION_FAILURE_STREAM,
+  FORM_SUBMISSION_FAILURE_SUBJECT,
+  FORM_SUBMISSION_MAX_BYTES,
+  FORM_SUBMISSION_MAX_MSG_SIZE,
+  FORM_SUBMISSION_PATH,
+  FORM_SUBMISSION_STREAM,
+  FORM_SUBMISSION_SUBJECT,
+  formSubmissionPayload,
+} from "../src/lib/public-forms/submission";
+
+// Each public intake route has its own size cap, schema, rate-limit budget and
+// stream. The events route values are the original, unchanged behaviour.
+const intakeRoutes = {
+  "/v1/events/registrations": {
+    maxBytes: 16384,
+    schema: registrationPayload as z.ZodType,
+    rateLimitPrefix: "seawatch.ratelimit.events",
+    subject: REGISTRATION_SUBJECT,
+    envelopeKey: "registration",
+    invalidFields: "Invalid registration fields",
+    rateLimited: "Too many registration attempts",
+    unavailable:
+      "Registration intake unavailable. Please retry with the same Idempotency-Key.",
+  },
+  [FORM_SUBMISSION_PATH]: {
+    maxBytes: FORM_SUBMISSION_MAX_BYTES,
+    schema: formSubmissionPayload as z.ZodType,
+    rateLimitPrefix: FORM_RATE_LIMIT_SUBJECT_PREFIX,
+    subject: FORM_SUBMISSION_SUBJECT,
+    envelopeKey: "submission",
+    invalidFields: "Invalid form submission fields",
+    rateLimited: "Too many form submissions",
+    unavailable:
+      "Form intake unavailable. Please retry with the same Idempotency-Key.",
+  },
+} as const;
 
 async function main() {
   const nc = await connect({
@@ -62,6 +101,37 @@ async function main() {
       {
         name: "SEAWATCH_REGISTRATION_RATE_LIMIT",
         subjects: ["seawatch.ratelimit.events.*"],
+        retention: RetentionPolicy.Limits,
+        discard: DiscardPolicy.New,
+        storage: StorageType.File,
+        max_msgs_per_subject: 10,
+        discard_new_per_subject: true,
+        max_age: 60 * 60 * 1e9,
+        max_bytes: 64 * 1024 ** 2,
+      },
+      {
+        name: FORM_SUBMISSION_STREAM,
+        subjects: [FORM_SUBMISSION_SUBJECT],
+        storage: StorageType.File,
+        retention: RetentionPolicy.Workqueue,
+        discard: DiscardPolicy.New,
+        max_bytes: 1024 ** 3,
+        max_msg_size: FORM_SUBMISSION_MAX_MSG_SIZE,
+        max_age: 0,
+        duplicate_window: 24 * 60 * 60 * 1e9,
+      },
+      {
+        name: FORM_SUBMISSION_FAILURE_STREAM,
+        subjects: [FORM_SUBMISSION_FAILURE_SUBJECT],
+        retention: RetentionPolicy.Limits,
+        discard: DiscardPolicy.New,
+        storage: StorageType.File,
+        max_bytes: 1024 ** 3,
+        max_age: 0,
+      },
+      {
+        name: FORM_RATE_LIMIT_STREAM,
+        subjects: [`${FORM_RATE_LIMIT_SUBJECT_PREFIX}.*`],
         retention: RetentionPolicy.Limits,
         discard: DiscardPolicy.New,
         storage: StorageType.File,
@@ -124,7 +194,10 @@ async function main() {
       }
       return;
     }
-    if (req.url !== "/v1/events/registrations") {
+    const route = Object.hasOwn(intakeRoutes, req.url ?? "")
+      ? intakeRoutes[req.url as keyof typeof intakeRoutes]
+      : undefined;
+    if (!route) {
       respond(404, { error: "Not found" });
       return;
     }
@@ -161,17 +234,17 @@ async function main() {
       const chunks: Buffer[] = [];
       for await (const chunk of req) {
         size += chunk.length;
-        if (size > 16384) {
+        if (size > route.maxBytes) {
           respond(413, { error: "Request too large" });
           return;
         }
         chunks.push(Buffer.from(chunk));
       }
-      const parsed = registrationPayload.safeParse(
+      const parsed = route.schema.safeParse(
         JSON.parse(Buffer.concat(chunks).toString("utf8")),
       );
       if (!parsed.success) {
-        respond(400, { error: "Invalid registration fields" });
+        respond(400, { error: route.invalidFields });
         return;
       }
       // Traefik appends the actual peer to X-Forwarded-For. NetworkPolicy
@@ -187,14 +260,14 @@ async function main() {
         .update(`${process.env.RATE_LIMIT_HASH_KEY}:${ip}`)
         .digest("hex");
       try {
-        await js.publish(`seawatch.ratelimit.events.${addressKey}`, "1");
+        await js.publish(`${route.rateLimitPrefix}.${addressKey}`, "1");
       } catch (error) {
         if (
           error instanceof Error &&
           /maximum messages|message limit|maximum number/i.test(error.message)
         ) {
           res.setHeader("Retry-After", "3600");
-          respond(429, { error: "Too many registration attempts" });
+          respond(429, { error: route.rateLimited });
           return;
         }
         throw error;
@@ -203,12 +276,12 @@ async function main() {
         .update(JSON.stringify(parsed.data))
         .digest("hex");
       await js.publish(
-        REGISTRATION_SUBJECT,
+        route.subject,
         JSON.stringify({
           version: 1,
           submissionId: submissionId.data,
           receivedAt: new Date().toISOString(),
-          registration: parsed.data,
+          [route.envelopeKey]: parsed.data,
         }),
         { msgID: `${submissionId.data}:${fingerprint}` },
       );
@@ -216,9 +289,7 @@ async function main() {
     } catch (error) {
       respond(error instanceof SyntaxError ? 400 : 503, {
         error:
-          error instanceof SyntaxError
-            ? "Invalid JSON"
-            : "Registration intake unavailable. Please retry with the same Idempotency-Key.",
+          error instanceof SyntaxError ? "Invalid JSON" : route.unavailable,
       });
     }
   });

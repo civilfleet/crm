@@ -20,6 +20,7 @@ type CreateChangeLogInput = {
   userId?: string;
   userName?: string;
   metadata?: ChangeLogMetadata;
+  proposalId?: string;
 };
 
 type ContactChangeLogWithDefaults = Prisma.ContactChangeLogGetPayload<
@@ -45,6 +46,7 @@ const mapChangeLog = (log: ContactChangeLogWithDefaults): ContactChangeLog => ({
   userId: log.userId ?? undefined,
   userName: log.userName ?? undefined,
   metadata: normalizeMetadata(log.metadata),
+  proposalId: log.proposalId ?? undefined,
   createdAt: log.createdAt,
 });
 
@@ -107,6 +109,7 @@ const createChangeLog = async (
       userId: input.userId,
       userName: input.userName,
       ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
+      ...(input.proposalId ? { proposalId: input.proposalId } : {}),
     },
   });
 
@@ -169,9 +172,53 @@ const logFieldUpdate = async (
   );
 };
 
+/**
+ * Record a change an intake wanted but must not apply (it would overwrite an
+ * existing value). Skipped when the same change is already pending. Returns
+ * whether a new proposal was recorded.
+ */
+const proposeFieldChange = async (
+  tx: Prisma.TransactionClient,
+  input: {
+    contactId: string;
+    fieldName: string;
+    oldValue: unknown;
+    newValue: unknown;
+    userName: string;
+    metadata: ChangeLogMetadata;
+  },
+) => {
+  const newValue = JSON.stringify(input.newValue);
+  const pending = await tx.contactChangeLog.findFirst({
+    where: {
+      contactId: input.contactId,
+      action: ChangeAction.PROPOSED,
+      fieldName: input.fieldName,
+      newValue,
+      resolutions: { none: {} },
+    },
+    select: { id: true },
+  });
+  if (pending) return false;
+  await createChangeLog(
+    {
+      contactId: input.contactId,
+      action: ChangeAction.PROPOSED,
+      fieldName: input.fieldName,
+      oldValue: JSON.stringify(input.oldValue),
+      newValue,
+      userName: input.userName,
+      metadata: input.metadata,
+    },
+    tx,
+  );
+  return true;
+};
+
 export {
   createChangeLog,
   getContactChangeLogs,
   logContactCreation,
   logFieldUpdate,
+  proposeFieldChange,
 };
