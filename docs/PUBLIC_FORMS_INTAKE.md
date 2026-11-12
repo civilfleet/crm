@@ -9,7 +9,7 @@ unchanged.
 ```
 browser ──POST /v1/forms/submissions──▶ seawatch-api (scripts/public-api.ts)
         ──JetStream seawatch.forms.submissions.v1──▶ CRM consumer
-          (scripts/consume-form-submissions.ts, via wss://seawatch-api.k8s-vpn.sea.watch)
+          (shared intake consumer scripts/consume-public-intake.ts, via wss://seawatch-api.k8s-vpn.sea.watch)
         ──▶ Contact / FormSubmission / ContactEngagement (one transaction)
 ```
 
@@ -88,8 +88,19 @@ max_ack_pending 1, unlimited redelivery. The consumer creates it on first start.
 
 ## CRM processing
 
-`scripts/consume-form-submissions.ts` (`yarn forms:consume`) has the same
-reliability semantics as the event registration consumer:
+One shared consumer process handles all public intakes:
+`scripts/consume-public-intake.ts` (`yarn intake:consume`; the existing
+`scripts/consume-event-registrations.ts` command now runs it too) uses one NATS
+connection (user `crm`) and one durable consumer per pipeline
+(`crm-event-registrations-v1`, `crm-form-submissions-v1`). The runner is
+`src/lib/public-intake/consumer.ts`; pipelines are defined in
+`src/lib/public-intake/pipelines.ts`.
+
+Pipelines are isolated: if a pipeline cannot set up or keep its subscription
+(stream not yet initialized, missing NATS permission, subscription ended), only
+that pipeline logs `<name>: consumer unavailable, retrying.` with the phase and
+error codes (never messages or payloads) and restarts with backoff (5 s … 5 min);
+the other keeps processing. Per message, both pipelines have the same semantics:
 
 - Ack only after the transaction commits; `working()` every 15 s while busy.
 - Existing `submissionId` → ack without changes. A concurrent unique violation
@@ -170,11 +181,13 @@ These are instructions only; implementation and local tests do not deploy.
    `seawatch-api`. The `initialize-event-streams` sync hook runs
    `--initialize`, which now also creates the three form streams (existing
    streams are left untouched).
-4. **CRM consumer.** Add a second long-running service next to the event
-   consumer in the infrastructure CRM role, identical except for the command
-   `yarn forms:consume` (same tools image, `DATABASE_URL`,
-   `NATS_URL=wss://seawatch-api.k8s-vpn.sea.watch`, `NATS_USER=crm`,
-   `NATS_PASSWORD`). Logs should show `CRM form submission consumer started.`
+4. **CRM consumer.** No new service: the existing `event-registrations`
+   service (infrastructure CRM role) runs `scripts/consume-event-registrations.ts`,
+   which now starts the shared intake consumer, so the CRM release deploys it.
+   Logs should show `Event registrations: consumer started.` and, once steps 1
+   and 3 are live, `Form submissions: consumer started.` Until then the forms
+   pipeline logs `consumer unavailable, retrying` without affecting event
+   registrations. Renaming the service (e.g. `public-intake`) is optional.
 5. **Enable** the intended team(s) as above.
 6. **Verify** with an OPTIONS preflight only:
 

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as registrationModule from "../src/lib/public-events/registration";
 import * as submissionModule from "../src/lib/public-forms/submission";
 import {
   FORM_SUBMISSION_FAILURE_SUBJECT,
@@ -8,6 +9,11 @@ import {
   formSubmissionMessage,
   formSubmissionPayload,
 } from "../src/lib/public-forms/submission";
+import {
+  handleMessage,
+  type IntakeJetStream,
+  type IntakePipeline,
+} from "../src/lib/public-intake/consumer";
 import { loadModule } from "./helpers/load-module";
 
 const TEAM_ID = "a10957f3-9d42-4b67-b31c-8bed001777ff";
@@ -596,6 +602,25 @@ class KnownRequestError extends Error {
   }
 }
 
+/** The real form pipeline on the shared intake runner, with harness boundaries. */
+function formPipeline(
+  harness: ReturnType<typeof formHarness>,
+  create?: (input: unknown) => Promise<unknown>,
+) {
+  return loadModule<{
+    formSubmissionPipeline: IntakePipeline<unknown>;
+  }>("src/lib/public-intake/pipelines.ts", {
+    "@/lib/prisma": harness.prisma,
+    "@/lib/public-events/registration": registrationModule,
+    "@/lib/public-forms/submission": submissionModule,
+    "@/services/form-submissions": {
+      ...harness.service,
+      createFormSubmission: create ?? harness.service.createFormSubmission,
+    },
+    "@/services/events": {},
+  }).formSubmissionPipeline;
+}
+
 async function runConsumer(
   deliveries: Array<{ data: unknown; deliveryCount?: number }>,
   options: {
@@ -607,100 +632,41 @@ async function runConsumer(
   } = {},
 ) {
   const harness = formHarness({ enabled: options.enabled });
+  const create = options.create;
+  const pipeline = formPipeline(
+    harness,
+    create && ((input) => create(input, harness)),
+  );
   const outcomes: string[] = [];
   const published: Array<{ subject: string; msgID?: string }> = [];
-  const signals = ["SIGTERM", "SIGINT"] as const;
-  const before = signals.map((signal) => new Set(process.listeners(signal)));
-  const saved = {
-    url: process.env.NATS_URL,
-    user: process.env.NATS_USER,
-    pass: process.env.NATS_PASSWORD,
-  };
-  const exit = process.exit;
-  process.env.NATS_URL = "nats://127.0.0.1:1";
-  process.env.NATS_USER = "crm";
-  process.env.NATS_PASSWORD = "local-test-only";
-  let done: () => void = () => {};
-  let failed: (error: Error) => void = () => {};
-  const finished = new Promise<void>((resolve, reject) => {
-    done = resolve;
-    failed = reject;
-  });
-  process.exit = ((code?: number) => {
-    failed(new Error(`consumer exited ${code}`));
-  }) as typeof process.exit;
-  const messages = deliveries.map((delivery, index) => ({
-    data: new TextEncoder().encode(JSON.stringify(delivery.data)),
-    json: () => delivery.data,
-    working: () => {},
-    ack: () => outcomes.push(`ack:${index}`),
-    nak: (delay: number) => outcomes.push(`nak:${index}:${delay}`),
-    info: { deliveryCount: delivery.deliveryCount ?? 1, streamSequence: index },
-  }));
-  try {
-    loadModule("scripts/consume-form-submissions.ts", {
-      "dotenv/config": {},
-      "@nats-io/transport-node": {
-        connect: async () => ({ drain: async () => {} }),
-        wsconnect: async () => ({ drain: async () => {} }),
+  const js = {
+    publish: async (
+      subject: string,
+      _data: unknown,
+      opts?: { msgID?: string },
+    ) => {
+      published.push({ subject, msgID: opts?.msgID });
+    },
+    consumers: { get: async () => assert.fail("not used") },
+  } as unknown as IntakeJetStream;
+  const logger = { log: () => {}, error: () => {} };
+  for (const [index, delivery] of deliveries.entries())
+    await handleMessage(
+      js,
+      pipeline,
+      {
+        data: new TextEncoder().encode(JSON.stringify(delivery.data)),
+        json: () => delivery.data,
+        working: () => {},
+        ack: () => outcomes.push(`ack:${index}`),
+        nak: (delay?: number) => outcomes.push(`nak:${index}:${delay}`),
+        info: {
+          deliveryCount: delivery.deliveryCount ?? 1,
+          streamSequence: index,
+        },
       },
-      "@nats-io/jetstream": {
-        AckPolicy: { Explicit: "explicit" },
-        jetstreamManager: async () => ({
-          consumers: { info: async () => ({}) },
-        }),
-        jetstream: () => ({
-          publish: async (
-            subject: string,
-            _data: unknown,
-            opts?: { msgID?: string },
-          ) => {
-            published.push({ subject, msgID: opts?.msgID });
-          },
-          consumers: {
-            get: async () => ({
-              consume: async () => ({
-                stop: () => {},
-                async *[Symbol.asyncIterator]() {
-                  yield* messages;
-                },
-              }),
-            }),
-          },
-        }),
-      },
-      "@prisma/client": {
-        Prisma: { PrismaClientKnownRequestError: KnownRequestError },
-      },
-      "../src/lib/prisma": {
-        ...harness.prisma,
-        $disconnect: async () => done(),
-      },
-      "../src/lib/public-forms/submission": submissionModule,
-      "../src/services/form-submissions": {
-        ...harness.service,
-        createFormSubmission: options.create
-          ? (input: unknown) => options.create?.(input, harness)
-          : harness.service.createFormSubmission,
-      },
-    });
-    await finished;
-  } finally {
-    process.exit = exit;
-    for (const [key, value] of [
-      ["NATS_URL", saved.url],
-      ["NATS_USER", saved.user],
-      ["NATS_PASSWORD", saved.pass],
-    ] as const) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-    signals.forEach((signal, index) => {
-      for (const listener of process.listeners(signal))
-        if (!before[index].has(listener))
-          process.removeListener(signal, listener);
-    });
-  }
+      logger,
+    );
   return { outcomes, published, state: harness.state() };
 }
 
