@@ -47,6 +47,18 @@
   --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-ring: hsl(var(--sidebar-ring));
+  --color-sidebar-muted-foreground: hsl(var(--sidebar-muted-foreground));
+  --color-sidebar-active: hsl(var(--sidebar-active));
+  --color-sidebar-active-foreground: hsl(var(--sidebar-active-foreground));
+  --color-sidebar-indicator: hsl(var(--sidebar-indicator));
+
+  /* Links, selection and the one primary action on a page. */
+  --color-interactive: hsl(var(--interactive));
+  --color-interactive-foreground: hsl(var(--interactive-foreground));
+  /* The surface of inputs and of the records grid. */
+  --color-field: hsl(var(--field));
+  /* Behind organization logos, so dark logos stay legible. */
+  --color-logo-tile: hsl(var(--logo-tile));
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
@@ -108,6 +120,14 @@
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 199 67% 26%;
     --sidebar-ring: 54 100% 50%;
+    --sidebar-muted-foreground: 193 28% 74%;
+    --sidebar-active: 199 67% 26%;
+    --sidebar-active-foreground: 0 0% 100%;
+    --sidebar-indicator: 54 100% 50%;
+    --interactive: 198 100% 17%;
+    --interactive-foreground: 0 0% 100%;
+    --field: 0 0% 100%;
+    --logo-tile: 0 0% 100%;
   }
   .dark {
     --background: 194 100% 8%;
@@ -142,6 +162,14 @@
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 199 67% 26%;
     --sidebar-ring: 54 100% 50%;
+    --sidebar-muted-foreground: 193 28% 74%;
+    --sidebar-active: 199 67% 26%;
+    --sidebar-active-foreground: 0 0% 100%;
+    --sidebar-indicator: 54 100% 50%;
+    --interactive: 190 48% 61%;
+    --interactive-foreground: 194 100% 8%;
+    --field: 198 100% 12%;
+    --logo-tile: 0 0% 100%;
   }
 }
 

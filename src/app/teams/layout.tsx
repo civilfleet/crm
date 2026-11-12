@@ -6,6 +6,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { getSidebarDefaultOpen, getSidebarWidth } from "@/lib/sidebar-state";
 import { getAdminUser, getUserCurrent } from "@/services/users";
 import { Roles } from "@/types";
 
@@ -24,9 +25,13 @@ export default async function RootLayout({
     return redirect("/");
   }
 
-  const userData = session.user?.roles?.includes(Roles.Admin)
-    ? await getAdminUser(userId)
-    : await getUserCurrent(userId);
+  const [userData, sidebarDefaultOpen, sidebarWidth] = await Promise.all([
+    session.user?.roles?.includes(Roles.Admin)
+      ? getAdminUser(userId)
+      : getUserCurrent(userId),
+    getSidebarDefaultOpen(),
+    getSidebarWidth(),
+  ]);
 
   // Serialize data to ensure consistency between server and client
   const teams = userData?.teams
@@ -38,7 +43,10 @@ export default async function RootLayout({
 
   return (
     <div>
-      <SidebarProvider>
+      <SidebarProvider
+        defaultOpen={sidebarDefaultOpen}
+        defaultWidth={sidebarWidth}
+      >
         <AppSidebar
           navItems={"team"}
           teams={teams}

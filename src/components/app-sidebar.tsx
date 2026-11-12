@@ -171,7 +171,7 @@ export function AppSidebar({
 
   return (
     <Sidebar collapsible="icon" {...sidebarProps}>
-      <SidebarHeader>
+      <SidebarHeader className="flex-row items-center gap-1 group-data-[collapsible=icon]:flex-col">
         <TeamSwitcher
           organizations={organizations}
           teams={teams}
@@ -179,13 +179,13 @@ export function AppSidebar({
           activeType={activeType}
           userRoles={user?.roles}
         />
+        <SidebarCollapseTrigger />
       </SidebarHeader>
-      <SidebarCollapseTrigger />
 
-      <SidebarContent>
+      <SidebarContent className="gap-0 pb-2">
         <NavMain items={navItemsToRender} />
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="border-t border-sidebar-border">
         <NavUser
           user={{
             name: user?.name || "",

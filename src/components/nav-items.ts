@@ -1,18 +1,21 @@
 import {
-  BookOpen,
+  ArrowLeftRight,
   BookUser,
-  Building,
+  Building2,
   Calendar,
+  FilePenLine,
+  Files,
   FolderOpen,
+  HandCoins,
+  HandHeart,
   Hash,
   Inbox,
   List,
   type LucideIcon,
   Mail,
-  Scroll,
+  ScrollText,
   Settings,
   ShieldCheck,
-  UserCircle2,
   Users,
   UsersRound,
 } from "lucide-react";
@@ -50,7 +53,7 @@ const navItems: {
     {
       title: "Organizations",
       url: "organizations",
-      icon: Building,
+      icon: Building2,
       isActive: true,
     },
     {
@@ -74,26 +77,26 @@ const navItems: {
     {
       title: "Organizations",
       url: "funding/organizations",
-      icon: Building,
+      icon: HandHeart,
       isActive: true,
       module: "FUNDING",
     },
     {
       title: "Funding Requests",
       url: "funding/funding-requests",
-      icon: BookOpen,
+      icon: HandCoins,
       module: "FUNDING",
     },
     {
       title: "Donation Agreements",
       url: "funding/donation-agreements",
-      icon: Scroll,
+      icon: FilePenLine,
       module: "FUNDING",
     },
     {
       title: "Transactions",
       url: "funding/transactions",
-      icon: Scroll,
+      icon: ArrowLeftRight,
       module: "FUNDING",
     },
     {
@@ -116,13 +119,13 @@ const navItems: {
     {
       title: "Organizations",
       url: "crm/organizations",
-      icon: Building,
+      icon: Building2,
       module: "CRM",
     },
     {
       title: "Contacts",
       url: "crm/contacts",
-      icon: UserCircle2,
+      icon: Users,
       module: "CRM",
     },
     {
@@ -146,7 +149,7 @@ const navItems: {
     {
       title: "Files",
       url: "crm/files",
-      icon: FolderOpen,
+      icon: Files,
       module: "CRM",
     },
     {
@@ -169,7 +172,7 @@ const navItems: {
     {
       title: "Logs",
       url: "admin/logs",
-      icon: Scroll,
+      icon: ScrollText,
       module: "ADMIN",
     },
     {
@@ -189,19 +192,19 @@ const navItems: {
     {
       title: "Organization Profile",
       url: "profile",
-      icon: Building,
+      icon: Building2,
       isActive: true,
     },
 
     {
       title: "Funding Requests",
       url: "funding-requests",
-      icon: BookOpen,
+      icon: HandCoins,
     },
     {
       title: "Donation Agreements",
       url: "donation-agreements",
-      icon: Scroll,
+      icon: FilePenLine,
     },
 
     {
@@ -217,7 +220,7 @@ const navItems: {
     {
       title: "Transactions",
       url: "transactions",
-      icon: Scroll,
+      icon: ArrowLeftRight,
     },
   ],
 };

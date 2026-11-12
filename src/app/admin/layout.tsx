@@ -1,4 +1,3 @@
-import { Shield } from "lucide-react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -7,6 +6,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { getSidebarDefaultOpen, getSidebarWidth } from "@/lib/sidebar-state";
 import { getAdminUser, getUserCurrent } from "@/services/users";
 import { Roles } from "@/types";
 
@@ -25,9 +25,13 @@ export default async function RootLayout({
     return redirect("/");
   }
 
-  const userData = session.user?.roles?.includes(Roles.Admin)
-    ? await getAdminUser(userId)
-    : await getUserCurrent(userId);
+  const [userData, sidebarDefaultOpen, sidebarWidth] = await Promise.all([
+    session.user?.roles?.includes(Roles.Admin)
+      ? getAdminUser(userId)
+      : getUserCurrent(userId),
+    getSidebarDefaultOpen(),
+    getSidebarWidth(),
+  ]);
 
   // Serialize data to ensure consistency between server and client
   const teams = userData?.teams
@@ -39,7 +43,10 @@ export default async function RootLayout({
 
   return (
     <div>
-      <SidebarProvider>
+      <SidebarProvider
+        defaultOpen={sidebarDefaultOpen}
+        defaultWidth={sidebarWidth}
+      >
         <AppSidebar
           navItems={"admin"}
           teams={teams}
@@ -47,12 +54,13 @@ export default async function RootLayout({
           user={session.user}
         />
         <SidebarInset>
-          <div className="flex items-center gap-2 border-b p-4">
-            <SidebarTrigger className="-ml-1 md:hidden" />
-            <Shield className="size-5 text-primary" />
-            <h1 className="text-xl font-semibold">Admin Dashboard</h1>
+          <div className="flex min-h-svh min-w-0 flex-1 flex-col">
+            <header className="flex items-center gap-2 border-b bg-background px-4 py-3 md:hidden">
+              <SidebarTrigger className="-ml-1" />
+              <span className="text-sm font-semibold">Admin</span>
+            </header>
+            <div className="flex-1">{children}</div>
           </div>
-          <div>{children}</div>
         </SidebarInset>
       </SidebarProvider>
     </div>

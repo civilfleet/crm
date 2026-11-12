@@ -64,7 +64,7 @@ export function TeamSwitcher({
   };
 
   return (
-    <SidebarMenu>
+    <SidebarMenu className="min-w-0 flex-1">
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
