@@ -35,7 +35,7 @@ spec:
               valueFrom: { secretKeyRef: { name: seawatch-api-env, key: RATE_LIMIT_HASH_KEY } }
             # Exact origins only. www redirects to sea-watch.org; other preview aliases remain denied.
             - name: PUBLIC_EVENTS_ORIGINS
-              value: "https://seawatch-events.netlify.app,https://sea-watch.org,https://dev-bridge-integration--seawatch.netlify.app"
+              value: "https://seawatch-events.netlify.app,https://sea-watch.org,https://dev-bridge-integration--seawatch.netlify.app,https://staging--seawatch.netlify.app"
           ports: [{ name: http, containerPort: 8080 }]
           resources:
             requests: { cpu: 100m, memory: 64Mi }

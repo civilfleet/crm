@@ -15,6 +15,7 @@ const allowedOrigins = [
   "https://seawatch-events.netlify.app",
   "https://sea-watch.org",
   "https://dev-bridge-integration--seawatch.netlify.app",
+  "https://staging--seawatch.netlify.app",
 ];
 type Handler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 
