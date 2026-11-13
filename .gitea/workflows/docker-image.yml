@@ -30,9 +30,32 @@ jobs:
             -t "crm-ci-test:${GITHUB_SHA}" \
             .
 
+      # Build a fresh database from the migrations, fail on any drift from
+      # prisma/schema.prisma, then run the database tests (tests/db).
+      - name: Check migrations and run database tests
+        run: |
+          set -euo pipefail
+          network="crm-ci-${GITHUB_SHA}"
+          database="crm-ci-db-${GITHUB_SHA}"
+          docker network create "$network" >/dev/null
+          docker run -d --rm --name "$database" --network "$network" \
+            -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=crm_test \
+            postgres:16-alpine >/dev/null
+          for _ in $(seq 1 60); do
+            docker exec "$database" pg_isready -U postgres -d crm_test >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker run --rm --network "$network" \
+            -e TEST_DATABASE_URL="postgresql://postgres:ci@${database}:5432/crm_test" \
+            "crm-ci-test:${GITHUB_SHA}" \
+            yarn ci:db
+
       - name: Cleanup test image
         if: always()
-        run: docker image rm -f "crm-ci-test:${GITHUB_SHA}" 2>/dev/null || true
+        run: |
+          docker rm -f "crm-ci-db-${GITHUB_SHA}" >/dev/null 2>&1 || true
+          docker network rm "crm-ci-${GITHUB_SHA}" >/dev/null 2>&1 || true
+          docker image rm -f "crm-ci-test:${GITHUB_SHA}" 2>/dev/null || true
 
   build:
     needs: test

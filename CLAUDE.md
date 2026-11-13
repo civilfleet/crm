@@ -105,4 +105,17 @@ FundingRequest statuses:
 - Automatic file association with organizations and funding requests
 
 ### Testing
-No test framework is currently configured. Check with the user before setting up testing infrastructure.
+Tests use Node's built-in test runner (`node:test`); there is no Jest/Vitest.
+
+- `yarn test`: unit tests in `tests/*.test.ts` and `src/**/*.test.ts`. Routes and services are loaded with `tests/helpers/load-module.ts`, which requires every `@/` import to be mocked explicitly.
+- `yarn test:db`: database tests in `tests/db/`, running real services against a real Postgres. They use `TEST_DATABASE_URL` only (never `DATABASE_URL`), refuse a database whose name lacks `test`, and empty all tables between tests.
+- `yarn db:check`: applies all migrations to the test database and fails if the result differs from `prisma/schema.prisma`. Any schema change needs a matching migration.
+- `yarn ci:verify` (lint, tests, typecheck) runs in the Dockerfile `test` stage, and `yarn ci:db` against a Postgres container, in `.gitea/workflows/docker-image.yml` on pushes to main and on pull requests.
+
+Local database run:
+
+```bash
+docker run -d --rm --name crm-test-db -p 55432:5432 \
+  -e POSTGRES_PASSWORD=pg -e POSTGRES_DB=crm_test postgres:16-alpine
+TEST_DATABASE_URL=postgresql://postgres:pg@localhost:55432/crm_test yarn ci:db
+```
