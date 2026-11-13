@@ -731,7 +731,7 @@ model EmailInternalCopyRecipient {
 }
 
 model EmailSuppression {
-  id                String                 @id @default(uuid()) @unique
+  id                String                 @id @default(uuid())
   teamId            String
   team              Teams                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
   email             String                 @db.VarChar(255)
@@ -955,7 +955,7 @@ model ContactAccessReview {
   createdAt     DateTime @default(now()) @db.Timestamptz(6)
   updatedAt     DateTime @updatedAt @db.Timestamptz(6)
 
-  @@unique([source, inboundEmailMessageId, groupId, contactId])
+  @@unique([source, inboundEmailMessageId, groupId, contactId], map: "ContactAccessReview_source_inboundEmailMessageId_groupId_contac")
   @@index([teamId, status])
   @@index([groupId, status])
   @@index([contactId])
