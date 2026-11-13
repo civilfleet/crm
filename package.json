@@ -9,7 +9,7 @@
     "build": "next build",
     "start": "next start",
     "test": "node --import ./tests/register-hooks.mjs --test tests/*.test.ts src/**/*.test.ts",
-    "ci:verify": "yarn test && yarn typecheck",
+    "ci:verify": "yarn lint && yarn test && yarn typecheck",
     "test:watch": "node --watch --import ./tests/register-hooks.mjs --test tests/*.test.ts src/**/*.test.ts",
     "lint": "biome lint .",
     "lint:fix": "biome lint --write .",

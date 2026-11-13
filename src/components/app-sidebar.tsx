@@ -13,6 +13,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { filterNavItemsByModules } from "@/lib/navigation";
 import { type AppModule, DEFAULT_TEAM_MODULES, type Roles } from "@/types";
 import navigationItems from "./nav-items";
 
@@ -92,82 +93,25 @@ export function AppSidebar({
     return [...DEFAULT_TEAM_MODULES];
   }, [activeTeam?.modules]);
 
-  const filterNavItemsByModules = React.useCallback(
-    (items: NavigationList): NavigationList => {
-      if (navItems !== "team") {
-        return items;
-      }
-
-      const modules = allowedModules;
-
-      if (!modules) {
-        return items;
-      }
-
-      if (modules.length === 0) {
-        return [];
-      }
-
-      const filtered = items.filter((item) => {
-        if (item?.module) {
-          return modules.includes(item.module);
-        }
-        return true;
-      });
-
-      const cleaned: NavigationItem[] = [];
-
-      const isSeparatorItem = (
-        candidate: NavigationItem,
-      ): candidate is Extract<NavigationItem, { type: "separator" }> =>
-        "type" in candidate && candidate.type === "separator";
-
-      for (let i = 0; i < filtered.length; i++) {
-        const item = filtered[i];
-
-        if (isSeparatorItem(item)) {
-          // Always show separators with labels (module names)
-          if (item.label) {
-            cleaned.push(item);
-            continue;
-          }
-
-          const hasPreviousContent =
-            cleaned.length > 0 && !isSeparatorItem(cleaned[cleaned.length - 1]);
-          let j = i + 1;
-          while (j < filtered.length && isSeparatorItem(filtered[j])) {
-            j++;
-          }
-          const hasNextContent = j < filtered.length;
-
-          if (!hasPreviousContent || !hasNextContent) {
-            continue;
-          }
-        }
-
-        cleaned.push(item);
-      }
-
-      if (cleaned.length && isSeparatorItem(cleaned[cleaned.length - 1])) {
-        cleaned.pop();
-      }
-
-      return cleaned;
-    },
+  const filterItems = React.useCallback(
+    (items: NavigationList): NavigationList =>
+      navItems === "team"
+        ? filterNavItemsByModules(items, allowedModules)
+        : items,
     [allowedModules, navItems],
   );
 
   const navItemsToRender = React.useMemo(() => {
     const items = navigationItems[navItems] as NavigationList;
     const count = activityCountData?.data.count ?? 0;
-    return filterNavItemsByModules(
+    return filterItems(
       items.map((item) =>
         "title" in item && item.title === "Activity Inbox" && count > 0
           ? { ...item, badge: count > 99 ? "99+" : count }
           : item,
       ),
     );
-  }, [activityCountData?.data.count, filterNavItemsByModules, navItems]);
+  }, [activityCountData?.data.count, filterItems, navItems]);
 
   return (
     <Sidebar collapsible="icon" {...sidebarProps}>

@@ -12,6 +12,14 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import {
+  getNavBasePath,
+  getNavHref,
+  groupIntoSections,
+  isNavItemActive,
+  type NavLinkEntry,
+  parseClosedSections,
+} from "@/lib/navigation";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -24,50 +32,17 @@ interface NavItem {
   badge?: number | string;
 }
 
-type NavLink = NavItem & { title: string; url: string };
-
-type NavSection = {
-  key: string;
-  label?: string;
-  items: NavLink[];
-};
+type NavLink = NavLinkEntry<NavItem>;
 
 const SECTIONS_STORAGE_KEY = "sidebar:closed-sections";
 
-const isNavLink = (item: NavItem): item is NavLink =>
-  item.type !== "separator" &&
-  typeof item.title === "string" &&
-  typeof item.url === "string";
-
-// Separators with a label open a new section; unlabeled ones just split.
-const groupIntoSections = (items: NavItem[]): NavSection[] => {
-  const sections: NavSection[] = [{ key: "root", items: [] }];
-
-  for (const item of items) {
-    if (item.type === "separator") {
-      sections.push({
-        key: item.label ?? `section-${sections.length}`,
-        label: item.label,
-        items: [],
-      });
-      continue;
-    }
-    if (isNavLink(item)) {
-      sections[sections.length - 1].items.push(item);
-    }
-  }
-
-  return sections.filter((section) => section.items.length > 0);
-};
-
 const readClosedSections = (): string[] => {
   try {
-    const stored = window.localStorage.getItem(SECTIONS_STORAGE_KEY);
-    const parsed: unknown = stored ? JSON.parse(stored) : [];
-    return Array.isArray(parsed)
-      ? parsed.filter((value): value is string => typeof value === "string")
-      : [];
+    return parseClosedSections(
+      window.localStorage.getItem(SECTIONS_STORAGE_KEY),
+    );
   } catch {
+    // Storage can be unavailable (private mode).
     return [];
   }
 };
@@ -80,15 +55,6 @@ const writeClosedSections = (closed: string[]) => {
   }
 };
 
-const getBasePath = (pathname: string): string | null => {
-  const [scope, id] = pathname.split("/").filter(Boolean);
-
-  if (scope === "admin") return "/admin";
-  if (!id || (scope === "teams" && id === "profile")) return null;
-  if (scope === "teams" || scope === "organizations") return `/${scope}/${id}`;
-  return null;
-};
-
 export function NavMain({ items = [] }: { items?: NavItem[] }) {
   const pathname = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
@@ -98,7 +64,7 @@ export function NavMain({ items = [] }: { items?: NavItem[] }) {
     setClosedSections(readClosedSections());
   }, []);
 
-  const basePath = getBasePath(pathname);
+  const basePath = getNavBasePath(pathname);
   const sections = React.useMemo(() => groupIntoSections(items), [items]);
 
   const handleNavigate = () => {
@@ -125,14 +91,10 @@ export function NavMain({ items = [] }: { items?: NavItem[] }) {
     );
   }
 
-  const getHref = (item: NavLink) =>
-    item.url ? `${basePath}/${item.url}` : basePath;
+  const getHref = (item: NavLink) => getNavHref(basePath, item.url);
 
-  const getIsActive = (item: NavLink) => {
-    const href = getHref(item);
-    if (!item.url) return pathname === href;
-    return pathname === href || pathname.startsWith(`${href}/`);
-  };
+  const getIsActive = (item: NavLink) =>
+    isNavItemActive(pathname, basePath, item.url);
 
   return (
     <>

@@ -21,16 +21,22 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  SIDEBAR_COOKIE_NAME,
+  SIDEBAR_WIDTH_COOKIE_NAME,
+  SIDEBAR_WIDTH_LIMITS,
+} from "@/lib/sidebar-state-values";
 import { cn } from "@/lib/utils";
 
-const SIDEBAR_COOKIE_NAME = "sidebar:state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem";
 /** Dragging the rail: the widths it may take, and below which it snaps shut. */
-export const SIDEBAR_WIDTH_PX = { initial: 256, min: 208, max: 400 } as const;
+export const SIDEBAR_WIDTH_PX = {
+  initial: 256,
+  ...SIDEBAR_WIDTH_LIMITS,
+} as const;
 const SIDEBAR_SNAP_PX = 152;
 const SIDEBAR_ICON_PX = 48;
-const SIDEBAR_WIDTH_COOKIE_NAME = "sidebar:width";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
