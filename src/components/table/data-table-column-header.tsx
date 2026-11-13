@@ -3,7 +3,6 @@
 import type { Column } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface DataTableColumnHeaderProps<TData, TValue> {
@@ -19,7 +18,7 @@ export function DataTableColumnHeader<TData, TValue>({
 }: DataTableColumnHeaderProps<TData, TValue>) {
   if (!column.getCanSort()) {
     return (
-      <div className={cn("flex items-center", className)}>
+      <div className={cn("flex items-center whitespace-nowrap", className)}>
         <span>{title}</span>
       </div>
     );
@@ -28,24 +27,29 @@ export function DataTableColumnHeader<TData, TValue>({
   const sorted = column.getIsSorted();
 
   return (
-    <Button
+    <button
       type="button"
-      variant="ghost"
-      size="sm"
       className={cn(
-        "flex items-center gap-1 -ml-3 h-8 px-2 text-sm font-medium",
+        "-mx-1 flex max-w-full items-center gap-1.5 rounded-sm px-1 py-0.5 text-xs font-medium whitespace-nowrap transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden",
+        sorted && "text-foreground",
         className,
       )}
+      aria-label={
+        typeof title === "string" ? `Sort by ${title.toLowerCase()}` : undefined
+      }
       onClick={() => column.toggleSorting(sorted === "asc")}
     >
-      <span>{title}</span>
+      <span className="truncate">{title}</span>
       {sorted === "desc" ? (
-        <ArrowDown className="h-3.5 w-3.5" />
+        <ArrowDown aria-hidden="true" className="size-3.5 shrink-0" />
       ) : sorted === "asc" ? (
-        <ArrowUp className="h-3.5 w-3.5" />
+        <ArrowUp aria-hidden="true" className="size-3.5 shrink-0" />
       ) : (
-        <ChevronsUpDown className="h-3.5 w-3.5" />
+        <ChevronsUpDown
+          aria-hidden="true"
+          className="size-3.5 shrink-0 opacity-40"
+        />
       )}
-    </Button>
+    </button>
   );
 }

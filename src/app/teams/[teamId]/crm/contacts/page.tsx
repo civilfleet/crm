@@ -1,4 +1,9 @@
+import { Users } from "lucide-react";
 import { cookies } from "next/headers";
+import {
+  RecordsHeader,
+  RecordsPage,
+} from "@/components/records/records-layout";
 import ContactTable from "@/components/table/contact-table";
 import {
   parseTablePageSize,
@@ -16,16 +21,9 @@ export default async function ContactsPage({ params }: ContactsPageProps) {
   );
 
   return (
-    <div className="p-4 space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold">Contacts</h1>
-        <p className="text-sm text-muted-foreground">
-          Manage the relationships and key stakeholders associated with your
-          team.
-        </p>
-      </div>
-
+    <RecordsPage>
+      <RecordsHeader icon={Users} title="Contacts" />
       <ContactTable teamId={teamId} initialPageSize={initialPageSize} />
-    </div>
+    </RecordsPage>
   );
 }

@@ -33,7 +33,6 @@ import {
   contactColumns,
   renderContactCard,
 } from "@/components/table/contact-columns";
-import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,6 +44,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -1175,8 +1175,9 @@ export default function ContactTable({
           preview.conflicts.map((conflict) => [
             conflict.field,
             encodeMergeValue(
-              conflict.values.find((entry) => entry.contactId === selectedRows[0].id)
-                ?.value ??
+              conflict.values.find(
+                (entry) => entry.contactId === selectedRows[0].id,
+              )?.value ??
                 conflict.values.find((entry) => entry.value !== null)?.value ??
                 null,
             ),
@@ -1427,7 +1428,7 @@ export default function ContactTable({
   };
 
   return (
-    <div className="my-4 flex flex-col gap-5">
+    <div className="flex flex-col gap-5 px-4 py-3">
       {showTrash && (
         <div className="rounded-md border bg-muted/30 p-4">
           <h2 className="font-medium">Contact trash</h2>
@@ -1537,9 +1538,9 @@ export default function ContactTable({
         </div>
       )}
 
-      <div className="relative rounded-md border p-2">
+      <div className="relative flex min-h-40 flex-col overflow-hidden rounded-lg border bg-card">
         {isValidating && !isLoading ? (
-          <p className="absolute right-4 top-4 text-xs text-muted-foreground">
+          <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 text-xs text-muted-foreground">
             Refreshing...
           </p>
         ) : null}
@@ -2043,10 +2044,7 @@ const ContactMergeDialog = ({
 
             <section className="space-y-3">
               <Label>Primary email</Label>
-              <Select
-                value={primaryEmail}
-                onValueChange={onPrimaryEmailChange}
-              >
+              <Select value={primaryEmail} onValueChange={onPrimaryEmailChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Choose primary email" />
                 </SelectTrigger>
@@ -2096,7 +2094,9 @@ const ContactMergeDialog = ({
                           onValueChange={(value) =>
                             setPreservedEmailKind(
                               entry.email,
-                              value as ContactEmailKind.ALIAS | ContactEmailKind.SHARED,
+                              value as
+                                | ContactEmailKind.ALIAS
+                                | ContactEmailKind.SHARED,
                             )
                           }
                           disabled={!preserved}

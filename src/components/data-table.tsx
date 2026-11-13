@@ -11,7 +11,13 @@ import {
   type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { LayoutGrid, List, Map as MapIcon } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  LayoutGrid,
+  List,
+  Map as MapIcon,
+} from "lucide-react";
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -24,14 +30,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
@@ -300,136 +298,139 @@ export function DataTable<TData, TValue>({
     goToPage(requestedPage);
   };
 
-  return (
-    <div className="w-full">
-      <div className="flex items-center justify-between gap-2 p-3">
-        <div className="flex-1 min-w-0">{toolbar}</div>
-        {isMobile && showMapToggle && (
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              size="sm"
-              variant={effectiveView === "card" ? "default" : "outline"}
-              onClick={() => setMobileView("card")}
-            >
-              <LayoutGrid className="mr-2" /> Cards
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={effectiveView === "map" ? "default" : "outline"}
-              onClick={() => setMobileView("map")}
-            >
-              <MapIcon className="mr-2" /> Map
-            </Button>
-          </div>
+  const renderViewButton = (
+    target: "table" | "card" | "map",
+    label: string,
+    Icon: typeof List,
+    onSelect: () => void,
+  ) => {
+    const isActive = effectiveView === target;
+    return (
+      <button
+        type="button"
+        aria-pressed={isActive}
+        onClick={onSelect}
+        className={cn(
+          "inline-flex h-7 items-center gap-1.5 rounded-[5px] px-2 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden",
+          isActive
+            ? "bg-card text-foreground shadow-xs"
+            : "text-muted-foreground hover:text-foreground",
         )}
-        {!isMobile && (
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              size="sm"
-              variant={effectiveView === "table" ? "default" : "outline"}
-              onClick={() => {
-                setView("table");
-                setDesktopView("table");
-              }}
-            >
-              <List className="mr-2" /> Table
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={effectiveView === "card" ? "default" : "outline"}
-              onClick={() => {
-                setView("card");
-                setDesktopView("card");
-              }}
-            >
-              <LayoutGrid className="mr-2" /> Cards
-            </Button>
-            {showMapToggle && (
-              <Button
-                type="button"
-                size="sm"
-                variant={effectiveView === "map" ? "default" : "outline"}
-                onClick={() => {
-                  setView("map");
-                  setDesktopView("map");
-                }}
-              >
-                <MapIcon className="mr-2" /> Map
-              </Button>
+      >
+        <Icon aria-hidden="true" className="size-3.5" />
+        {label}
+      </button>
+    );
+  };
+
+  const firstOnPage = currentPageRows === 0 ? 0 : currentFrom;
+
+  return (
+    <div className="flex w-full min-w-0 flex-col">
+      <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b px-3 py-2">
+        <div className="min-w-0 flex-1">{toolbar}</div>
+        {isMobile && showMapToggle && (
+          <div className="inline-flex items-center gap-0.5 rounded-md border bg-muted/50 p-0.5">
+            {renderViewButton("card", "Cards", LayoutGrid, () =>
+              setMobileView("card"),
+            )}
+            {renderViewButton("map", "Map", MapIcon, () =>
+              setMobileView("map"),
             )}
           </div>
         )}
+        {!isMobile && (
+          <div className="inline-flex items-center gap-0.5 rounded-md border bg-muted/50 p-0.5">
+            {renderViewButton("table", "Table", List, () => {
+              setView("table");
+              setDesktopView("table");
+            })}
+            {renderViewButton("card", "Cards", LayoutGrid, () => {
+              setView("card");
+              setDesktopView("card");
+            })}
+            {showMapToggle
+              ? renderViewButton("map", "Map", MapIcon, () => {
+                  setView("map");
+                  setDesktopView("map");
+                })
+              : null}
+          </div>
+        )}
       </div>
-      {hasBatchActions && (
-        <div
-          className={cn(
-            "px-3 transition-opacity",
-            isMobile ? "min-h-0 pb-0" : "min-h-11 pb-2",
-            showDesktopBatchActions ? "opacity-100" : "opacity-0",
-          )}
-          aria-hidden={!showDesktopBatchActions}
-        >
-          {showDesktopBatchActions ? (
-            <div className="flex items-center justify-between gap-3">
-              {renderBatchActions?.({ selectedRows, clearSelection })}
-            </div>
-          ) : null}
+      {showDesktopBatchActions ? (
+        <div className="flex min-h-11 items-center justify-between gap-3 border-b bg-accent/60 px-3 py-1.5">
+          {renderBatchActions?.({ selectedRows, clearSelection })}
         </div>
-      )}
+      ) : null}
 
       {effectiveView === "table" ? (
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id}>
+        <div className="min-w-0 overflow-x-auto">
+          <table className="w-full min-w-full border-separate border-spacing-0 text-sm">
+            <thead>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <tr key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <th
+                      key={header.id}
+                      className={cn(
+                        "h-9 border-r border-b bg-muted/40 px-3 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground last:border-r-0",
+                        header.column.id === "__select" && "w-10",
+                      )}
+                    >
                       {header.isPlaceholder
                         ? null
                         : flexRender(
                             header.column.columnDef.header,
                             header.getContext(),
                           )}
-                    </TableHead>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {hasRows ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
-                    </TableCell>
+                    </th>
                   ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={table.getVisibleLeafColumns().length}
-                  className="h-24 text-center"
-                >
-                  No results.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+                </tr>
+              ))}
+            </thead>
+            <tbody>
+              {hasRows ? (
+                table.getRowModel().rows.map((row) => {
+                  const isSelected = row.getIsSelected();
+                  return (
+                    <tr
+                      key={row.id}
+                      data-state={isSelected ? "selected" : undefined}
+                      className="group"
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <td
+                          key={cell.id}
+                          className={cn(
+                            "h-10 border-r border-b px-3 py-1.5 align-middle transition-colors last:border-r-0",
+                            isSelected
+                              ? "bg-accent"
+                              : "bg-card group-hover:bg-muted/50",
+                          )}
+                        >
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext(),
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td
+                    colSpan={table.getVisibleLeafColumns().length}
+                    className="h-32 border-b text-center text-sm text-muted-foreground"
+                  >
+                    No results.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       ) : effectiveView === "map" ? (
         <div className="p-3">
           {renderMap ? (
@@ -443,7 +444,7 @@ export function DataTable<TData, TValue>({
       ) : hasRows ? (
         <div
           className={cn(
-            "grid grid-cols-1 gap-4 px-3 pb-3 pt-0 sm:grid-cols-2 sm:pt-3 lg:grid-cols-3",
+            "grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 lg:grid-cols-3",
             showMobileBatchActions ? "pb-24" : "",
           )}
         >
@@ -493,19 +494,18 @@ export function DataTable<TData, TValue>({
           })}
         </div>
       ) : (
-        <div className="p-6 text-center text-sm text-muted-foreground">
+        <div className="p-10 text-center text-sm text-muted-foreground">
           No results.
         </div>
       )}
       {effectiveView !== "map" && totalItems > 0 ? (
-        <div className="flex flex-col gap-2 border-t px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-muted-foreground">
-            Showing {currentPageRows === 0 ? 0 : currentFrom}-{currentTo} of{" "}
-            {totalItems}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Rows</span>
+        <footer className="flex flex-wrap items-center justify-between gap-3 bg-card px-4 py-2 text-sm text-muted-foreground">
+          <span className="tabular-nums">
+            {firstOnPage}–{currentTo} of {totalItems.toLocaleString()}
+          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="hidden items-center gap-2 sm:flex">
+              <span>Rows</span>
               <Select
                 value={String(paginationState.pageSize)}
                 onValueChange={(value) => {
@@ -517,7 +517,10 @@ export function DataTable<TData, TValue>({
                   table.setPageSize(nextSize);
                 }}
               >
-                <SelectTrigger className="h-8 w-[84px]">
+                <SelectTrigger
+                  aria-label="Rows per page"
+                  className="h-7 w-[4.5rem] text-xs"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -530,13 +533,15 @@ export function DataTable<TData, TValue>({
               </Select>
             </div>
             <form
-              className="flex items-center gap-2 text-sm text-muted-foreground"
+              className="flex items-center gap-1.5 tabular-nums"
               onSubmit={(event) => {
                 event.preventDefault();
                 submitPageInput();
               }}
             >
-              <label htmlFor={pageInputId}>Page</label>
+              <label htmlFor={pageInputId} className="sr-only">
+                Page
+              </label>
               <Input
                 id={pageInputId}
                 type="number"
@@ -547,55 +552,61 @@ export function DataTable<TData, TValue>({
                 value={pageInput}
                 onChange={(event) => setPageInput(event.target.value)}
                 onBlur={submitPageInput}
-                className="h-8 w-16 px-2 text-center"
+                className="h-7 w-12 px-1 text-center text-xs"
                 aria-label="Go to page"
               />
-              <span>of {Math.max(pageCount, 1)}</span>
+              <span>/ {Math.max(pageCount, 1)}</span>
             </form>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (isServerPagination && serverPagination) {
-                  if (serverPagination.page > 1) {
-                    serverPagination.onPageChange(serverPagination.page - 1);
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-7"
+                aria-label="Previous page"
+                onClick={() => {
+                  if (isServerPagination && serverPagination) {
+                    if (serverPagination.page > 1) {
+                      serverPagination.onPageChange(serverPagination.page - 1);
+                    }
+                    return;
                   }
-                  return;
+                  table.previousPage();
+                }}
+                disabled={
+                  isServerPagination
+                    ? (serverPagination?.page ?? 1) <= 1 || !canPaginate
+                    : !table.getCanPreviousPage() || !canPaginate
                 }
-                table.previousPage();
-              }}
-              disabled={
-                isServerPagination
-                  ? (serverPagination?.page ?? 1) <= 1 || !canPaginate
-                  : !table.getCanPreviousPage() || !canPaginate
-              }
-            >
-              Previous
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (isServerPagination && serverPagination) {
-                  if ((serverPagination.page ?? 1) < pageCount) {
-                    serverPagination.onPageChange(serverPagination.page + 1);
+              >
+                <ChevronLeft />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-7"
+                aria-label="Next page"
+                onClick={() => {
+                  if (isServerPagination && serverPagination) {
+                    if ((serverPagination.page ?? 1) < pageCount) {
+                      serverPagination.onPageChange(serverPagination.page + 1);
+                    }
+                    return;
                   }
-                  return;
+                  table.nextPage();
+                }}
+                disabled={
+                  isServerPagination
+                    ? (serverPagination?.page ?? 1) >= pageCount || !canPaginate
+                    : !table.getCanNextPage() || !canPaginate
                 }
-                table.nextPage();
-              }}
-              disabled={
-                isServerPagination
-                  ? (serverPagination?.page ?? 1) >= pageCount || !canPaginate
-                  : !table.getCanNextPage() || !canPaginate
-              }
-            >
-              Next
-            </Button>
+              >
+                <ChevronRight />
+              </Button>
+            </div>
           </div>
-        </div>
+        </footer>
       ) : null}
       {showMobileBatchActions ? (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 p-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">

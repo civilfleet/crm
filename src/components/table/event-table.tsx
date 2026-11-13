@@ -294,7 +294,7 @@ export default function EventTable({ teamId }: EventTableProps) {
   };
 
   return (
-    <div className="flex flex-col gap-4 my-4">
+    <div className="flex flex-col gap-4">
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(handleSubmit)}
@@ -348,9 +348,9 @@ export default function EventTable({ teamId }: EventTableProps) {
         </form>
       </Form>
 
-      <div className="relative rounded-md border p-2">
+      <div className="relative flex min-h-40 flex-col overflow-hidden rounded-lg border bg-card">
         {isValidating && !isLoading ? (
-          <p className="absolute right-4 top-4 text-xs text-muted-foreground">
+          <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 text-xs text-muted-foreground">
             Refreshing...
           </p>
         ) : null}

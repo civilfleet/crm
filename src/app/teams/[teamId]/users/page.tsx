@@ -1,8 +1,13 @@
+import { BookUser } from "lucide-react";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { BulkInviteUsersDialog } from "@/components/forms/bulk-invite-users";
+import {
+  RecordsHeader,
+  RecordsPage,
+} from "@/components/records/records-layout";
 import UserTable from "@/components/table/user-table";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,21 +42,24 @@ export default async function Page({ params }: PageProps) {
   }
 
   return (
-    <div className="p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl my-2">Users</h1>
-        <div className="flex items-center gap-2">
-          <Link href={`/teams/${teamId}/users/create`}>
-            <Button type="button">Invite New User</Button>
-          </Link>
-          <BulkInviteUsersDialog teamId={teamId} />
-        </div>
-      </div>
+    <RecordsPage>
+      <RecordsHeader
+        icon={BookUser}
+        title="Users"
+        action={
+          <>
+            <BulkInviteUsersDialog teamId={teamId} />
+            <Button asChild size="sm">
+              <Link href={`/teams/${teamId}/users/create`}>Invite user</Link>
+            </Button>
+          </>
+        }
+      />
       <UserTable
         teamId={teamId}
         organizationId=""
         initialPageSize={initialPageSize}
       />
-    </div>
+    </RecordsPage>
   );
 }

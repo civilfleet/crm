@@ -1,3 +1,8 @@
+import { FilePenLine } from "lucide-react";
+import {
+  RecordsHeader,
+  RecordsPage,
+} from "@/components/records/records-layout";
 import DonationAgreementTable from "@/components/table/donation-agreement-table";
 
 interface PageProps {
@@ -8,12 +13,9 @@ interface PageProps {
 export default async function Organization({ params }: PageProps) {
   const organizationId = (await params).organizationId;
   return (
-    <div className="p-4 w-full">
-      <div className="flex justify-between">
-        <h1 className="text-2xl  my-2">Donations Agreements</h1>
-      </div>
-
+    <RecordsPage>
+      <RecordsHeader icon={FilePenLine} title="Donation Agreements" />
       <DonationAgreementTable teamId="" organizationId={organizationId} />
-    </div>
+    </RecordsPage>
   );
 }

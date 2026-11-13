@@ -1,3 +1,8 @@
+import { Files } from "lucide-react";
+import {
+  RecordsHeader,
+  RecordsPage,
+} from "@/components/records/records-layout";
 import FileTable from "@/components/table/file-table";
 
 interface FilesPageProps {
@@ -8,15 +13,9 @@ export default async function FilesPage({ params }: FilesPageProps) {
   const { teamId } = await params;
 
   return (
-    <div className="p-4 space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold">Files</h1>
-        <p className="text-sm text-muted-foreground">
-          Browse files attached to contacts and related team records.
-        </p>
-      </div>
-
+    <RecordsPage>
+      <RecordsHeader icon={Files} title="Files" />
       <FileTable teamId={teamId} organizationId="" includeContactFiles />
-    </div>
+    </RecordsPage>
   );
 }

@@ -15,7 +15,7 @@ export default async function Page({
 
   return (
     <div>
-      <div className="container">
+      <div className="container p-4">
         <OrganizationData organizationId={id} isAdminOrTeam={isAdminOrTeam} />
       </div>
     </div>

@@ -186,10 +186,13 @@ export default function FileTable({
   }
 
   return (
-    <div className="flex flex-col my-2">
-      <div className="mb-2 flex items-center justify-between gap-3">
+    <div className="flex flex-col gap-3 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-1/2">
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="flex w-full max-w-lg items-center"
+          >
             <div className="flex-1">
               <FormInputControl
                 form={form}
@@ -208,9 +211,9 @@ export default function FileTable({
           onClick={() => downloadFiles()}
         />
       </div>
-      <div className="relative rounded-md border my-2 flex justify-center items-center grow h-full">
+      <div className="relative flex min-h-40 flex-col overflow-hidden rounded-lg border bg-card">
         {isValidating && !loading ? (
-          <p className="absolute right-4 top-4 text-xs text-muted-foreground">
+          <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 text-xs text-muted-foreground">
             Refreshing...
           </p>
         ) : null}

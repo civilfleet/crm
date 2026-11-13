@@ -372,7 +372,7 @@ export default function OrganizationTable({
   };
 
   return (
-    <div className="my-2 flex flex-col gap-4">
+    <div className="flex flex-col gap-4 px-4 py-3">
       <Form {...form}>
         <form
           onSubmit={form.handleSubmit(onSubmit)}
@@ -532,9 +532,9 @@ export default function OrganizationTable({
         </div>
       )}
 
-      <div className="relative my-2 flex h-full grow items-center justify-center rounded-md border p-2 sm:p-4">
+      <div className="relative flex min-h-40 flex-col overflow-hidden rounded-lg border bg-card">
         {isValidating && !loading ? (
-          <p className="absolute right-4 top-4 text-xs text-muted-foreground">
+          <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 text-xs text-muted-foreground">
             Refreshing...
           </p>
         ) : null}

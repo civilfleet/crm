@@ -1,5 +1,10 @@
+import { BookUser } from "lucide-react";
 import { cookies } from "next/headers";
 import Link from "next/link";
+import {
+  RecordsHeader,
+  RecordsPage,
+} from "@/components/records/records-layout";
 import UserTable from "@/components/table/user-table";
 import { Button } from "@/components/ui/button";
 import { verifyOrganizationAccess } from "@/lib/api-guard";
@@ -26,21 +31,26 @@ export default async function Organization({ params }: PageProps) {
   const canManageUsers = access.isGlobalAdmin || access.isTeamAdmin;
 
   return (
-    <div className="p-4 w-full">
-      <div className="flex justify-between">
-        <h1 className="text-2xl  my-2">Users</h1>
-        {canManageUsers ? (
-          <Link href="users/create">
-            <Button type="button">Create New</Button>
-          </Link>
-        ) : null}
-      </div>
+    <RecordsPage>
+      <RecordsHeader
+        icon={BookUser}
+        title="Users"
+        action={
+          canManageUsers ? (
+            <Button asChild size="sm">
+              <Link href={`/organizations/${organizationId}/users/create`}>
+                New user
+              </Link>
+            </Button>
+          ) : null
+        }
+      />
       <UserTable
         teamId=""
         organizationId={organizationId}
         canManageUsers={canManageUsers}
         initialPageSize={initialPageSize}
       />
-    </div>
+    </RecordsPage>
   );
 }

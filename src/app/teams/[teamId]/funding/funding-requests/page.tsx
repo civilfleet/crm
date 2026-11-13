@@ -1,4 +1,9 @@
+import { HandCoins } from "lucide-react";
 import Link from "next/link";
+import {
+  RecordsHeader,
+  RecordsPage,
+} from "@/components/records/records-layout";
 import FundingRequestTable from "@/components/table/funding-request-table";
 import { Button } from "@/components/ui/button";
 
@@ -11,15 +16,19 @@ export default async function Page({ params }: PageProps) {
   const teamId = (await params).teamId;
 
   return (
-    <div className="p-4 w-full ">
-      <div className="flex justify-between">
-        <h1 className="text-2xl  my-2">Funding Requests</h1>
-        <Link href={`/teams/${teamId}/funding/funding-requests/create`}>
-          <Button type="button">Create New</Button>
-        </Link>
-      </div>
-
+    <RecordsPage>
+      <RecordsHeader
+        icon={HandCoins}
+        title="Funding Requests"
+        action={
+          <Button asChild size="sm">
+            <Link href={`/teams/${teamId}/funding/funding-requests/create`}>
+              New funding request
+            </Link>
+          </Button>
+        }
+      />
       <FundingRequestTable teamId={teamId} organizationId="" />
-    </div>
+    </RecordsPage>
   );
 }

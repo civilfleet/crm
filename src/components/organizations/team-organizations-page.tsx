@@ -1,5 +1,10 @@
+import { Building2, HandHeart } from "lucide-react";
 import Link from "next/link";
 import { CopyRegistrationLinkButton } from "@/components/buttons/copy-registration-link-button";
+import {
+  RecordsHeader,
+  RecordsPage,
+} from "@/components/records/records-layout";
 import OrganizationTable from "@/components/table/organization-table";
 import { Button } from "@/components/ui/button";
 
@@ -19,23 +24,26 @@ export default function TeamOrganizationsPage({
   const basePath = `/teams/${teamId}/${scope}/organizations`;
 
   return (
-    <div className="w-full space-y-6 p-4">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-semibold">Organizations</h1>
-        <div className="flex flex-wrap gap-2">
-          {showRegistrationLink ? (
-            <CopyRegistrationLinkButton teamId={teamId} />
-          ) : null}
-          <Link href={`${basePath}/create`}>
-            <Button type="button">Create New</Button>
-          </Link>
-        </div>
-      </div>
+    <RecordsPage>
+      <RecordsHeader
+        icon={scope === "funding" ? HandHeart : Building2}
+        title="Organizations"
+        action={
+          <>
+            {showRegistrationLink ? (
+              <CopyRegistrationLinkButton teamId={teamId} />
+            ) : null}
+            <Button asChild size="sm">
+              <Link href={`${basePath}/create`}>New organization</Link>
+            </Button>
+          </>
+        }
+      />
       <OrganizationTable
         teamId={teamId}
         basePath={basePath}
         initialPageSize={initialPageSize}
       />
-    </div>
+    </RecordsPage>
   );
 }

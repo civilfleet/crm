@@ -61,9 +61,8 @@ export default async function RootLayout({
                 Organization Navigation
               </span>
             </header>
-            <div className="flex flex-1 flex-col gap-4 p-4 md:m-5 md:p-8 md:pt-0">
-              {children}
-            </div>
+            {/* Each page sets its own padding; lists and records sit flush. */}
+            <div className="flex-1">{children}</div>
           </div>
         </SidebarInset>
       </SidebarProvider>

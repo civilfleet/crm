@@ -76,7 +76,7 @@ export default function TeamsTable() {
   };
 
   return (
-    <div className="rounded-md border p-2">
+    <div className="m-4 overflow-hidden rounded-lg border bg-card">
       <DataTable
         columns={columns(mutate)}
         data={data?.data || []}

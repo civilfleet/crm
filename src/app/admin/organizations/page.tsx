@@ -1,5 +1,10 @@
+import { Building2 } from "lucide-react";
 import { cookies } from "next/headers";
 import Link from "next/link";
+import {
+  RecordsHeader,
+  RecordsPage,
+} from "@/components/records/records-layout";
 import OrganizationTable from "@/components/table/organization-table";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,14 +21,17 @@ export default async function AdminOrganizationsPage() {
   );
 
   return (
-    <div className="p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Organizations Management</h1>
-        <Link href="/admin/organizations/create">
-          <Button>Create New Organization</Button>
-        </Link>
-      </div>
+    <RecordsPage>
+      <RecordsHeader
+        icon={Building2}
+        title="Organizations"
+        action={
+          <Button asChild size="sm">
+            <Link href={"/admin/organizations/create"}>New organization</Link>
+          </Button>
+        }
+      />
       <OrganizationTable initialPageSize={initialPageSize} />
-    </div>
+    </RecordsPage>
   );
 }
