@@ -1,5 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // Lets the schema declare the partial unique indexes the migrations create.
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -461,7 +463,8 @@ model DonationAgreementSignature {
   signedAt            DateTime?  // If NULL, person hasn't signed
 
   donationAgreement DonationAgreement @relation(fields: [donationAgreementId], references: [id], onDelete: Cascade)
-  user     User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // A signature is the record of who signed: a signer cannot be deleted.
+  user     User @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@id([donationAgreementId, userId]) // Composite key to avoid duplicate signatures
 }
@@ -627,6 +630,10 @@ model ContactEmail {
   @@index([contactId])
   @@index([kind])
   @@unique([contactId, email])
+  // An address identifies one contact per team (shared addresses may repeat).
+  @@unique([teamId, email], map: "ContactEmail_identity_email_key", where: raw("kind = ANY (ARRAY['PRIMARY'::\"ContactEmailKind\", 'ALIAS'::\"ContactEmailKind\"])"))
+  // A contact has at most one primary address.
+  @@unique([contactId], map: "ContactEmail_primary_contact_key", where: raw("kind = 'PRIMARY'"))
 }
 
 model ContactOrganization {
@@ -1508,6 +1515,8 @@ model ContactChangeLog {
   @@index([contactId])
   @@index([createdAt])
   @@index([proposalId])
+  // A proposal is resolved at most once.
+  @@unique([proposalId], map: "ContactChangeLog_proposal_resolution_key", where: raw("\"proposalId\" IS NOT NULL"))
 }
 
 // Group and UserGroup models for access control
