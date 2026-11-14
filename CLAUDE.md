@@ -104,6 +104,9 @@ FundingRequest statuses:
 - File type classification (tax certificates, reports, receipts, etc.)
 - Automatic file association with organizations and funding requests
 
+### Data rules
+`docs/DATA_RULES.md` describes how funding requests and contacts may change (status path, payouts, agreements, contact visibility, edits, merge, e-mail uniqueness), where each rule lives and which test covers it. Keep it, the code and the tests in step.
+
 ### Testing
 Tests use Node's built-in test runner (`node:test`); there is no Jest/Vitest.
 
