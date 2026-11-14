@@ -2255,6 +2255,9 @@ const updateContact = async (
   userId?: string,
   userName?: string,
 ) => {
+  // Fields the editor may not see are removed here; every "was it sent?"
+  // check below must read sanitizedInput, or a removed field counts as
+  // sent empty and wipes the stored value.
   const sanitizedInput = await applyContactFieldAccess(input, userId);
 
   const {
@@ -2288,17 +2291,17 @@ const updateContact = async (
     files,
   } = sanitizedInput;
   const groupsProvided =
-    Object.hasOwn(input, "groupIds") || Object.hasOwn(input, "groupId");
+    Object.hasOwn(sanitizedInput, "groupIds") || Object.hasOwn(sanitizedInput, "groupId");
   const normalizedGroupIds = groupsProvided
     ? normalizeGroupIds(groupIds, groupId)
     : undefined;
   const normalizedName = typeof name === "string" ? name.trim() : undefined;
-  const pronounsProvided = Object.hasOwn(input, "pronouns");
-  const addressProvided = Object.hasOwn(input, "address");
-  const postalCodeProvided = Object.hasOwn(input, "postalCode");
-  const stateProvided = Object.hasOwn(input, "state");
-  const cityProvided = Object.hasOwn(input, "city");
-  const countryProvided = Object.hasOwn(input, "country");
+  const pronounsProvided = Object.hasOwn(sanitizedInput, "pronouns");
+  const addressProvided = Object.hasOwn(sanitizedInput, "address");
+  const postalCodeProvided = Object.hasOwn(sanitizedInput, "postalCode");
+  const stateProvided = Object.hasOwn(sanitizedInput, "state");
+  const cityProvided = Object.hasOwn(sanitizedInput, "city");
+  const countryProvided = Object.hasOwn(sanitizedInput, "country");
   const normalizedPronouns = (() => {
     if (!pronounsProvided) {
       return undefined;
@@ -2368,16 +2371,16 @@ const updateContact = async (
     }
     return normalizeCountryCode(normalizedCountry ?? undefined) ?? null;
   })();
-  const genderProvided = Object.hasOwn(input, "gender");
+  const genderProvided = Object.hasOwn(sanitizedInput, "gender");
   const normalizedGender = genderProvided ? (gender ?? null) : undefined;
   const genderRequestPreferenceProvided = Object.hasOwn(
-    input,
+    sanitizedInput,
     "genderRequestPreference",
   );
   const normalizedGenderRequestPreference = genderRequestPreferenceProvided
     ? (genderRequestPreference ?? null)
     : undefined;
-  const bipocProvided = Object.hasOwn(input, "isBipoc");
+  const bipocProvided = Object.hasOwn(sanitizedInput, "isBipoc");
   const normalizedIsBipoc = (() => {
     if (!bipocProvided) {
       return undefined;
@@ -2388,13 +2391,13 @@ const updateContact = async (
     return null;
   })();
   const racismPreferenceProvided = Object.hasOwn(
-    input,
+    sanitizedInput,
     "racismRequestPreference",
   );
   const normalizedRacismRequestPreference = racismPreferenceProvided
     ? (racismRequestPreference ?? null)
     : undefined;
-  const otherMarginsProvided = Object.hasOwn(input, "otherMargins");
+  const otherMarginsProvided = Object.hasOwn(sanitizedInput, "otherMargins");
   const normalizedOtherMargins = (() => {
     if (!otherMarginsProvided) {
       return undefined;
@@ -2405,7 +2408,7 @@ const updateContact = async (
     const trimmed = otherMargins.trim();
     return trimmed === "" ? null : trimmed;
   })();
-  const onboardingProvided = Object.hasOwn(input, "onboardingDate");
+  const onboardingProvided = Object.hasOwn(sanitizedInput, "onboardingDate");
   const normalizedOnboardingDate = (() => {
     if (!onboardingProvided) {
       return undefined;
@@ -2419,7 +2422,7 @@ const updateContact = async (
     }
     return parsed;
   })();
-  const breakUntilProvided = Object.hasOwn(input, "breakUntil");
+  const breakUntilProvided = Object.hasOwn(sanitizedInput, "breakUntil");
   const normalizedBreakUntil = (() => {
     if (!breakUntilProvided) {
       return undefined;
@@ -2435,10 +2438,10 @@ const updateContact = async (
   })();
   const normalizedEmail =
     email === undefined ? undefined : email.trim().toLowerCase();
-  const additionalEmailsProvided = Object.hasOwn(input, "additionalEmails");
+  const additionalEmailsProvided = Object.hasOwn(sanitizedInput, "additionalEmails");
   const normalizedPhone = phone === undefined ? undefined : phone.trim();
   const normalizedSignal = signal === undefined ? undefined : signal.trim();
-  const websiteProvided = Object.hasOwn(input, "website");
+  const websiteProvided = Object.hasOwn(sanitizedInput, "website");
   const normalizedWebsite = (() => {
     if (!websiteProvided) {
       return undefined;
@@ -2449,7 +2452,7 @@ const updateContact = async (
     const trimmed = website.trim();
     return trimmed === "" ? null : trimmed;
   })();
-  const notesProvided = Object.hasOwn(input, "notes");
+  const notesProvided = Object.hasOwn(sanitizedInput, "notes");
   const normalizedNotes = (() => {
     if (!notesProvided) {
       return undefined;
@@ -2460,11 +2463,11 @@ const updateContact = async (
     const trimmed = notes.trim();
     return trimmed === "" ? null : trimmed;
   })();
-  const socialLinksProvided = Object.hasOwn(input, "socialLinks");
+  const socialLinksProvided = Object.hasOwn(sanitizedInput, "socialLinks");
   const normalizedSocialLinks = socialLinksProvided
     ? normalizeSocialLinks(socialLinks)
     : [];
-  const organizationIdsProvided = Object.hasOwn(input, "organizationIds");
+  const organizationIdsProvided = Object.hasOwn(sanitizedInput, "organizationIds");
   const normalizedOrganizationIds = organizationIdsProvided
     ? Array.from(new Set(organizationIds ?? []))
     : [];
