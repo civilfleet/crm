@@ -1,8 +1,11 @@
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
+import path from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Prisma, PrismaClient } from "@prisma/client";
 import { Pool } from "pg";
+import ts from "typescript";
 import * as types from "@/types";
-import { loadModule } from "../helpers/load-module";
 
 /*
   Database tests run the real services against a real, migrated Postgres.
@@ -59,20 +62,76 @@ const silentLogger = {
   default: { info: noop, warn: noop, error: noop, debug: noop },
 };
 
+const root = process.cwd();
+const requireFromRepo = createRequire(path.join(root, "package.json"));
+
+const resolveSource = (base: string) => {
+  if (existsSync(base) && statSync(base).isFile()) return base;
+  for (const candidate of [
+    ...[".ts", ".tsx", ".js"].map((extension) => `${base}${extension}`),
+    ...[".ts", ".tsx", ".js"].map((extension) =>
+      path.join(base, `index${extension}`),
+    ),
+  ]) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(`Cannot resolve ${base}`);
+};
+
 /**
- * Loads a service module with `@/lib/prisma` bound to the test database.
- * `@/types` and the logger are provided; pass any other boundary in `mocks`.
+ * Loads a service module and, recursively, the real `@/` modules it
+ * imports, with `@/lib/prisma` bound to the test database. Only the
+ * boundaries in `mocks` (and the logger) are replaced; `next/*` must be
+ * mocked explicitly, so no request context sneaks in.
  */
 export const loadService = <T>(
   relative: string,
   mocks: Record<string, unknown> = {},
-) =>
-  loadModule<T>(relative, {
+): T => {
+  const boundaries: Record<string, unknown> = {
     "@/lib/prisma": { __esModule: true, default: db, prisma: db },
     "@/lib/logger": silentLogger,
-    "@/types": types,
     ...mocks,
-  });
+  };
+  const cache = new Map<string, { exports: unknown }>();
+
+  const load = (file: string): unknown => {
+    const cached = cache.get(file);
+    if (cached) return cached.exports;
+    const module = { exports: {} as unknown };
+    cache.set(file, module);
+    const code = ts.transpileModule(readFileSync(file, "utf8"), {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        jsx: ts.JsxEmit.ReactJSX,
+        esModuleInterop: true,
+      },
+      fileName: file,
+    }).outputText;
+    const require = (id: string) => {
+      if (Object.hasOwn(boundaries, id)) return boundaries[id];
+      if (id.startsWith("@/")) {
+        return load(resolveSource(path.join(root, "src", id.slice(2))));
+      }
+      if (id.startsWith("./") || id.startsWith("../")) {
+        return load(resolveSource(path.resolve(path.dirname(file), id)));
+      }
+      if (id.startsWith("next/") || id === "next") {
+        throw new Error(`Missing test boundary: ${id} (from ${file})`);
+      }
+      return requireFromRepo(id);
+    };
+    new Function("require", "module", "exports", code)(
+      require,
+      module,
+      module.exports,
+    );
+    return module.exports;
+  };
+
+  return load(path.join(root, relative)) as T;
+};
 
 let sequence = 0;
 const unique = (prefix: string) => `${prefix}-${Date.now()}-${++sequence}`;

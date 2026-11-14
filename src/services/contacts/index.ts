@@ -3609,26 +3609,42 @@ const mergeContacts = async (
       }
     }
 
+    await tx.formSubmission.updateMany({
+      where: { contactId: { in: sourceContactIds } },
+      data: { contactId: input.targetContactId },
+    });
+
+    // A failed statement aborts a Postgres transaction, so look for the
+    // target's matching review first instead of catching the conflict.
     const accessReviews = await tx.contactAccessReview.findMany({
       where: { contactId: { in: sourceContactIds } },
-      select: { id: true },
+      select: {
+        id: true,
+        source: true,
+        inboundEmailMessageId: true,
+        groupId: true,
+      },
     });
     for (const review of accessReviews) {
-      try {
-        await tx.contactAccessReview.update({
-          where: { id: review.id },
-          data: { contactId: input.targetContactId },
-        });
-      } catch (error) {
-        if (
-          error instanceof Prisma.PrismaClientKnownRequestError &&
-          error.code === "P2002"
-        ) {
-          await tx.contactAccessReview.delete({ where: { id: review.id } });
-          continue;
-        }
-        throw error;
+      const duplicate = review.inboundEmailMessageId
+        ? await tx.contactAccessReview.findFirst({
+            where: {
+              contactId: input.targetContactId,
+              source: review.source,
+              inboundEmailMessageId: review.inboundEmailMessageId,
+              groupId: review.groupId,
+            },
+            select: { id: true },
+          })
+        : null;
+      if (duplicate) {
+        await tx.contactAccessReview.delete({ where: { id: review.id } });
+        continue;
       }
+      await tx.contactAccessReview.update({
+        where: { id: review.id },
+        data: { contactId: input.targetContactId },
+      });
     }
 
     await tx.contactChangeLog.updateMany({
