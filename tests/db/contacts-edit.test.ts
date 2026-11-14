@@ -28,6 +28,7 @@ type ContactsService = {
     input: UpdateInput,
     userId?: string,
     userName?: string,
+    roles?: string[],
   ) => Promise<unknown>;
 };
 
@@ -72,6 +73,14 @@ const createEditSetup = async () => {
       email: "org-foreign@example.org",
       teamId: otherTeam.id,
     },
+  });
+  // Coordinators see every contact, whatever its groups (but not
+  // restricted fields: those follow field access).
+  const coordinators = await db.group.create({
+    data: { teamId: team.id, name: "Coordinators", canAccessAllContacts: true },
+  });
+  await db.userGroup.create({
+    data: { userId: editor.id, groupId: coordinators.id },
   });
   const contact = await db.contact.create({
     data: {
@@ -389,4 +398,148 @@ test("an e-mail address can belong to only one contact", async () => {
     /already belongs to another contact/,
   );
   assert.deepEqual(await snapshot(setup.contact.id), before);
+});
+
+test("people edit only contacts they can see", async () => {
+  const setup = await createEditSetup();
+  const before = await snapshot(setup.contact.id);
+  // A member of group B only cannot see a contact kept in group A.
+  const outsider = await createUser("Outsider");
+  await db.userGroup.create({
+    data: { userId: outsider.id, groupId: setup.groupB.id },
+  });
+
+  await assert.rejects(
+    service.updateContact(
+      { contactId: setup.contact.id, teamId: setup.team.id, name: "Changed" },
+      outsider.id,
+    ),
+    /Contact not found/,
+  );
+  assert.deepEqual(await snapshot(setup.contact.id), before);
+  assert.deepEqual(await history(setup.contact.id), []);
+
+  // A global administrator sees every contact.
+  await service.updateContact(
+    { contactId: setup.contact.id, teamId: setup.team.id, name: "By admin" },
+    outsider.id,
+    undefined,
+    ["Admin"],
+  );
+  assert.equal((await snapshot(setup.contact.id)).name, "By admin");
+
+  // A contact in no group is visible to the whole team.
+  await db.contactGroup.deleteMany({ where: { contactId: setup.contact.id } });
+  await service.updateContact(
+    { contactId: setup.contact.id, teamId: setup.team.id, name: "Open" },
+    outsider.id,
+  );
+  assert.equal((await snapshot(setup.contact.id)).name, "Open");
+});
+
+test("organization changes are recorded in the history", async () => {
+  const setup = await createEditSetup();
+
+  await service.updateContact(
+    {
+      contactId: setup.contact.id,
+      teamId: setup.team.id,
+      organizationIds: [setup.orgB.id],
+    },
+    setup.editor.id,
+  );
+  // Sending the same organizations again records nothing.
+  await service.updateContact(
+    {
+      contactId: setup.contact.id,
+      teamId: setup.team.id,
+      organizationIds: [setup.orgB.id],
+    },
+    setup.editor.id,
+  );
+
+  assert.deepEqual(await history(setup.contact.id), [
+    {
+      fieldName: "organizationIds",
+      oldValue: JSON.stringify([setup.orgA.id]),
+      newValue: JSON.stringify([setup.orgB.id]),
+      userId: setup.editor.id,
+    },
+  ]);
+});
+
+test("an address of a contact in the trash is refused with a clear reason", async () => {
+  const setup = await createEditSetup();
+  await db.contact.create({
+    data: {
+      teamId: setup.team.id,
+      name: "Trashed",
+      deletedAt: new Date(),
+      emails: {
+        create: {
+          teamId: setup.team.id,
+          email: "trashed@example.org",
+          kind: "PRIMARY",
+        },
+      },
+    },
+  });
+
+  await assert.rejects(
+    service.updateContact(
+      {
+        contactId: setup.contact.id,
+        teamId: setup.team.id,
+        email: "trashed@example.org",
+      },
+      setup.editor.id,
+    ),
+    /belongs to a contact in the trash/,
+  );
+});
+
+test("two saves at once cannot give one address to two contacts", async () => {
+  const setup = await createEditSetup();
+  const contacts = [setup.contact];
+  for (const name of ["Second", "Third", "Fourth"]) {
+    contacts.push(
+      await db.contact.create({
+        data: {
+          teamId: setup.team.id,
+          name,
+          emails: {
+            create: {
+              teamId: setup.team.id,
+              email: `${name.toLowerCase()}@example.org`,
+              kind: "PRIMARY",
+            },
+          },
+        },
+      }),
+    );
+  }
+
+  const results = await Promise.allSettled(
+    contacts.map((contact) =>
+      service.updateContact(
+        {
+          contactId: contact.id,
+          teamId: setup.team.id,
+          email: "shared-desk@example.org",
+        },
+        setup.editor.id,
+      ),
+    ),
+  );
+
+  assert.equal(
+    results.filter((result) => result.status === "fulfilled").length,
+    1,
+  );
+  assert.equal(
+    await db.contactEmail.count({
+      where: { email: "shared-desk@example.org", kind: "PRIMARY" },
+    }),
+    1,
+  );
 });

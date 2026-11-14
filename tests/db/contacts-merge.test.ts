@@ -21,6 +21,7 @@ type ContactsService = {
     },
     userId?: string,
     userName?: string,
+    roles?: string[],
   ) => Promise<{ id: string }>;
 };
 
@@ -78,6 +79,12 @@ const createMergeSetup = async () => {
   const user = await createUser("Editor");
   const team = await db.teams.create({
     data: { name: "Merge team", email: "merge-team@example.org" },
+  });
+  const coordinators = await db.group.create({
+    data: { teamId: team.id, name: "Coordinators", canAccessAllContacts: true },
+  });
+  await db.userGroup.create({
+    data: { userId: user.id, groupId: coordinators.id },
   });
   const [groupA, groupB] = await Promise.all(
     ["Group A", "Group B"].map((name) =>
@@ -364,6 +371,30 @@ test("a merge that fails changes nothing", async () => {
     /already belongs to another contact/,
   );
 
+  assert.deepEqual(
+    await countReferences(references, [setup.source.id, setup.target.id]),
+    before,
+  );
+  assert.equal(await db.contact.count({ where: { id: setup.source.id } }), 1);
+});
+
+test("people merge only contacts they can all see", async () => {
+  const setup = await createMergeSetup();
+  const references = await contactReferences();
+  const before = await countReferences(references, [
+    setup.source.id,
+    setup.target.id,
+  ]);
+  // In group B only: sees the target (group B) but not the source (group A).
+  const outsider = await createUser("Outsider");
+  await db.userGroup.create({
+    data: { userId: outsider.id, groupId: setup.groupB.id },
+  });
+
+  await assert.rejects(
+    service.mergeContacts(mergeInput(setup), outsider.id, "Outsider"),
+    /could not be found/,
+  );
   assert.deepEqual(
     await countReferences(references, [setup.source.id, setup.target.id]),
     before,

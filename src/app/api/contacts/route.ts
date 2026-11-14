@@ -142,7 +142,12 @@ export async function PATCH(req: Request) {
     const userId = session?.user?.userId;
     const userName = session?.user?.name ?? undefined;
 
-    const contact = await updateContact(validated, userId, userName);
+    const contact = await updateContact(
+      validated,
+      userId,
+      userName,
+      session?.user?.roles,
+    );
 
     return NextResponse.json({ data: contact }, { status: 200 });
   } catch (e) {

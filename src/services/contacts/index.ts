@@ -629,12 +629,16 @@ const assertIdentityEmailsAvailable = async (
         ? { contactId: { notIn: allowedContactIds } }
         : {}),
     },
-    select: { email: true },
+    select: { email: true, contact: { select: { deletedAt: true } } },
   });
 
   if (conflicts.length > 0) {
+    const [conflict] = conflicts;
+    // A trashed contact keeps its addresses so that it can be restored.
     throw new Error(
-      `Email already belongs to another contact: ${conflicts[0].email}`,
+      conflict.contact.deletedAt
+        ? `Email already belongs to a contact in the trash: ${conflict.email}. Restore or permanently delete that contact first.`
+        : `Email already belongs to another contact: ${conflict.email}`,
     );
   }
 };
@@ -2254,6 +2258,7 @@ const updateContact = async (
   input: UpdateContactInput,
   userId?: string,
   userName?: string,
+  roles: Roles[] = [],
 ) => {
   // Fields the editor may not see are removed here; every "was it sent?"
   // check below must read sanitizedInput, or a removed field counts as
@@ -2472,13 +2477,19 @@ const updateContact = async (
     ? Array.from(new Set(organizationIds ?? []))
     : [];
 
+  // A person edits only contacts they can see (as delete and restore).
+  const visibility = userId
+    ? await getContactVisibility({ teamId, userId, roles })
+    : null;
+
   return prisma.$transaction(async (tx) => {
     // Get the existing contact
     const existing = await tx.contact.findFirst({
       where: {
-        id: contactId,
-        teamId,
-        deletedAt: null,
+        AND: [
+          { id: contactId, teamId, deletedAt: null },
+          ...(visibility ? [visibility.where] : []),
+        ],
       },
       include: {
         attributes: true,
@@ -2946,6 +2957,21 @@ const updateContact = async (
       );
       const nextOrganizationIds = new Set(normalizedOrganizationIds);
 
+      const organizationsChanged =
+        existingOrganizationIds.size !== nextOrganizationIds.size ||
+        [...nextOrganizationIds].some((id) => !existingOrganizationIds.has(id));
+      if (organizationsChanged) {
+        await logFieldUpdate(
+          contactId,
+          "organizationIds",
+          [...existingOrganizationIds].sort(),
+          [...nextOrganizationIds].sort(),
+          userId,
+          userName,
+          tx,
+        );
+      }
+
       for (const organizationId of existingOrganizationIds) {
         if (!nextOrganizationIds.has(organizationId)) {
           await tx.contactOrganization.delete({
@@ -3359,6 +3385,7 @@ const mergeContacts = async (
   input: MergeContactsInput,
   userId?: string,
   userName?: string,
+  roles: Roles[] = [],
 ) => {
   const sourceContactIds = input.sourceContactIds.filter(
     (id) => id !== input.targetContactId,
@@ -3369,13 +3396,18 @@ const mergeContacts = async (
   }
 
   const allContactIds = [input.targetContactId, ...sourceContactIds];
+  // Every contact in a merge must be visible to the person merging.
+  const visibility = userId
+    ? await getContactVisibility({ teamId: input.teamId, userId, roles })
+    : null;
 
   return prisma.$transaction(async (tx) => {
     const contacts = await tx.contact.findMany({
       where: {
-        teamId: input.teamId,
-        id: { in: allContactIds },
-        deletedAt: null,
+        AND: [
+          { teamId: input.teamId, id: { in: allContactIds }, deletedAt: null },
+          ...(visibility ? [visibility.where] : []),
+        ],
       },
       include: {
         ...contactInclude,

@@ -46,6 +46,7 @@ export async function PATCH(req: Request) {
       validated,
       session.user.userId,
       session.user.name ?? undefined,
+      session.user.roles,
     );
 
     return NextResponse.json({ data: contact }, { status: 200 });
