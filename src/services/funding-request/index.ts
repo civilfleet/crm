@@ -1,5 +1,9 @@
-import type { Prisma } from "@prisma/client";
+import { type Prisma, Prisma as PrismaValue } from "@prisma/client";
 import { auth } from "@/auth";
+import {
+  assertManualStatusChange,
+  FundingRuleError,
+} from "@/lib/funding-status";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
 import { type FileTypes, FundingStatus } from "@/types";
@@ -141,6 +145,7 @@ const updateFundingRequest = async (
   id: string,
   data: Partial<FundingRequestData>,
   teamId: string,
+  { isGlobalAdmin = false }: { isGlobalAdmin?: boolean } = {},
 ) => {
   const team = await prisma.teams.findFirst({
     where: {
@@ -180,67 +185,128 @@ const updateFundingRequest = async (
     ...(rest.expectedCompletionDate !== undefined && {
       expectedCompletionDate: new Date(rest.expectedCompletionDate),
     }),
-    ...(rest.status !== undefined && { status: rest.status }),
-    ...(rest.remainingAmount !== undefined && {
-      remainingAmount: rest.remainingAmount,
-    }),
+    // Status and amounts follow the funding rules below; the remaining
+    // amount is always derived from the payouts, never set by hand.
     ...(rest.customFields !== undefined && {
       customFields: rest.customFields as Prisma.InputJsonValue,
     }),
   };
 
-  const fundingRequest = await prisma.fundingRequest.update({
-    where: { id },
-    data: updateData,
+  const changesStatus = rest.status !== undefined;
+  const changesAgreedAmount = rest.amountAgreed !== undefined;
+
+  // Serializable, like payouts: a payout and an edit of the same request
+  // cannot interleave.
+  const fundingRequest = await prisma.$transaction(
+    async (tx) => {
+      if (changesStatus || changesAgreedAmount) {
+        const current = await tx.fundingRequest.findUnique({
+          where: { id },
+          select: { status: true },
+        });
+        if (!current) {
+          throw new Error("Funding request not found");
+        }
+        const { _sum, _count } = await tx.transaction.aggregate({
+          where: { fundingRequestId: id },
+          _sum: { amount: true },
+          _count: true,
+        });
+
+        if (changesStatus) {
+          assertManualStatusChange({
+            from: current.status as FundingStatus,
+            to: rest.status as FundingStatus,
+            isGlobalAdmin,
+            hasPayouts: _count > 0,
+          });
+          updateData.status = rest.status;
+        }
+
+        if (changesAgreedAmount) {
+          const disbursed = new PrismaValue.Decimal(_sum.amount ?? 0);
+          const agreed = new PrismaValue.Decimal(rest.amountAgreed ?? 0);
+          if (agreed.lt(disbursed)) {
+            throw new FundingRuleError(
+              `The agreed amount cannot be below the ${disbursed.toString()} already paid out.`,
+            );
+          }
+          updateData.remainingAmount = agreed.minus(disbursed);
+        }
+      }
+
+      return tx.fundingRequest.update({
+        where: { id },
+        data: updateData,
+        select: fundingRequestUpdateSelect,
+      });
+    },
+    { isolationLevel: PrismaValue.TransactionIsolationLevel.Serializable },
+  );
+  return fundingRequest;
+};
+
+const fundingRequestUpdateSelect = {
+  id: true,
+  name: true,
+  description: true,
+  purpose: true,
+  amountRequested: true,
+  amountAgreed: true,
+  refinancingConcept: true,
+  sustainability: true,
+  expectedCompletionDate: true,
+  remainingAmount: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+  files: {
     select: {
       id: true,
       name: true,
-      description: true,
-      purpose: true,
-      amountRequested: true,
-      amountAgreed: true,
-      refinancingConcept: true,
-      sustainability: true,
-      expectedCompletionDate: true,
-      remainingAmount: true,
-      status: true,
-      createdAt: true,
-      updatedAt: true,
-      files: {
-        select: {
-          id: true,
-          name: true,
-          url: true,
-          type: true,
-        },
-      },
-      organization: {
-        select: {
-          name: true,
-          email: true,
-          team: {
-            select: {
-              email: true,
-              name: true,
-            },
-          },
-        },
-      },
-      submittedBy: {
+      url: true,
+      type: true,
+    },
+  },
+  organization: {
+    select: {
+      name: true,
+      email: true,
+      team: {
         select: {
           email: true,
+          name: true,
         },
       },
     },
-  });
-  return fundingRequest;
-};
+  },
+  submittedBy: {
+    select: {
+      email: true,
+    },
+  },
+} satisfies Prisma.FundingRequestSelect;
 
 const updateFundingRequestStatus = async (
   id: string,
   status: FundingStatus,
   donationId?: string | null,
+  { isGlobalAdmin = false }: { isGlobalAdmin?: boolean } = {},
 ) => {
+  const current = await prisma.fundingRequest.findUnique({
+    where: { id },
+    select: { status: true, _count: { select: { Transaction: true } } },
+  });
+  if (!current) {
+    throw new Error("Funding request not found");
+  }
+  assertManualStatusChange({
+    from: current.status as FundingStatus,
+    to: status,
+    isGlobalAdmin,
+    hasPayouts: current._count.Transaction > 0,
+  });
+
   const selectedFields = {
     id: true,
     name: true,
@@ -301,7 +367,8 @@ const updateFundingRequestStatus = async (
 
       if (!signedAgreements?.length) {
         return await prisma.fundingRequest.update({
-          where: { id },
+          // Only if nobody changed the status since it was checked.
+          where: { id, status: current.status },
           data: {
             status,
           },
@@ -311,7 +378,7 @@ const updateFundingRequestStatus = async (
       throw new Error("Donation agreement still has unsigned signatures");
     } else {
       return await prisma.fundingRequest.update({
-        where: { id },
+        where: { id, status: current.status },
         data: {
           status,
         },

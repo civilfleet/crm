@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { FundingRuleError } from "@/lib/funding-status";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import { calculateTransactionBalance } from "@/services/transactions/balance";
@@ -25,10 +26,17 @@ const createTransaction = async (transaction: CreateTransaction) => {
           amountAgreed: true,
           organizationId: true,
           teamId: true,
+          status: true,
         },
       });
       if (!fundingRequest?.amountAgreed || !fundingRequest.teamId) {
         throw new Error("Funding request is not ready for disbursement");
+      }
+      // Money goes out only once the agreement is fully signed.
+      if (fundingRequest.status !== FundingStatus.FundsDisbursing) {
+        throw new FundingRuleError(
+          "Payouts can only be made while the request is disbursing funds.",
+        );
       }
 
       const aggregate = await tx.transaction.aggregate({

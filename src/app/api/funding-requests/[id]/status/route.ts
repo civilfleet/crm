@@ -46,6 +46,7 @@ export async function PUT(
       fundingRequestId,
       fundingRequestData.status,
       fundingRequestData?.donationId,
+      { isGlobalAdmin: access.isGlobalAdmin },
     );
 
     const status = fundingRequest?.status;

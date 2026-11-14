@@ -84,7 +84,10 @@ test("payouts keep the remaining amount in step and complete the request", async
 });
 
 test("a payout above the remaining amount writes nothing", async () => {
-  const { fundingRequest } = await createFundingRequest({ amountAgreed: 500 });
+  const { fundingRequest } = await createFundingRequest({
+    amountAgreed: 500,
+    status: FundingStatus.FundsDisbursing,
+  });
   await service.createTransaction({
     amount: 300,
     fundingRequestId: fundingRequest.id,
@@ -104,7 +107,10 @@ test("a payout above the remaining amount writes nothing", async () => {
 });
 
 test("zero, negative and unready payouts are refused", async () => {
-  const { fundingRequest } = await createFundingRequest({ amountAgreed: 500 });
+  const { fundingRequest } = await createFundingRequest({
+    amountAgreed: 500,
+    status: FundingStatus.FundsDisbursing,
+  });
   for (const amount of [0, -10]) {
     await assert.rejects(
       service.createTransaction({
@@ -115,7 +121,9 @@ test("zero, negative and unready payouts are refused", async () => {
     );
   }
 
-  const { fundingRequest: unagreed } = await createFundingRequest();
+  const { fundingRequest: unagreed } = await createFundingRequest({
+    status: FundingStatus.FundsDisbursing,
+  });
   await assert.rejects(
     service.createTransaction({ amount: 10, fundingRequestId: unagreed.id }),
     /not ready for disbursement/,
@@ -125,7 +133,10 @@ test("zero, negative and unready payouts are refused", async () => {
 });
 
 test("concurrent payouts can never overdraw the agreed amount", async () => {
-  const { fundingRequest } = await createFundingRequest({ amountAgreed: 100 });
+  const { fundingRequest } = await createFundingRequest({
+    amountAgreed: 100,
+    status: FundingStatus.FundsDisbursing,
+  });
 
   // Eight payouts of 20 race for 100: at most five may go through.
   const results = await Promise.allSettled(
@@ -146,4 +157,27 @@ test("concurrent payouts can never overdraw the agreed amount", async () => {
   assert.ok(disbursed <= 100, `disbursed ${disbursed} of 100`);
   const request = await readRequest(fundingRequest.id);
   assert.equal(decimal(request.remainingAmount), 100 - disbursed);
+});
+
+test("payouts wait until the agreement is fully signed", async () => {
+  for (const status of [
+    FundingStatus.Accepted,
+    FundingStatus.WaitingForSignature,
+    FundingStatus.Rejected,
+    FundingStatus.Completed,
+  ]) {
+    const { fundingRequest } = await createFundingRequest({
+      amountAgreed: 100,
+      status,
+    });
+    await assert.rejects(
+      service.createTransaction({
+        amount: 10,
+        fundingRequestId: fundingRequest.id,
+      }),
+      /only be made while the request is disbursing/,
+      status,
+    );
+  }
+  assert.equal(await db.transaction.count(), 0);
 });

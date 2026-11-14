@@ -1,11 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { ApiError } from "@/lib/api-guard";
+import prisma from "@/lib/prisma";
 import {
   assertPendingUploadsAvailable,
   consumePendingUploads,
 } from "@/services/file/pending-uploads";
 import { assertStoredFileExists } from "@/services/file/s3-service";
-import prisma from "@/lib/prisma";
 import { FundingStatus } from "@/types";
 
 type DonationAgreement = {
@@ -25,6 +25,7 @@ const createDonationAgreement = async (
       where: {
         email: {
           in: donation?.users as string[],
+          mode: "insensitive",
         },
       },
       select: {
@@ -33,14 +34,42 @@ const createDonationAgreement = async (
         name: true,
       },
     });
+    const signerEmails = Array.from(
+      new Set(
+        ((donation?.users as string[]) ?? []).map((email) =>
+          email.trim().toLowerCase(),
+        ),
+      ),
+    ).filter(Boolean);
+    if (signerEmails.length === 0) {
+      throw new ApiError(400, "An agreement needs at least one signer.");
+    }
+    const unknownSigners = signerEmails.filter(
+      (email) => !users.some((user) => user.email.toLowerCase() === email),
+    );
+    if (unknownSigners.length > 0) {
+      // Dropping them would leave an agreement nobody can complete.
+      throw new ApiError(
+        400,
+        `No user has the signer e-mail ${unknownSigners.join(", ")}.`,
+      );
+    }
+
     const organizationId = await prisma.fundingRequest.findUnique({
       where: {
         id: donation?.fundingRequestId,
       },
       select: {
         organizationId: true,
+        status: true,
       },
     });
+    if (organizationId?.status !== FundingStatus.Accepted) {
+      throw new ApiError(
+        409,
+        "An agreement can only be created for an accepted request.",
+      );
+    }
     const file = await prisma.file.create({
       data: {
         url: donation.file as string,

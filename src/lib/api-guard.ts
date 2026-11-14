@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { FundingRuleError } from "@/lib/funding-status";
 import { hasModuleAccess } from "@/lib/permissions";
 import prisma from "@/lib/prisma";
 import { getTeamAdminAccess } from "@/services/teams/access";
@@ -280,7 +281,7 @@ export const verifyDonationAgreementAccess = async (
  * Helper to catch ApiError and return consistent JSON responses
  */
 export const handleApiError = (error: unknown) => {
-  if (error instanceof ApiError) {
+  if (error instanceof ApiError || error instanceof FundingRuleError) {
     return NextResponse.json(
       { error: error.message },
       { status: error.status },

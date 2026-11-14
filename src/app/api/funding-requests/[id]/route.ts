@@ -70,6 +70,7 @@ export async function PUT(
       fundingRequestId,
       safeData,
       access.teamId as string,
+      { isGlobalAdmin: access.isGlobalAdmin },
     );
     const status = response.status;
     let emailTemplate: Awaited<

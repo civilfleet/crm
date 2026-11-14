@@ -89,7 +89,7 @@ const createAgreement = async () => {
       agreement: "Terms",
       file: `agreements/${setup.fundingRequest.id}.pdf`,
       fundingRequestId: setup.fundingRequest.id,
-      users: [first.email, second.email, "nobody@example.org"],
+      users: [first.email, second.email],
     },
     setup.submitter.id,
     setup.team.id,
@@ -121,7 +121,6 @@ test("creating an agreement records it, its signers and the new status together"
   assert.equal(stored.organizationId, organization.id);
   assert.equal(stored.file.type, "DONATION_AGREEMENT");
   assert.equal(stored.file.fundingRequestId, fundingRequest.id);
-  // Unknown e-mail addresses get no signature row.
   assert.deepEqual(
     stored.userSignatures.map((signature) => signature.userId).sort(),
     [first.id, second.id].sort(),
@@ -205,7 +204,7 @@ test("a status change through an agreement waits for every signature", async () 
   await assert.rejects(
     statusService.updateFundingRequestStatus(
       fundingRequest.id,
-      FundingStatus.Approved,
+      FundingStatus.Rejected,
       agreement.id,
     ),
     /unsigned signatures/,
@@ -217,12 +216,13 @@ test("a status change through an agreement waits for every signature", async () 
 
   await service.updateDonationAgreement(agreement.id, upload(), first.id);
   await service.updateDonationAgreement(agreement.id, upload(), second.id);
+  // Fully signed (and so disbursing, without payouts yet): allowed.
   const updated = await statusService.updateFundingRequestStatus(
     fundingRequest.id,
-    FundingStatus.Approved,
+    FundingStatus.Rejected,
     agreement.id,
   );
-  assert.equal(updated.status, FundingStatus.Approved);
+  assert.equal(updated.status, FundingStatus.Rejected);
 });
 
 test("a status change cannot borrow another request's agreement", async () => {
@@ -236,10 +236,95 @@ test("a status change cannot borrow another request's agreement", async () => {
   await assert.rejects(
     statusService.updateFundingRequestStatus(
       other.id,
-      FundingStatus.Approved,
+      FundingStatus.Rejected,
       agreement.id,
     ),
     /does not belong to this request/,
   );
   assert.equal(await statusOf(other.id), FundingStatus.Accepted);
+});
+
+test("an agreement is refused unless every signer is a known user", async () => {
+  const setup = await createFundingRequest({ amountAgreed: 1000 });
+  const signer = await createUser("Signer");
+
+  for (const users of [[signer.email, "nobody@example.org"], []]) {
+    await assert.rejects(
+      service.createDonationAgreement(
+        {
+          agreement: "Terms",
+          file: `agreements/${setup.fundingRequest.id}-${users.length}.pdf`,
+          fundingRequestId: setup.fundingRequest.id,
+          users,
+        },
+        setup.submitter.id,
+        setup.team.id,
+      ),
+      rejectsWith(400),
+    );
+  }
+
+  assert.equal(await db.donationAgreement.count(), 0);
+  assert.equal(await db.file.count(), 0);
+  assert.equal(await statusOf(setup.fundingRequest.id), FundingStatus.Accepted);
+});
+
+test("signer e-mails match users regardless of case", async () => {
+  const setup = await createFundingRequest({ amountAgreed: 1000 });
+  const signer = await createUser("Signer");
+
+  const { agreement } = await service.createDonationAgreement(
+    {
+      agreement: "Terms",
+      file: `agreements/${setup.fundingRequest.id}.pdf`,
+      fundingRequestId: setup.fundingRequest.id,
+      users: [signer.email.toUpperCase()],
+    },
+    setup.submitter.id,
+    setup.team.id,
+  );
+  assert.equal(
+    await db.donationAgreementSignature.count({
+      where: { donationAgreementId: agreement.id, userId: signer.id },
+    }),
+    1,
+  );
+});
+
+test("an agreement can only be created for an accepted request", async () => {
+  for (const status of [
+    FundingStatus.Submitted,
+    FundingStatus.WaitingForSignature,
+    FundingStatus.FundsDisbursing,
+    FundingStatus.Rejected,
+  ]) {
+    const setup = await createFundingRequest({ amountAgreed: 1000, status });
+    const signer = await createUser("Signer");
+    await assert.rejects(
+      service.createDonationAgreement(
+        {
+          agreement: "Terms",
+          file: `agreements/${setup.fundingRequest.id}.pdf`,
+          fundingRequestId: setup.fundingRequest.id,
+          users: [signer.email],
+        },
+        setup.submitter.id,
+        setup.team.id,
+      ),
+      rejectsWith(409),
+      status,
+    );
+    assert.equal(await statusOf(setup.fundingRequest.id), status);
+  }
+  assert.equal(await db.donationAgreement.count(), 0);
+});
+
+test("a user who signed cannot be deleted, so the signature stays", async () => {
+  const { first } = await createAgreement();
+
+  await assert.rejects(db.user.delete({ where: { id: first.id } }));
+  assert.equal(
+    await db.donationAgreementSignature.count({ where: { userId: first.id } }),
+    1,
+  );
 });
