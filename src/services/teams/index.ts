@@ -1,7 +1,9 @@
 import { normalizeLoginDomain } from "@/lib/auth-routing";
+import type { Prisma } from "@prisma/client";
+import type { RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import { ensureDefaultGroup } from "@/services/groups";
-import { Roles } from "@/types";
+import { type AppModule, Roles } from "@/types";
 import type { CreateTeamInput } from "@/validations/team";
 
 const getTeamsByRoles = async (_roles: string[] | null) => {
@@ -210,7 +212,77 @@ const getTeamOwner = async (teamId: string) => {
   return team.owner ?? null;
 };
 
+export const TEAM_SORT_FIELDS = ["name", "email", "city", "createdAt"] as const;
+export type TeamSortField = (typeof TEAM_SORT_FIELDS)[number];
+
+/** One page of every team, for the admin Teams list. */
+const getTeamsPage = async ({
+  query,
+  modules,
+  page,
+  pageSize,
+  sort,
+}: {
+  query: string;
+  modules: AppModule[];
+  page: number;
+  pageSize: number;
+  sort: RecordSort<TeamSortField>;
+}) => {
+  const trimmedQuery = query.trim();
+  const where: Prisma.TeamsWhereInput = {
+    AND: [
+      trimmedQuery
+        ? {
+            OR: [
+              { name: { contains: trimmedQuery, mode: "insensitive" } },
+              { email: { contains: trimmedQuery, mode: "insensitive" } },
+              { city: { contains: trimmedQuery, mode: "insensitive" } },
+              { country: { contains: trimmedQuery, mode: "insensitive" } },
+              { loginDomain: { contains: trimmedQuery, mode: "insensitive" } },
+            ],
+          }
+        : {},
+      modules.length ? { modules: { hasSome: modules } } : {},
+    ],
+  };
+  const orderBy: Prisma.TeamsOrderByWithRelationInput[] =
+    sort.field === "city"
+      ? [{ city: { sort: sort.direction, nulls: "last" } }, { id: "asc" }]
+      : [{ [sort.field]: sort.direction }, { id: "asc" }];
+
+  const [data, total] = await Promise.all([
+    prisma.teams.findMany({
+      where,
+      orderBy,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        city: true,
+        country: true,
+        website: true,
+        loginDomain: true,
+        emailLoginEnabled: true,
+        oidcLoginEnabled: true,
+        modules: true,
+        createdAt: true,
+        updatedAt: true,
+        owner: { select: { id: true, name: true, email: true } },
+        _count: { select: { users: true, organizations: true } },
+      },
+    }),
+    prisma.teams.count({ where }),
+  ]);
+
+  return { data, total };
+};
+
 export {
+  getTeamsPage,
   createTeam,
   ensureTeamOwner,
   getTeamOwner,

@@ -1,117 +1,194 @@
-import type { ColumnDef } from "@tanstack/react-table";
-import Link from "next/link";
-import formatCurrency from "@/components/helper/format-currency";
-import {
-  DonationAgreementStatusBadge,
-  DonationPayoutStatusBadge,
-  getDonationPayoutStatus,
-} from "@/components/helper/status-badge";
-import { Button } from "@/components/ui/button";
-import type { DonationAgreement } from "@/types";
+"use client";
 
-const truncateText = (value?: string, maxLength = 20) => {
-  if (!value) return "";
-  if (value.length <= maxLength) return value;
-  return `${value.slice(0, maxLength - 3)}...`;
+import type { ColumnDef } from "@tanstack/react-table";
+import {
+  Banknote,
+  Building2,
+  CalendarPlus,
+  CircleUserRound,
+  FilePenLine,
+  PenLine,
+  PiggyBank,
+} from "lucide-react";
+import {
+  AmountCell,
+  OrganizationCell,
+} from "@/components/funding/funding-cells";
+import { toAmount } from "@/components/funding/funding-format";
+import {
+  PayoutStatusChip,
+  StatusChip,
+} from "@/components/funding/funding-status";
+import { getDonationPayoutStatus } from "@/components/helper/status-badge";
+import {
+  DateCell,
+  RecordNameCell,
+  TextCell,
+} from "@/components/records/record-cells";
+import type { FundingStatus } from "@/types";
+
+/** A donation agreement as the list API sends it. */
+export type DonationAgreementRow = {
+  id: string;
+  createdAt: string;
+  userSignatures: Array<{
+    signedAt?: string | null;
+    user?: { name?: string | null; email?: string | null } | null;
+  }>;
+  createdBy?: { name?: string | null; email?: string | null } | null;
+  organization?: { id: string; name?: string | null } | null;
+  fundingRequest?: {
+    id: string;
+    name?: string | null;
+    amountAgreed?: string | number | null;
+    remainingAmount?: string | number | null;
+    status?: FundingStatus | null;
+  } | null;
 };
 
-export const columns: ColumnDef<DonationAgreement>[] = [
-  {
-    id: "actions",
-    header: () => <div className="text-left">Actions</div>,
-    cell: ({ row }) => {
-      const request = row.original;
+export const DONATION_AGREEMENT_COLUMN_DEFAULTS: Record<string, boolean> = {
+  createdBy: false,
+};
 
-      return (
-        <div className="text-left">
-          <Button asChild variant="outline" size="sm">
-            <Link href={`donation-agreements/${request.id}`}>View</Link>
-          </Button>
-        </div>
-      );
-    },
-  },
+export const donationAgreementName = (agreement: DonationAgreementRow) =>
+  agreement.fundingRequest?.name?.trim() || "Untitled agreement";
+
+const signerName = (
+  signature: DonationAgreementRow["userSignatures"][number],
+) => signature.user?.name || signature.user?.email || "Unknown signer";
+
+const SignaturesChip = ({
+  signatures,
+}: {
+  signatures: DonationAgreementRow["userSignatures"];
+}) => {
+  if (signatures.length === 0) return null;
+  const pending = signatures.filter((signature) => !signature.signedAt);
+  if (pending.length === 0) {
+    return (
+      <StatusChip
+        label="Signed"
+        tone="success"
+        description={`Signed by ${signatures.map(signerName).join(", ")}`}
+      />
+    );
+  }
+  return (
+    <StatusChip
+      label={`${signatures.length - pending.length} of ${signatures.length} signed`}
+      tone="warning"
+      description={`Waiting for ${pending.map(signerName).join(", ")}`}
+    />
+  );
+};
+
+export const getDonationAgreementColumns = ({
+  getHref,
+  getOrganizationHref,
+  showOrganization,
+}: {
+  getHref: (agreement: DonationAgreementRow) => string;
+  getOrganizationHref?: (organizationId: string) => string;
+  showOrganization: boolean;
+}): ColumnDef<DonationAgreementRow, unknown>[] => [
   {
-    accessorKey: "fundingRequest",
-    header: () => <div className="text-left w-36">Funding Request</div>,
+    id: "fundingRequest",
+    meta: {
+      label: "Funding request",
+      icon: FilePenLine,
+      sortField: "fundingRequest",
+      width: 280,
+      pinned: true,
+      alwaysVisible: true,
+    },
     cell: ({ row }) => (
-      <div className="text-left">
-        {truncateText(row.original?.fundingRequest?.name, 20) || "N/A"}
-      </div>
+      <RecordNameCell
+        kind="record"
+        icon={FilePenLine}
+        name={donationAgreementName(row.original)}
+        href={getHref(row.original)}
+      />
     ),
   },
-
+  ...(showOrganization
+    ? [
+        {
+          id: "organization",
+          meta: {
+            label: "Organization",
+            icon: Building2,
+            sortField: "organization",
+            width: 220,
+          },
+          cell: ({ row }) => {
+            const organization = row.original.organization;
+            return (
+              <OrganizationCell
+                organization={organization}
+                href={
+                  organization && getOrganizationHref
+                    ? getOrganizationHref(organization.id)
+                    : undefined
+                }
+              />
+            );
+          },
+        } satisfies ColumnDef<DonationAgreementRow, unknown>,
+      ]
+    : []),
   {
-    accessorKey: "status",
-    header: () => <div className="text-left w-36">Status</div>,
-    cell: ({ row }) => {
-      const signed = row.original.userSignatures.every((user) => user.signedAt);
-
-      return (
-        <div className="text-left">
-          <DonationAgreementStatusBadge
-            status={signed ? "completed" : "pending"}
-          />
-        </div>
-      );
-    },
+    id: "signatures",
+    meta: { label: "Signatures", icon: PenLine, width: 160 },
+    cell: ({ row }) => (
+      <SignaturesChip signatures={row.original.userSignatures ?? []} />
+    ),
   },
   {
     id: "amountAgreed",
-    header: () => <div className="text-left w-36">Agreed Amount</div>,
+    meta: {
+      label: "Agreed",
+      icon: PiggyBank,
+      sortField: "amountAgreed",
+      width: 140,
+      align: "right",
+    },
+    cell: ({ row }) => (
+      <AmountCell value={row.original.fundingRequest?.amountAgreed} />
+    ),
+  },
+  {
+    id: "payout",
+    meta: { label: "Payout", icon: Banknote, width: 180 },
     cell: ({ row }) => {
-      const amountAgreed = row.original.fundingRequest?.amountAgreed;
+      const request = row.original.fundingRequest;
+      if (!request) return null;
       return (
-        <div className="text-left w-36">
-          {amountAgreed !== undefined && amountAgreed !== null
-            ? formatCurrency(Number(amountAgreed))
-            : "Not set"}
-        </div>
+        <PayoutStatusChip
+          status={getDonationPayoutStatus({
+            fundingStatus: request.status ?? undefined,
+            amountAgreed: toAmount(request.amountAgreed),
+            remainingAmount: toAmount(request.remainingAmount),
+          })}
+        />
       );
     },
   },
   {
-    id: "payoutStatus",
-    header: () => <div className="text-left w-44">Payout</div>,
+    id: "createdBy",
+    meta: { label: "Created by", icon: CircleUserRound, width: 220 },
     cell: ({ row }) => {
-      const fundingRequest = row.original.fundingRequest;
-      const payoutStatus = getDonationPayoutStatus({
-        fundingStatus: fundingRequest?.status,
-        amountAgreed:
-          fundingRequest?.amountAgreed !== undefined &&
-          fundingRequest?.amountAgreed !== null
-            ? Number(fundingRequest.amountAgreed)
-            : null,
-        remainingAmount:
-          fundingRequest?.remainingAmount !== undefined &&
-          fundingRequest?.remainingAmount !== null
-            ? Number(fundingRequest.remainingAmount)
-            : null,
-      });
-
-      return (
-        <div className="text-left w-44">
-          <DonationPayoutStatusBadge status={payoutStatus} />
-        </div>
-      );
+      const person = row.original.createdBy;
+      return <TextCell value={person?.name || person?.email} />;
     },
   },
   {
-    accessorKey: "createdBy",
-    header: () => <div className="text-left w-36">Created By</div>,
-    cell: ({ row }) => (
-      <div className="text-left">{row.original?.createdBy.email || "N/A"}</div>
-    ),
-  },
-  {
-    accessorKey: "createdAt",
-    header: () => <div className="text-left w-36">Created At</div>,
-    cell: ({ row }) => (
-      <div className="text-left">
-        {row.original?.createdAt
-          ? new Date(row.original.createdAt).toLocaleString()
-          : "N/A"}
-      </div>
-    ),
+    id: "createdAt",
+    meta: {
+      label: "Created",
+      icon: CalendarPlus,
+      sortField: "createdAt",
+      width: 140,
+    },
+    cell: ({ row }) => <DateCell value={row.original.createdAt} />,
   },
 ];

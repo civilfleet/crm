@@ -1,3 +1,4 @@
+import { type ListRequest, readList } from "@/lib/list-request";
 import { NextResponse } from "next/server";
 import {
   ApiError,
@@ -11,6 +12,10 @@ import { sendEmail } from "@/lib/nodemailer";
 import { handlePrismaError } from "@/lib/utils";
 import {
   createDonationAgreement,
+  DONATION_AGREEMENT_SIGNATURE_FILTERS,
+  DONATION_AGREEMENT_SORT_FIELDS,
+  type DonationAgreementSignatureFilter,
+  type DonationAgreementSortField,
   getDonationAgreements,
 } from "@/services/donation-agreement";
 import { createDonationAgreementSchema } from "@/validations/donation-agreement";
@@ -31,12 +36,34 @@ export async function GET(req: Request) {
       await requireGlobalAdmin();
     }
 
-    const data = await getDonationAgreements({ teamId, orgId }, searchQuery);
+    // The Donation Agreements list pages and sorts; others get every row.
+    const list = readList(searchParams, {
+      sort: DONATION_AGREEMENT_SORT_FIELDS,
+      fallback: { field: "createdAt", direction: "desc" },
+      paging: "optional",
+    });
+    const signatures = searchParams
+      .getAll("signatures")
+      .filter((value): value is DonationAgreementSignatureFilter =>
+        (DONATION_AGREEMENT_SIGNATURE_FILTERS as readonly string[]).includes(
+          value,
+        ),
+      );
+    const { data, total } = await getDonationAgreements(
+      { teamId, orgId },
+      searchQuery,
+      {
+        signatures,
+        pagination:
+          (list as ListRequest<DonationAgreementSortField> | null) ??
+          undefined,
+      },
+    );
 
     return NextResponse.json(
-      {
-        data,
-      },
+      list
+        ? { data, total, page: list.page, pageSize: list.pageSize }
+        : { data },
       { status: 201 },
     );
   } catch (e) {

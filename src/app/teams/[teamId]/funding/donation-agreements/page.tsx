@@ -1,35 +1,27 @@
-import { FilePenLine } from "lucide-react";
-import Link from "next/link";
-import {
-  RecordsHeader,
-  RecordsPage,
-} from "@/components/records/records-layout";
+import { cookies } from "next/headers";
 import DonationAgreementTable from "@/components/table/donation-agreement-table";
-import { Button } from "@/components/ui/button";
+import {
+  parseTablePageSize,
+  RECORDS_PAGE_SIZE,
+  TABLE_PAGE_SIZE_COOKIE,
+} from "@/lib/table-page-size";
 
-interface PageProps {
-  params: Promise<{
-    teamId: string;
-  }>;
-}
-
-export default async function Organization({ params }: PageProps) {
-  const teamId = (await params).teamId;
+export default async function DonationAgreementsPage({
+  params,
+}: {
+  params: Promise<{ teamId: string }>;
+}) {
+  const [{ teamId }, cookieStore] = await Promise.all([params, cookies()]);
+  const initialPageSize = parseTablePageSize(
+    cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+    RECORDS_PAGE_SIZE,
+  );
 
   return (
-    <RecordsPage>
-      <RecordsHeader
-        icon={FilePenLine}
-        title="Donation Agreements"
-        action={
-          <Button asChild size="sm">
-            <Link href={`/teams/${teamId}/funding/donation-agreements/create`}>
-              New donation agreement
-            </Link>
-          </Button>
-        }
-      />
-      <DonationAgreementTable teamId={teamId} organizationId="" />
-    </RecordsPage>
+    <DonationAgreementTable
+      scope={{ kind: "team", teamId }}
+      initialPageSize={initialPageSize}
+      canCreate
+    />
   );
 }

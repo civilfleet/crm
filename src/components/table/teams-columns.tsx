@@ -1,150 +1,179 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { format } from "date-fns";
-import Link from "next/link";
-import { useState } from "react";
-import { DataTableColumnHeader } from "@/components/table/data-table-column-header";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+  Blocks,
+  Building2,
+  CalendarPlus,
+  CircleUserRound,
+  Globe,
+  KeyRound,
+  Link2,
+  Mail,
+  MapPin,
+  Phone,
+  Users,
+} from "lucide-react";
+import {
+  ChipList,
+  DateCell,
+  EmailCell,
+  LinkCell,
+  LocationCell,
+  RecordChip,
+  RecordNameCell,
+  TextCell,
+} from "@/components/records/record-cells";
 
-export type Team = {
+export type TeamRow = {
   id: string;
   name: string;
   email: string;
-  phone?: string;
-  address?: string;
-  postalCode?: string;
-  city?: string;
-  country?: string;
-  website?: string;
+  phone?: string | null;
+  city?: string | null;
+  country?: string | null;
+  website?: string | null;
+  loginDomain?: string | null;
+  emailLoginEnabled?: boolean;
+  oidcLoginEnabled?: boolean;
+  modules?: string[];
+  owner?: { id: string; name?: string | null; email: string } | null;
+  _count?: { users: number; organizations: number };
   createdAt: string;
   updatedAt: string;
 };
 
-const ActionsCell = ({ team, mutate }: { team: Team; mutate: () => void }) => {
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-
-  const handleDelete = async () => {
-    try {
-      const response = await fetch(`/api/teams/${team.id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete team");
-      }
-
-      toast({
-        title: "Success",
-        description: "Team deleted successfully",
-      });
-
-      // Revalidate the teams data
-      mutate();
-      setOpen(false);
-    } catch (_error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete team",
-        variant: "destructive",
-      });
-    }
-  };
-
-  return (
-    <div className="flex gap-2">
-      <Link href={`/admin/teams/${team.id}/edit`}>
-        <Button variant="outline" size="sm">
-          Edit
-        </Button>
-      </Link>
-      <AlertDialog open={open} onOpenChange={setOpen}>
-        <AlertDialogTrigger asChild>
-          <Button variant="destructive" size="sm">
-            Delete
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the
-              team &#34;{team.name}&#34; and all associated data.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete Team
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-  );
+export const TEAM_MODULE_LABELS: Record<string, string> = {
+  CRM: "CRM",
+  FUNDING: "Funding",
+  ADMIN: "Admin",
 };
 
-export const columns = (mutate: () => void): ColumnDef<Team>[] => [
+const getSignInLabel = (team: TeamRow) =>
+  [team.emailLoginEnabled ? "Email" : "", team.oidcLoginEnabled ? "SSO" : ""]
+    .filter(Boolean)
+    .join(" and ");
+
+/** Columns that open hidden; the Columns menu brings them back. */
+export const TEAM_COLUMN_DEFAULTS: Record<string, boolean> = {
+  phone: false,
+  website: false,
+  loginDomain: false,
+};
+
+export const getTeamHref = (team: Pick<TeamRow, "id">) =>
+  `/admin/teams/${team.id}/edit`;
+
+const CountCell = ({ value }: { value?: number }) =>
+  value ? (
+    <span className="block text-right tabular-nums">
+      {value.toLocaleString()}
+    </span>
+  ) : null;
+
+export const getTeamColumns = (): ColumnDef<TeamRow, unknown>[] => [
   {
+    id: "name",
     accessorKey: "name",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Name" />
+    meta: {
+      label: "Team",
+      icon: Users,
+      sortField: "name",
+      width: 240,
+      pinned: true,
+      alwaysVisible: true,
+    },
+    cell: ({ row }) => (
+      <RecordNameCell
+        kind="organization"
+        name={row.original.name}
+        href={getTeamHref(row.original)}
+      />
     ),
   },
   {
+    id: "email",
     accessorKey: "email",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Email" />
+    meta: { label: "Email", icon: Mail, sortField: "email", width: 240 },
+    cell: ({ row }) => <EmailCell email={row.original.email} />,
+  },
+  {
+    id: "modules",
+    meta: { label: "Modules", icon: Blocks, width: 210 },
+    cell: ({ row }) => (
+      <ChipList
+        items={row.original.modules ?? []}
+        getKey={(module) => module}
+        getLabel={(module) => TEAM_MODULE_LABELS[module] ?? module}
+        max={3}
+        renderChip={(module) => (
+          <RecordChip>{TEAM_MODULE_LABELS[module] ?? module}</RecordChip>
+        )}
+      />
     ),
   },
   {
-    accessorKey: "phone",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Phone" />
-    ),
-    cell: ({ row }) => row.original.phone || "-",
-  },
-  {
-    accessorKey: "city",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="City" />
-    ),
-    cell: ({ row }) => row.original.city || "-",
-  },
-  {
-    accessorKey: "country",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Country" />
-    ),
-    cell: ({ row }) => row.original.country || "-",
-  },
-  {
-    accessorKey: "createdAt",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Created At" />
-    ),
+    id: "owner",
+    meta: { label: "Owner", icon: CircleUserRound, width: 200 },
     cell: ({ row }) => {
-      return format(new Date(row.getValue("createdAt")), "PP");
+      const owner = row.original.owner;
+      const name = owner?.name?.trim() || owner?.email;
+      return name ? (
+        <RecordChip title={owner?.email} avatar={{ name, kind: "person" }}>
+          {name}
+        </RecordChip>
+      ) : null;
     },
   },
   {
-    id: "actions",
-    cell: ({ row }) => <ActionsCell team={row.original} mutate={mutate} />,
+    id: "users",
+    meta: { label: "Users", icon: Users, width: 100 },
+    cell: ({ row }) => <CountCell value={row.original._count?.users} />,
+  },
+  {
+    id: "organizations",
+    meta: { label: "Organizations", icon: Building2, width: 130 },
+    cell: ({ row }) => <CountCell value={row.original._count?.organizations} />,
+  },
+  {
+    id: "signIn",
+    meta: { label: "Sign-in", icon: KeyRound, width: 140 },
+    cell: ({ row }) => <TextCell value={getSignInLabel(row.original)} />,
+  },
+  {
+    id: "loginDomain",
+    accessorKey: "loginDomain",
+    meta: { label: "Login domain", icon: Globe, width: 180 },
+    cell: ({ row }) => <TextCell value={row.original.loginDomain} />,
+  },
+  {
+    id: "location",
+    meta: { label: "Location", icon: MapPin, sortField: "city", width: 180 },
+    cell: ({ row }) => (
+      <LocationCell city={row.original.city} country={row.original.country} />
+    ),
+  },
+  {
+    id: "website",
+    accessorKey: "website",
+    meta: { label: "Website", icon: Link2, width: 180 },
+    cell: ({ row }) => <LinkCell url={row.original.website} />,
+  },
+  {
+    id: "phone",
+    accessorKey: "phone",
+    meta: { label: "Phone", icon: Phone, width: 160 },
+    cell: ({ row }) => <TextCell value={row.original.phone} />,
+  },
+  {
+    id: "createdAt",
+    accessorKey: "createdAt",
+    meta: {
+      label: "Created",
+      icon: CalendarPlus,
+      sortField: "createdAt",
+      width: 130,
+    },
+    cell: ({ row }) => <DateCell value={row.original.createdAt} />,
   },
 ];

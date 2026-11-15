@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { ApiError } from "@/lib/api-guard";
+import type { ListRequest, RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import {
   assertPendingUploadsAvailable,
@@ -156,70 +157,146 @@ const createDonationAgreement = async (
   };
 };
 
+export const DONATION_AGREEMENT_SORT_FIELDS = [
+  "fundingRequest",
+  "organization",
+  "amountAgreed",
+  "createdAt",
+] as const;
+export type DonationAgreementSortField =
+  (typeof DONATION_AGREEMENT_SORT_FIELDS)[number];
+
+export const DONATION_AGREEMENT_SIGNATURE_FILTERS = [
+  "signed",
+  "pending",
+] as const;
+export type DonationAgreementSignatureFilter =
+  (typeof DONATION_AGREEMENT_SIGNATURE_FILTERS)[number];
+
+const donationAgreementOrderBy = ({
+  field,
+  direction,
+}: RecordSort<DonationAgreementSortField>): Prisma.DonationAgreementOrderByWithRelationInput => {
+  switch (field) {
+    case "fundingRequest":
+      return { fundingRequest: { name: direction } };
+    case "organization":
+      return { organization: { name: direction } };
+    case "amountAgreed":
+      return {
+        fundingRequest: { amountAgreed: { sort: direction, nulls: "last" } },
+      };
+    default:
+      return { createdAt: direction };
+  }
+};
+
 const getDonationAgreements = async (
   { teamId, orgId }: { teamId: string; orgId: string },
   searchQuery: string,
+  {
+    signatures = [],
+    pagination,
+  }: {
+    signatures?: DonationAgreementSignatureFilter[];
+    pagination?: ListRequest<DonationAgreementSortField>;
+  } = {},
 ) => {
-  const where: Record<string, unknown> = {};
+  const and: Prisma.DonationAgreementWhereInput[] = [];
   if (orgId) {
-    where.organizationId = orgId;
+    and.push({ organizationId: orgId });
   }
   if (teamId) {
-    where.teamId = teamId;
+    and.push({ teamId });
   }
-  if (searchQuery) {
-    where.fundingRequest = {
-      name: {
-        contains: searchQuery,
-        mode: "insensitive",
-      },
-    };
+  const query = searchQuery.trim();
+  if (query) {
+    and.push({
+      OR: [
+        { fundingRequest: { name: { contains: query, mode: "insensitive" } } },
+        { organization: { name: { contains: query, mode: "insensitive" } } },
+      ],
+    });
   }
-  const donationAgreements = await prisma.donationAgreement.findMany({
-    where: {
-      ...where,
-    },
-    include: {
-      userSignatures: {
-        select: {
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
+  // Both selected is the same as no filter.
+  if (signatures.length === 1) {
+    and.push(
+      signatures[0] === "signed"
+        ? { userSignatures: { none: { signedAt: null } } }
+        : { userSignatures: { some: { signedAt: null } } },
+    );
+  }
+  const where: Prisma.DonationAgreementWhereInput = { AND: and };
+
+  const include = {
+    userSignatures: {
+      select: {
+        user: {
+          select: {
+            name: true,
+            email: true,
           },
-          signedAt: true,
         },
-      },
-      file: {
-        select: {
-          url: true,
-          name: true,
-          type: true,
-        },
-      },
-      createdBy: {
-        select: {
-          name: true,
-          email: true,
-        },
-      },
-      fundingRequest: {
-        select: {
-          description: true,
-          purpose: true,
-          name: true,
-          amountAgreed: true,
-          remainingAmount: true,
-          status: true,
-        },
+        signedAt: true,
       },
     },
-    orderBy: {
-      createdAt: "desc",
+    file: {
+      select: {
+        url: true,
+        name: true,
+        type: true,
+      },
     },
-  });
-  return donationAgreements;
+    createdBy: {
+      select: {
+        name: true,
+        email: true,
+      },
+    },
+    organization: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+    fundingRequest: {
+      select: {
+        id: true,
+        description: true,
+        purpose: true,
+        name: true,
+        amountAgreed: true,
+        remainingAmount: true,
+        status: true,
+      },
+    },
+  } satisfies Prisma.DonationAgreementInclude;
+
+  if (!pagination) {
+    const data = await prisma.donationAgreement.findMany({
+      where,
+      include,
+      orderBy: { createdAt: "desc" },
+    });
+    return { data, total: data.length };
+  }
+
+  const [data, total] = await Promise.all([
+    prisma.donationAgreement.findMany({
+      where,
+      include,
+      orderBy: [
+        donationAgreementOrderBy(
+          pagination.sort ?? { field: "createdAt", direction: "desc" },
+        ),
+        { id: "asc" },
+      ],
+      skip: (pagination.page - 1) * pagination.pageSize,
+      take: pagination.pageSize,
+    }),
+    prisma.donationAgreement.count({ where }),
+  ]);
+  return { data, total };
 };
 
 const getDonationAgreementById = async (id: string) => {

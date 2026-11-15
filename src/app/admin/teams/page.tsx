@@ -1,27 +1,19 @@
-import { Users } from "lucide-react";
-import Link from "next/link";
-import {
-  RecordsHeader,
-  RecordsPage,
-} from "@/components/records/records-layout";
+import { cookies } from "next/headers";
 import TeamsTable from "@/components/table/teams-table";
-import { Button } from "@/components/ui/button";
+import {
+  parseTablePageSize,
+  RECORDS_PAGE_SIZE,
+  TABLE_PAGE_SIZE_COOKIE,
+} from "@/lib/table-page-size";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminTeamsPage() {
-  return (
-    <RecordsPage>
-      <RecordsHeader
-        icon={Users}
-        title="Teams"
-        action={
-          <Button asChild size="sm">
-            <Link href={"/admin/teams/create"}>New team</Link>
-          </Button>
-        }
-      />
-      <TeamsTable />
-    </RecordsPage>
+  const cookieStore = await cookies();
+  const initialPageSize = parseTablePageSize(
+    cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+    RECORDS_PAGE_SIZE,
   );
+
+  return <TeamsTable initialPageSize={initialPageSize} />;
 }

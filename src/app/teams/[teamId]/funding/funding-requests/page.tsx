@@ -1,34 +1,26 @@
-import { HandCoins } from "lucide-react";
-import Link from "next/link";
-import {
-  RecordsHeader,
-  RecordsPage,
-} from "@/components/records/records-layout";
+import { cookies } from "next/headers";
 import FundingRequestTable from "@/components/table/funding-request-table";
-import { Button } from "@/components/ui/button";
+import {
+  parseTablePageSize,
+  RECORDS_PAGE_SIZE,
+  TABLE_PAGE_SIZE_COOKIE,
+} from "@/lib/table-page-size";
 
-interface PageProps {
-  params: Promise<{
-    teamId: string;
-  }>;
-}
-export default async function Page({ params }: PageProps) {
-  const teamId = (await params).teamId;
+export default async function FundingRequestsPage({
+  params,
+}: {
+  params: Promise<{ teamId: string }>;
+}) {
+  const [{ teamId }, cookieStore] = await Promise.all([params, cookies()]);
+  const initialPageSize = parseTablePageSize(
+    cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+    RECORDS_PAGE_SIZE,
+  );
 
   return (
-    <RecordsPage>
-      <RecordsHeader
-        icon={HandCoins}
-        title="Funding Requests"
-        action={
-          <Button asChild size="sm">
-            <Link href={`/teams/${teamId}/funding/funding-requests/create`}>
-              New funding request
-            </Link>
-          </Button>
-        }
-      />
-      <FundingRequestTable teamId={teamId} organizationId="" />
-    </RecordsPage>
+    <FundingRequestTable
+      scope={{ kind: "team", teamId }}
+      initialPageSize={initialPageSize}
+    />
   );
 }

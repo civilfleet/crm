@@ -4,6 +4,7 @@ import {
   assertManualStatusChange,
   FundingRuleError,
 } from "@/lib/funding-status";
+import type { ListRequest, RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
 import { type FileTypes, FundingStatus } from "@/types";
@@ -426,6 +427,32 @@ const uploadFundingRequestFile = async (
   });
 };
 
+export const FUNDING_REQUEST_SORT_FIELDS = [
+  "name",
+  "organization",
+  "status",
+  "amountRequested",
+  "amountAgreed",
+  "remainingAmount",
+  "expectedCompletionDate",
+  "createdAt",
+] as const;
+export type FundingRequestSortField =
+  (typeof FUNDING_REQUEST_SORT_FIELDS)[number];
+
+const fundingRequestOrderBy = ({
+  field,
+  direction,
+}: RecordSort<FundingRequestSortField>): Prisma.FundingRequestOrderByWithRelationInput => {
+  if (field === "organization") {
+    return { organization: { name: direction } };
+  }
+  if (field === "amountAgreed" || field === "remainingAmount") {
+    return { [field]: { sort: direction, nulls: "last" } };
+  }
+  return { [field]: direction };
+};
+
 const getFundingRequests = async (
   {
     teamId,
@@ -436,6 +463,7 @@ const getFundingRequests = async (
   },
   searchQuery: string,
   status?: FundingStatus[] | null,
+  pagination?: ListRequest<FundingRequestSortField>,
 ) => {
   const where: Prisma.FundingRequestWhereInput = {};
   if (orgId) {
@@ -444,19 +472,14 @@ const getFundingRequests = async (
   if (teamId) {
     where.teamId = teamId;
   }
-  if (searchQuery) {
-    where.description = {
-      contains: searchQuery,
-    };
-    where.purpose = {
-      contains: searchQuery,
-    };
-    where.refinancingConcept = {
-      contains: searchQuery,
-    };
-    where.sustainability = {
-      contains: searchQuery,
-    };
+  const query = searchQuery.trim();
+  if (query) {
+    where.OR = [
+      { name: { contains: query, mode: "insensitive" } },
+      { organization: { name: { contains: query, mode: "insensitive" } } },
+      { purpose: { contains: query, mode: "insensitive" } },
+      { description: { contains: query, mode: "insensitive" } },
+    ];
   }
   if (status?.length) {
     where.status = {
@@ -464,47 +487,69 @@ const getFundingRequests = async (
     };
   }
 
-  const fundingRequests = await prisma.fundingRequest.findMany({
-    where,
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      purpose: true,
-      amountRequested: true,
-      amountAgreed: true,
-      refinancingConcept: true,
-      sustainability: true,
-      expectedCompletionDate: true,
-      remainingAmount: true,
-      status: true,
-      createdAt: true,
-      updatedAt: true,
-      files: {
-        select: {
-          id: true,
-          name: true,
-          url: true,
-          type: true,
-        },
-      },
-      organization: {
-        select: {
-          name: true,
-          email: true,
-        },
-      },
-      submittedBy: {
-        select: {
-          email: true,
-        },
+  const select = {
+    id: true,
+    name: true,
+    description: true,
+    purpose: true,
+    amountRequested: true,
+    amountAgreed: true,
+    refinancingConcept: true,
+    sustainability: true,
+    expectedCompletionDate: true,
+    remainingAmount: true,
+    status: true,
+    createdAt: true,
+    updatedAt: true,
+    files: {
+      select: {
+        id: true,
+        name: true,
+        url: true,
+        type: true,
       },
     },
-    orderBy: {
-      createdAt: "desc",
+    organization: {
+      select: {
+        id: true,
+        name: true,
+        email: true,
+      },
     },
-  });
-  return fundingRequests;
+    submittedBy: {
+      select: {
+        name: true,
+        email: true,
+      },
+    },
+  } satisfies Prisma.FundingRequestSelect;
+
+  if (!pagination) {
+    const data = await prisma.fundingRequest.findMany({
+      where,
+      select,
+      orderBy: { createdAt: "desc" },
+    });
+    return { data, total: data.length };
+  }
+
+  const [data, total] = await Promise.all([
+    prisma.fundingRequest.findMany({
+      where,
+      select,
+      // A stable tiebreaker keeps pages from overlapping on equal values.
+      orderBy: [
+        fundingRequestOrderBy(
+          pagination.sort ?? { field: "createdAt", direction: "desc" },
+        ),
+        { id: "asc" },
+      ],
+      skip: (pagination.page - 1) * pagination.pageSize,
+      take: pagination.pageSize,
+    }),
+    prisma.fundingRequest.count({ where }),
+  ]);
+  return { data, total };
 };
 
 const getFundingRequestsByOrgId = async (searchQuery: string) => {

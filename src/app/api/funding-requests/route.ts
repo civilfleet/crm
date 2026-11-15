@@ -1,3 +1,4 @@
+import { type ListRequest, readList } from "@/lib/list-request";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import {
@@ -9,9 +10,11 @@ import { sendEmail } from "@/lib/nodemailer";
 import { handlePrismaError } from "@/lib/utils";
 import {
   createFundingRequest,
+  FUNDING_REQUEST_SORT_FIELDS,
+  type FundingRequestSortField,
   getFundingRequests,
 } from "@/services/funding-request";
-import type { FundingStatus } from "@/types";
+import { FundingStatus } from "@/types";
 import { createFundingRequestSchema } from "@/validations/funding-request";
 
 export async function GET(req: Request) {
@@ -32,16 +35,26 @@ export async function GET(req: Request) {
       await verifyOrganizationAccess(orgId, { requireModule: "FUNDING" });
     }
 
-    const data = await getFundingRequests(
+    // The Funding Requests list pages and sorts; pickers get every row.
+    const list = readList(searchParams, {
+      sort: FUNDING_REQUEST_SORT_FIELDS,
+      fallback: { field: "createdAt", direction: "desc" },
+      paging: "optional",
+    });
+    const statuses = status.filter((value): value is FundingStatus =>
+      (Object.values(FundingStatus) as string[]).includes(value),
+    );
+    const { data, total } = await getFundingRequests(
       { teamId, orgId },
       searchQuery,
-      status as FundingStatus[],
+      statuses,
+      (list as ListRequest<FundingRequestSortField> | null) ?? undefined,
     );
 
     return NextResponse.json(
-      {
-        data,
-      },
+      list
+        ? { data, total, page: list.page, pageSize: list.pageSize }
+        : { data },
       { status: 201 },
     );
   } catch (e) {

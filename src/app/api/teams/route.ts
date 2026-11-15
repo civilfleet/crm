@@ -2,9 +2,15 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { auth } from "@/auth";
 import { normalizeLoginDomain } from "@/lib/auth-routing";
+import { type RecordSort, readList } from "@/lib/list-request";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
-import { Roles } from "@/types";
+import {
+  getTeamsPage,
+  TEAM_SORT_FIELDS,
+  type TeamSortField,
+} from "@/services/teams";
+import { APP_MODULES, type AppModule, Roles } from "@/types";
 import { createTeamSchema } from "@/validations/team";
 
 const hasAdminRole = (roles?: Roles[] | string[]) =>
@@ -28,7 +34,7 @@ const sanitizeTeamResponse = <T extends Record<string, unknown>>(
   };
 };
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const session = await auth();
     if (!session?.user?.userId) {
@@ -37,6 +43,36 @@ export async function GET() {
 
     if (!hasAdminRole(session.user.roles)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // The admin Teams list pages and sorts; other callers get every team.
+    const { searchParams } = new URL(req.url);
+    const list = readList(searchParams, {
+      sort: TEAM_SORT_FIELDS,
+      fallback: { field: "createdAt", direction: "desc" },
+      paging: "optional",
+    });
+    if (list) {
+      const moduleValues: readonly string[] = APP_MODULES;
+      const modules = (searchParams.get("modules") || "")
+        .split(",")
+        .filter((module): module is AppModule => moduleValues.includes(module));
+      const { data, total } = await getTeamsPage({
+        query: searchParams.get("query") || "",
+        modules,
+        page: list.page,
+        pageSize: list.pageSize,
+        sort: (list.sort ?? {
+          field: "createdAt",
+          direction: "desc",
+        }) as RecordSort<TeamSortField>,
+      });
+      return NextResponse.json({
+        data,
+        total,
+        page: list.page,
+        pageSize: list.pageSize,
+      });
     }
 
     const teams = await prisma.teams.findMany({

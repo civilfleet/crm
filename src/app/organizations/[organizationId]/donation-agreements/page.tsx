@@ -1,21 +1,29 @@
-import { FilePenLine } from "lucide-react";
-import {
-  RecordsHeader,
-  RecordsPage,
-} from "@/components/records/records-layout";
+import { cookies } from "next/headers";
 import DonationAgreementTable from "@/components/table/donation-agreement-table";
+import {
+  parseTablePageSize,
+  RECORDS_PAGE_SIZE,
+  TABLE_PAGE_SIZE_COOKIE,
+} from "@/lib/table-page-size";
 
-interface PageProps {
-  params: Promise<{
-    organizationId: string;
-  }>;
-}
-export default async function Organization({ params }: PageProps) {
-  const organizationId = (await params).organizationId;
+export default async function OrganizationDonationAgreementsPage({
+  params,
+}: {
+  params: Promise<{ organizationId: string }>;
+}) {
+  const [{ organizationId }, cookieStore] = await Promise.all([
+    params,
+    cookies(),
+  ]);
+  const initialPageSize = parseTablePageSize(
+    cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+    RECORDS_PAGE_SIZE,
+  );
+
   return (
-    <RecordsPage>
-      <RecordsHeader icon={FilePenLine} title="Donation Agreements" />
-      <DonationAgreementTable teamId="" organizationId={organizationId} />
-    </RecordsPage>
+    <DonationAgreementTable
+      scope={{ kind: "organization", organizationId }}
+      initialPageSize={initialPageSize}
+    />
   );
 }

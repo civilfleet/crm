@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { FundingRuleError } from "@/lib/funding-status";
+import type { ListRequest, RecordSort } from "@/lib/list-request";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import { calculateTransactionBalance } from "@/services/transactions/balance";
@@ -10,11 +11,41 @@ type CreateTransaction = {
   fundingRequestId: string;
 };
 
+export const TRANSACTION_SORT_FIELDS = [
+  "fundingRequest",
+  "organization",
+  "amount",
+  "totalAmount",
+  "remainingAmount",
+  "createdAt",
+] as const;
+export type TransactionSortField = (typeof TRANSACTION_SORT_FIELDS)[number];
+
+export const TRANSACTION_RECEIPT_FILTERS = ["uploaded", "missing"] as const;
+export type TransactionReceiptFilter =
+  (typeof TRANSACTION_RECEIPT_FILTERS)[number];
+
 type GetTransactionsParams = {
   organizationId?: string;
   teamId?: string;
   fundingRequestId?: string;
   searchQuery?: string;
+  receipts?: TransactionReceiptFilter[];
+  /** One page in an order; without it, every row, newest first. */
+  pagination?: ListRequest;
+};
+
+const transactionOrderBy = ({
+  field,
+  direction,
+}: RecordSort<string>): Prisma.TransactionOrderByWithRelationInput => {
+  if (field === "fundingRequest") {
+    return { fundingRequest: { name: direction } };
+  }
+  if (field === "organization") {
+    return { organization: { name: direction } };
+  }
+  return { [field]: direction };
 };
 
 const createTransaction = async (transaction: CreateTransaction) => {
@@ -79,40 +110,69 @@ const getTransactions = async ({
   teamId,
   fundingRequestId,
   searchQuery,
+  receipts = [],
+  pagination,
 }: GetTransactionsParams = {}) => {
-  const where: Record<string, unknown> = {};
+  const and: Prisma.TransactionWhereInput[] = [];
 
   if (organizationId) {
-    where.organizationId = organizationId;
+    and.push({ organizationId });
   }
   if (teamId) {
-    where.teamId = teamId;
+    and.push({ teamId });
   }
   if (fundingRequestId) {
-    where.fundingRequestId = fundingRequestId;
+    and.push({ fundingRequestId });
   }
-  if (searchQuery) {
-    where.fundingRequest = {
-      name: {
-        contains: searchQuery,
-        mode: "insensitive",
-      },
-    };
+  const query = searchQuery?.trim();
+  if (query) {
+    and.push({
+      OR: [
+        { fundingRequest: { name: { contains: query, mode: "insensitive" } } },
+        { organization: { name: { contains: query, mode: "insensitive" } } },
+      ],
+    });
   }
+  // Both selected is the same as no filter.
+  if (receipts.length === 1) {
+    and.push({
+      transactionReciept: receipts[0] === "uploaded" ? { not: null } : null,
+    });
+  }
+  const where: Prisma.TransactionWhereInput = { AND: and };
+  const include = {
+    fundingRequest: true,
+    organization: true,
+    team: true,
+  } satisfies Prisma.TransactionInclude;
 
   logger.debug({ where }, "Transactions query filters");
-  const response = await prisma.transaction.findMany({
-    where,
-    include: {
-      fundingRequest: true,
-      organization: true,
-      team: true,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
-  return response;
+  if (!pagination) {
+    const data = await prisma.transaction.findMany({
+      where,
+      include,
+      orderBy: { createdAt: "desc" },
+    });
+    return { data, total: data.length };
+  }
+
+  const [data, total] = await Promise.all([
+    prisma.transaction.findMany({
+      where,
+      include,
+      // The id keeps rows with equal values in one order across pages.
+      orderBy: [
+        transactionOrderBy(
+          pagination.sort ?? { field: "createdAt", direction: "desc" },
+        ),
+        { id: "asc" },
+      ],
+      skip: (pagination.page - 1) * pagination.pageSize,
+      take: pagination.pageSize,
+    }),
+    prisma.transaction.count({ where }),
+  ]);
+  return { data, total };
 };
 
 const getTransactionById = async (id: string) => {

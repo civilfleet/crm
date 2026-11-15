@@ -1,100 +1,174 @@
+"use client";
+
 import type { ColumnDef } from "@tanstack/react-table";
-import Link from "next/link"; // Import Link
-// import { MoreHorizontal } from "lucide-react"; // No longer needed
-import { Button } from "@/components/ui/button";
-// import {
-//   DropdownMenu,
-//   DropdownMenuContent,
-//   DropdownMenuItem,
-//   DropdownMenuSeparator,
-//   DropdownMenuTrigger,
-// } from "@/components/ui/dropdown-menu"; // No longer needed
-import type { FundingRequest } from "@/types";
-import { StatusBadge } from "../helper/status-badge";
+import {
+  Building2,
+  CalendarCheck,
+  CalendarPlus,
+  CircleDot,
+  CircleUserRound,
+  Coins,
+  HandCoins,
+  PiggyBank,
+  Wallet,
+} from "lucide-react";
+import {
+  AmountCell,
+  OrganizationCell,
+} from "@/components/funding/funding-cells";
+import { FundingStatusChip } from "@/components/funding/funding-status";
+import {
+  DateCell,
+  RecordNameCell,
+  TextCell,
+} from "@/components/records/record-cells";
+import type { FundingStatus } from "@/types";
 
-export const columns: ColumnDef<FundingRequest>[] = [
-  {
-    id: "actions",
-    header: () => <div className="text-left">Actions</div>,
-    cell: ({ row }) => {
-      const request = row.original;
-      return (
-        <div className="text-left">
-          <Button asChild variant="outline" size="sm">
-            <Link href={`funding-requests/${request.id}`} passHref>
-              View
-            </Link>
-          </Button>
-        </div>
-      );
-    },
-  },
-  {
-    accessorKey: "name",
-    header: () => <div className="text-left w-36">Funding Request</div>,
-    cell: ({ row }) => (
-      <div className="text-left">{row.original?.name || "N/A"}</div>
-    ),
-  },
-  {
-    accessorKey: "organization.name",
-    header: () => <div className="text-left w-36">Organization</div>,
-    cell: ({ row }) => (
-      <div className="text-left">
-        {row.original?.organization?.name || "N/A"}
-      </div>
-    ),
-  },
+/** A funding request as the list API sends it (decimals arrive as strings). */
+export type FundingRequestRow = {
+  id: string;
+  name: string;
+  status: FundingStatus;
+  amountRequested?: string | number | null;
+  amountAgreed?: string | number | null;
+  remainingAmount?: string | number | null;
+  expectedCompletionDate?: string | null;
+  createdAt: string;
+  organization?: { id: string; name?: string | null } | null;
+  submittedBy?: { name?: string | null; email?: string | null } | null;
+};
 
+export const FUNDING_REQUEST_COLUMN_DEFAULTS: Record<string, boolean> = {
+  submittedBy: false,
+};
+
+export const fundingRequestName = (request: FundingRequestRow) =>
+  request.name?.trim() || "Untitled funding request";
+
+export const getFundingRequestColumns = ({
+  getHref,
+  getOrganizationHref,
+  showOrganization,
+}: {
+  getHref: (request: FundingRequestRow) => string;
+  getOrganizationHref?: (organizationId: string) => string;
+  /** An organization's own list is all theirs; no need to say so per row. */
+  showOrganization: boolean;
+}): ColumnDef<FundingRequestRow, unknown>[] => [
   {
-    accessorKey: "amountAgreed",
-    header: () => <div className="text-left w-32">Amount Agreed</div>,
+    id: "name",
+    meta: {
+      label: "Funding request",
+      icon: HandCoins,
+      sortField: "name",
+      width: 280,
+      pinned: true,
+      alwaysVisible: true,
+    },
+    cell: ({ row }) => (
+      <RecordNameCell
+        kind="record"
+        icon={HandCoins}
+        name={fundingRequestName(row.original)}
+        href={getHref(row.original)}
+      />
+    ),
+  },
+  ...(showOrganization
+    ? [
+        {
+          id: "organization",
+          meta: {
+            label: "Organization",
+            icon: Building2,
+            sortField: "organization",
+            width: 220,
+          },
+          cell: ({ row }) => {
+            const organization = row.original.organization;
+            return (
+              <OrganizationCell
+                organization={organization}
+                href={
+                  organization && getOrganizationHref
+                    ? getOrganizationHref(organization.id)
+                    : undefined
+                }
+              />
+            );
+          },
+        } satisfies ColumnDef<FundingRequestRow, unknown>,
+      ]
+    : []),
+  {
+    id: "status",
+    meta: {
+      label: "Status",
+      icon: CircleDot,
+      sortField: "status",
+      width: 180,
+    },
+    cell: ({ row }) => <FundingStatusChip status={row.original.status} />,
+  },
+  {
+    id: "amountRequested",
+    meta: {
+      label: "Requested",
+      icon: Coins,
+      sortField: "amountRequested",
+      width: 140,
+      align: "right",
+    },
+    cell: ({ row }) => <AmountCell value={row.original.amountRequested} />,
+  },
+  {
+    id: "amountAgreed",
+    meta: {
+      label: "Agreed",
+      icon: PiggyBank,
+      sortField: "amountAgreed",
+      width: 140,
+      align: "right",
+    },
+    cell: ({ row }) => <AmountCell value={row.original.amountAgreed} />,
+  },
+  {
+    id: "remainingAmount",
+    meta: {
+      label: "Remaining",
+      icon: Wallet,
+      sortField: "remainingAmount",
+      width: 140,
+      align: "right",
+    },
+    cell: ({ row }) => <AmountCell value={row.original.remainingAmount} />,
+  },
+  {
+    id: "expectedCompletionDate",
+    meta: {
+      label: "Expected completion",
+      icon: CalendarCheck,
+      sortField: "expectedCompletionDate",
+      width: 180,
+    },
+    cell: ({ row }) => <DateCell value={row.original.expectedCompletionDate} />,
+  },
+  {
+    id: "submittedBy",
+    meta: { label: "Submitted by", icon: CircleUserRound, width: 220 },
     cell: ({ row }) => {
-      const amount = row.getValue("amountAgreed");
-      return (
-        <div className="text-left">
-          {amount ? `€ ${amount.toLocaleString()}` : "€ 0"}
-        </div>
-      );
+      const person = row.original.submittedBy;
+      return <TextCell value={person?.name || person?.email} />;
     },
   },
   {
-    accessorKey: "remainingAmount",
-    header: () => <div className="text-left w-32">Remaining Amount</div>,
-    cell: ({ row }) => {
-      const remainingAmount = row.getValue("remainingAmount");
-      return (
-        <div className="text-left">
-          {remainingAmount ? `€ ${remainingAmount.toLocaleString()}` : "€ 0"}
-        </div>
-      );
+    id: "createdAt",
+    meta: {
+      label: "Created",
+      icon: CalendarPlus,
+      sortField: "createdAt",
+      width: 140,
     },
-  },
-  {
-    accessorKey: "expectedCompletionDate",
-    header: () => <div className="text-left w-36">Completion Date</div>,
-    cell: ({ row }) => (
-      <div className="text-left">
-        {new Date(row.getValue("expectedCompletionDate")).toLocaleDateString()}
-      </div>
-    ),
-  },
-  {
-    accessorKey: "status",
-    header: () => <div className="text-left w-24">Status</div>,
-    cell: ({ row }) => (
-      <div className="text-left font-medium">
-        <StatusBadge status={row.getValue("status")} />
-      </div>
-    ),
-  },
-  {
-    accessorKey: "createdAt",
-    header: () => <div className="text-left w-32">Created At</div>,
-    cell: ({ row }) => (
-      <div className="text-left">
-        {new Date(row.getValue("createdAt"))?.toLocaleDateString()}
-      </div>
-    ),
+    cell: ({ row }) => <DateCell value={row.original.createdAt} />,
   },
 ];

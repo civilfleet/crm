@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as listRequest from "@/lib/list-request";
 import { FundingStatus } from "@/types";
 import { loadModule } from "./helpers/load-module";
 
@@ -61,6 +62,7 @@ test("payouts: invalid amounts and ids never reach the ledger", async () => {
       "next/server": nextServer,
       "@/lib/api-guard": apiGuard(() => true, calls),
       "@/lib/utils": { handlePrismaError: (error: unknown) => String(error) },
+      "@/lib/list-request": listRequest,
       "@/services/transactions": {
         createTransaction: async () => calls.push("createTransaction"),
         getTransactions: async () => [],
@@ -90,6 +92,7 @@ test("payouts: only callers with access to the request reach the ledger", async 
       "next/server": nextServer,
       "@/lib/api-guard": apiGuard(() => allowed, calls),
       "@/lib/utils": { handlePrismaError: (error: unknown) => String(error) },
+      "@/lib/list-request": listRequest,
       "@/services/transactions": {
         createTransaction: async () => {
           calls.push("createTransaction");

@@ -1,92 +1,223 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { ArrowLeftRight, Plus } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { z } from "zod";
-import { DataTable } from "@/components/data-table";
-import TableLoadingState from "@/components/loading/table-loading-state";
-import { columns } from "@/components/table/transaction-columns";
+import { EmptyState } from "@/components/design/empty-state";
+import type { FundingListScope } from "@/components/funding/funding-scope";
+import {
+  NoMatchState,
+  optionFilter,
+  RecordListToolbar,
+} from "@/components/records/record-list-toolbar";
+import { RecordTable } from "@/components/records/record-table";
+import {
+  RecordsHeader,
+  RecordsPage,
+} from "@/components/records/records-layout";
+import {
+  getSortFields,
+  type OptionFilterDefinition,
+  optionFilters,
+  recordListFetcher,
+  useRecordList,
+} from "@/components/records/use-record-list";
+import {
+  getTransactionColumns,
+  TRANSACTION_COLUMN_DEFAULTS,
+  type TransactionRow,
+} from "@/components/table/transaction-columns";
+import { Button } from "@/components/ui/button";
+import { UploadReceiptModal } from "@/components/upload-receipt-modal";
 import { useToast } from "@/hooks/use-toast";
-import ButtonControl from "../helper/button-control";
-import FormInputControl from "../helper/form-input-control";
-import { Form } from "../ui/form";
+import { TABLE_PAGE_SIZES } from "@/lib/table-page-size";
 
-const querySchema = z.object({
-  query: z.string(),
-});
+const FILTERS: OptionFilterDefinition[] = [
+  {
+    key: "receipt",
+    label: "Receipt",
+    options: [
+      { value: "missing", label: "Missing" },
+      { value: "uploaded", label: "Uploaded" },
+    ],
+  },
+];
+const FILTER_MODEL = optionFilters(FILTERS);
+const FILTER_DEFINITIONS = FILTERS.map(optionFilter);
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+const getRowId = (transaction: TransactionRow) => transaction.id;
 
-interface ITransactionTableProps {
-  teamId?: string;
-  organizationId?: string;
-  fundingRequestId?: string;
-}
+type TransactionTableProps = {
+  /** A team's or an organization's list, or the payouts of one funding request. */
+  scope:
+    | FundingListScope
+    | { kind: "fundingRequest"; fundingRequestId: string };
+  initialPageSize?: number;
+  canCreate?: boolean;
+};
 
 export default function TransactionTable({
-  teamId,
-  organizationId,
-  fundingRequestId,
-}: ITransactionTableProps) {
+  scope,
+  initialPageSize = TABLE_PAGE_SIZES[0],
+  canCreate = false,
+}: TransactionTableProps) {
   const { toast } = useToast();
-  const form = useForm<z.infer<typeof querySchema>>({
-    resolver: zodResolver(querySchema),
-    defaultValues: { query: "" },
+  const [receiptFor, setReceiptFor] = useState<TransactionRow | null>(null);
+  const isEmbedded = scope.kind === "fundingRequest";
+  const teamId = scope.kind === "team" ? scope.teamId : null;
+  const fundingRequestBase =
+    scope.kind === "team"
+      ? `/teams/${scope.teamId}/funding/funding-requests`
+      : scope.kind === "organization"
+        ? `/organizations/${scope.organizationId}/funding-requests`
+        : null;
+  const scopeParams: Record<string, string> =
+    scope.kind === "team"
+      ? { teamId: scope.teamId }
+      : scope.kind === "organization"
+        ? { organizationId: scope.organizationId }
+        : { fundingRequestId: scope.fundingRequestId };
+
+  const columns = useMemo(
+    () =>
+      getTransactionColumns({
+        getFundingRequestHref: fundingRequestBase
+          ? (fundingRequestId) => `${fundingRequestBase}/${fundingRequestId}`
+          : undefined,
+        getOrganizationHref: teamId
+          ? (organizationId) =>
+              `/teams/${teamId}/funding/organizations/${organizationId}`
+          : undefined,
+        showFundingRequest: !isEmbedded,
+        showOrganization: Boolean(teamId),
+        onUploadReceipt: setReceiptFor,
+      }),
+    [fundingRequestBase, teamId, isEmbedded],
+  );
+
+  const list = useRecordList({
+    // Inside a funding request the list keeps no view of its own.
+    viewKey:
+      scope.kind === "team"
+        ? `transactions:team:${scope.teamId}`
+        : scope.kind === "organization"
+          ? `transactions:org:${scope.organizationId}`
+          : null,
+    initialPageSize,
+    columnDefaults: TRANSACTION_COLUMN_DEFAULTS,
+    sortFields: getSortFields(columns),
+    filters: FILTER_MODEL,
   });
 
-  const query = form.watch("query");
-
-  const { data, error, isLoading, isValidating } = useSWR(
-    `/api/transactions?teamId=${teamId || ""}&organizationId=${organizationId || ""}&fundingRequestId=${
-      fundingRequestId || ""
-    }&query=${query}`,
-    fetcher,
+  const params = list.getSearchParams(scopeParams);
+  for (const filter of list.activeFilters) {
+    for (const value of filter.values) params.append(filter.key, value);
+  }
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
+    `/api/transactions?${params.toString()}`,
+    recordListFetcher,
+    { keepPreviousData: true },
   );
-  const loading = isLoading;
+  const total = Number(data?.total ?? 0);
+  const transactions: TransactionRow[] = Array.isArray(data?.data)
+    ? data.data
+    : [];
 
-  if (error) {
+  useEffect(() => {
+    if (!error) return;
     toast({
-      title: "Error",
-      description: "Error fetching transactions",
+      title: "Unable to load transactions",
+      description: "An unexpected error occurred while fetching them.",
       variant: "destructive",
     });
-  }
+  }, [error, toast]);
 
-  async function onSubmit(values: z.infer<typeof querySchema>) {
-    form.setValue("query", values.query);
-  }
+  const newHref = teamId ? `/teams/${teamId}/funding/transactions/create` : "";
+  const showCreate = canCreate && Boolean(teamId);
 
   return (
-    <div className="flex flex-col gap-3 px-4 py-3">
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="flex w-full max-w-lg items-center"
-        >
-          <div className="flex-1">
-            <FormInputControl
-              form={form}
-              name="query"
-              placeholder="Search..."
-            />
-          </div>
+    <RecordsPage fill={!isEmbedded} grid>
+      {isEmbedded ? null : (
+        <RecordsHeader
+          icon={ArrowLeftRight}
+          title="Transactions"
+          count={isLoading ? undefined : total}
+          action={
+            showCreate ? (
+              <Button asChild variant="action" size="sm">
+                <Link href={newHref}>
+                  <Plus /> New transaction
+                </Link>
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
 
-          <ButtonControl type="submit" label="Submit" className="mx-2" />
-        </form>
-      </Form>
-      <div className="relative flex min-h-40 flex-col overflow-hidden rounded-lg border bg-card">
-        {isValidating && !loading ? (
-          <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 text-xs text-muted-foreground">
-            Refreshing...
-          </p>
-        ) : null}
-        {loading ? (
-          <TableLoadingState />
-        ) : (
-          <DataTable columns={columns} data={data?.data} />
-        )}
-      </div>
-    </div>
+      <RecordListToolbar
+        list={list}
+        columns={columns}
+        filters={FILTER_DEFINITIONS}
+        searchLabel="Search transactions"
+        isRefreshing={isValidating && !isLoading}
+      />
+
+      <RecordTable
+        columns={columns}
+        data={transactions}
+        getRowId={getRowId}
+        getRowHref={(transaction) =>
+          fundingRequestBase && transaction.fundingRequest
+            ? `${fundingRequestBase}/${transaction.fundingRequest.id}`
+            : undefined
+        }
+        isLoading={isLoading}
+        emptyState={
+          list.isSearching ? (
+            <NoMatchState noun="transactions" onClear={list.handleClearAll} />
+          ) : (
+            <EmptyState
+              size={isEmbedded ? "inline" : "page"}
+              icon={ArrowLeftRight}
+              title="No transactions yet"
+              description={
+                isEmbedded
+                  ? "Payouts for this request appear here once funds are sent."
+                  : teamId
+                    ? "Record a payout once a funding request is approved and its funds go out."
+                    : "Payouts to your organization appear here, each with its receipt."
+              }
+              action={
+                showCreate ? (
+                  <Button asChild variant="action">
+                    <Link href={newHref}>
+                      <Plus /> New transaction
+                    </Link>
+                  </Button>
+                ) : undefined
+              }
+            />
+          )
+        }
+        noun={{ one: "transaction", other: "transactions" }}
+        sort={list.sort}
+        onSortChange={list.setSort}
+        columnVisibility={list.columnVisibility.visibility}
+        pagination={{ ...list.pagination, total }}
+      />
+
+      {receiptFor ? (
+        <UploadReceiptModal
+          key={receiptFor.id}
+          isOpen
+          onClose={() => setReceiptFor(null)}
+          onUpload={() => {
+            void mutate();
+          }}
+          transactionId={receiptFor.id}
+        />
+      ) : null}
+    </RecordsPage>
   );
 }

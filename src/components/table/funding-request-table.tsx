@@ -1,87 +1,180 @@
 "use client";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+
+import { HandCoins, Plus } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useMemo } from "react";
 import useSWR from "swr";
-import { z } from "zod";
-import { DataTable } from "@/components/data-table";
-import TableLoadingState from "@/components/loading/table-loading-state";
-import { columns } from "@/components/table/funding-request-columns";
+import { EmptyState } from "@/components/design/empty-state";
+import {
+  type FundingListScope,
+  getFundingScopeParams,
+} from "@/components/funding/funding-scope";
+import { FUNDING_STATUS_OPTIONS } from "@/components/funding/funding-status";
+import {
+  NoMatchState,
+  optionFilter,
+  RecordListToolbar,
+} from "@/components/records/record-list-toolbar";
+import { RecordTable } from "@/components/records/record-table";
+import {
+  RecordsHeader,
+  RecordsPage,
+} from "@/components/records/records-layout";
+import {
+  getSortFields,
+  type OptionFilterDefinition,
+  optionFilters,
+  recordListFetcher,
+  useRecordList,
+} from "@/components/records/use-record-list";
+import {
+  FUNDING_REQUEST_COLUMN_DEFAULTS,
+  type FundingRequestRow,
+  getFundingRequestColumns,
+} from "@/components/table/funding-request-columns";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import ButtonControl from "../helper/button-control";
-import FormInputControl from "../helper/form-input-control";
-import { Form } from "../ui/form";
 
-const querySchema = z.object({
-  query: z.string(),
-});
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+const FILTERS: OptionFilterDefinition[] = [
+  { key: "status", label: "Status", options: FUNDING_STATUS_OPTIONS },
+];
+const FILTER_MODEL = optionFilters(FILTERS);
+const FILTER_DEFINITIONS = FILTERS.map(optionFilter);
 
-interface IFundingRequestProps {
-  teamId: string;
-  organizationId: string;
-}
+const getRowId = (request: FundingRequestRow) => request.id;
+
+type FundingRequestTableProps = {
+  scope: FundingListScope;
+  initialPageSize: number;
+  canCreate?: boolean;
+};
 
 export default function FundingRequestTable({
-  teamId,
-  organizationId,
-}: IFundingRequestProps) {
+  scope,
+  initialPageSize,
+  canCreate = true,
+}: FundingRequestTableProps) {
   const { toast } = useToast();
+  const teamId = scope.kind === "team" ? scope.teamId : null;
+  const basePath =
+    scope.kind === "team"
+      ? `/teams/${scope.teamId}/funding/funding-requests`
+      : `/organizations/${scope.organizationId}/funding-requests`;
 
-  const form = useForm<z.infer<typeof querySchema>>({
-    resolver: zodResolver(querySchema),
-    defaultValues: { query: "" },
+  const columns = useMemo(
+    () =>
+      getFundingRequestColumns({
+        getHref: (request) => `${basePath}/${request.id}`,
+        getOrganizationHref: teamId
+          ? (organizationId) =>
+              `/teams/${teamId}/funding/organizations/${organizationId}`
+          : undefined,
+        showOrganization: Boolean(teamId),
+      }),
+    [basePath, teamId],
+  );
+
+  const list = useRecordList({
+    viewKey:
+      scope.kind === "team"
+        ? `funding-requests:team:${scope.teamId}`
+        : `funding-requests:org:${scope.organizationId}`,
+    initialPageSize,
+    columnDefaults: FUNDING_REQUEST_COLUMN_DEFAULTS,
+    sortFields: getSortFields(columns),
+    filters: FILTER_MODEL,
   });
 
-  const query = form.watch("query");
-
+  const params = list.getSearchParams(getFundingScopeParams(scope));
+  for (const filter of list.activeFilters) {
+    for (const value of filter.values) params.append(filter.key, value);
+  }
   const { data, error, isLoading, isValidating } = useSWR(
-    `/api/funding-requests?teamId=${teamId}&organizationId=${organizationId}&query=${query}`,
-    fetcher,
+    `/api/funding-requests?${params.toString()}`,
+    recordListFetcher,
+    { keepPreviousData: true },
   );
-  const loading = isLoading || !data;
+  const total = Number(data?.total ?? 0);
+  const requests: FundingRequestRow[] = Array.isArray(data?.data)
+    ? data.data
+    : [];
 
-  if (error) {
+  useEffect(() => {
+    if (!error) return;
     toast({
-      title: "Error",
-      description: "Error fetching funding requests",
+      title: "Unable to load funding requests",
+      description: "An unexpected error occurred while fetching them.",
       variant: "destructive",
     });
-  }
+  }, [error, toast]);
 
-  async function onSubmit(values: z.infer<typeof querySchema>) {
-    form.setValue("query", values.query);
-  }
+  const newHref = `${basePath}/create`;
 
   return (
-    <div className="flex flex-col gap-3 px-4 py-3">
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="flex w-full max-w-lg items-center"
-        >
-          <div className="flex-1">
-            <FormInputControl
-              form={form}
-              name="query"
-              placeholder="Search..."
-            />
-          </div>
+    <RecordsPage grid>
+      <RecordsHeader
+        icon={HandCoins}
+        title="Funding requests"
+        count={isLoading ? undefined : total}
+        action={
+          canCreate ? (
+            <Button asChild variant="action" size="sm">
+              <Link href={newHref}>
+                <Plus /> New funding request
+              </Link>
+            </Button>
+          ) : undefined
+        }
+      />
 
-          <ButtonControl type="submit" label="Submit" className="mx-2" />
-        </form>
-      </Form>
-      <div className="relative flex min-h-40 flex-col overflow-hidden rounded-lg border bg-card">
-        {isValidating && !loading ? (
-          <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 text-xs text-muted-foreground">
-            Refreshing...
-          </p>
-        ) : null}
-        {loading ? (
-          <TableLoadingState />
-        ) : (
-          <DataTable columns={columns} data={data?.data} />
-        )}
-      </div>
-    </div>
+      <RecordListToolbar
+        list={list}
+        columns={columns}
+        filters={FILTER_DEFINITIONS}
+        searchLabel="Search funding requests"
+        isRefreshing={isValidating && !isLoading}
+      />
+
+      <RecordTable
+        columns={columns}
+        data={requests}
+        getRowId={getRowId}
+        getRowHref={(request) => `${basePath}/${request.id}`}
+        isLoading={isLoading}
+        emptyState={
+          list.isSearching ? (
+            <NoMatchState
+              noun="funding requests"
+              onClear={list.handleClearAll}
+            />
+          ) : (
+            <EmptyState
+              size="page"
+              icon={HandCoins}
+              title="No funding requests yet"
+              description={
+                teamId
+                  ? "Requests appear here when organizations apply, or when you add one for them."
+                  : "Apply for funding, then follow your request here from review to payout."
+              }
+              action={
+                canCreate ? (
+                  <Button asChild variant="action">
+                    <Link href={newHref}>
+                      <Plus /> New funding request
+                    </Link>
+                  </Button>
+                ) : undefined
+              }
+            />
+          )
+        }
+        noun={{ one: "funding request", other: "funding requests" }}
+        sort={list.sort}
+        onSortChange={list.setSort}
+        columnVisibility={list.columnVisibility.visibility}
+        pagination={{ ...list.pagination, total }}
+      />
+    </RecordsPage>
   );
 }

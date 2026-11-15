@@ -1,24 +1,29 @@
-import { ArrowLeftRight } from "lucide-react";
-import {
-  RecordsHeader,
-  RecordsPage,
-} from "@/components/records/records-layout";
+import { cookies } from "next/headers";
 import TransactionTable from "@/components/table/transaction-table";
+import {
+  parseTablePageSize,
+  RECORDS_PAGE_SIZE,
+  TABLE_PAGE_SIZE_COOKIE,
+} from "@/lib/table-page-size";
 
-interface PageProps {
-  params: Promise<{
-    teamId: string;
-    organizationId: string;
-  }>;
-}
-
-export default async function Page({ params }: PageProps) {
-  const { teamId, organizationId } = await params;
+export default async function TransactionsPage({
+  params,
+}: {
+  params: Promise<{ organizationId: string }>;
+}) {
+  const [{ organizationId }, cookieStore] = await Promise.all([
+    params,
+    cookies(),
+  ]);
+  const initialPageSize = parseTablePageSize(
+    cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+    RECORDS_PAGE_SIZE,
+  );
 
   return (
-    <RecordsPage>
-      <RecordsHeader icon={ArrowLeftRight} title="Transactions" />
-      <TransactionTable teamId={teamId} organizationId={organizationId} />
-    </RecordsPage>
+    <TransactionTable
+      scope={{ kind: "organization", organizationId }}
+      initialPageSize={initialPageSize}
+    />
   );
 }

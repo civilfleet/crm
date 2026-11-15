@@ -8,7 +8,14 @@ import {
   verifyTeamAccess,
 } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
-import { createTransaction, getTransactions } from "@/services/transactions";
+import { readList } from "@/lib/list-request";
+import {
+  createTransaction,
+  getTransactions,
+  TRANSACTION_RECEIPT_FILTERS,
+  TRANSACTION_SORT_FIELDS,
+  type TransactionReceiptFilter,
+} from "@/services/transactions";
 
 export async function GET(request: Request) {
   try {
@@ -32,14 +39,31 @@ export async function GET(request: Request) {
       await requireGlobalAdmin();
     }
 
-    const transactions = await getTransactions({
+    // The Transactions list pages and sorts; other callers get every row.
+    const list = readList(searchParams, {
+      sort: TRANSACTION_SORT_FIELDS,
+      fallback: { field: "createdAt", direction: "desc" },
+      paging: "optional",
+    });
+    const receipts = searchParams
+      .getAll("receipt")
+      .filter((value): value is TransactionReceiptFilter =>
+        (TRANSACTION_RECEIPT_FILTERS as readonly string[]).includes(value),
+      );
+    const { data, total } = await getTransactions({
       organizationId,
       teamId,
       fundingRequestId,
       searchQuery: query,
+      receipts,
+      pagination: list ?? undefined,
     });
 
-    return NextResponse.json({ data: transactions });
+    return NextResponse.json(
+      list
+        ? { data, total, page: list.page, pageSize: list.pageSize }
+        : { data },
+    );
   } catch (error) {
     const apiError = handleApiError(error);
     if (apiError) return apiError;

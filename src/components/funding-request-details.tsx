@@ -50,7 +50,9 @@ export default function FundingRequestDetail({
           <OrganizationView data={data} />
         </TabsContent>
         <TabsContent value="transactions">
-          <TransactionTable fundingRequestId={data?.id} />
+          <TransactionTable
+            scope={{ kind: "fundingRequest", fundingRequestId: data?.id }}
+          />
         </TabsContent>
       </Tabs>
     </div>

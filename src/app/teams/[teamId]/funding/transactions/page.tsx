@@ -1,36 +1,27 @@
-import { ArrowLeftRight } from "lucide-react";
-import Link from "next/link";
-import {
-  RecordsHeader,
-  RecordsPage,
-} from "@/components/records/records-layout";
+import { cookies } from "next/headers";
 import TransactionTable from "@/components/table/transaction-table";
-import { Button } from "@/components/ui/button";
+import {
+  parseTablePageSize,
+  RECORDS_PAGE_SIZE,
+  TABLE_PAGE_SIZE_COOKIE,
+} from "@/lib/table-page-size";
 
-interface PageProps {
-  params: Promise<{
-    teamId: string;
-    organizationId: string;
-  }>;
-}
-
-export default async function Page({ params }: PageProps) {
-  const { teamId, organizationId } = await params;
+export default async function TransactionsPage({
+  params,
+}: {
+  params: Promise<{ teamId: string }>;
+}) {
+  const [{ teamId }, cookieStore] = await Promise.all([params, cookies()]);
+  const initialPageSize = parseTablePageSize(
+    cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+    RECORDS_PAGE_SIZE,
+  );
 
   return (
-    <RecordsPage>
-      <RecordsHeader
-        icon={ArrowLeftRight}
-        title="Transactions"
-        action={
-          <Button asChild size="sm">
-            <Link href={`/teams/${teamId}/funding/transactions/create`}>
-              New transaction
-            </Link>
-          </Button>
-        }
-      />
-      <TransactionTable teamId={teamId} organizationId={organizationId} />
-    </RecordsPage>
+    <TransactionTable
+      scope={{ kind: "team", teamId }}
+      initialPageSize={initialPageSize}
+      canCreate
+    />
   );
 }
