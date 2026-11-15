@@ -649,7 +649,7 @@ export default function ContactListsManager({
   const newListHref = `/teams/${teamId}/crm/lists/new`;
 
   return (
-    <RecordsPage grid>
+    <RecordsPage>
       <RecordsHeader
         icon={List}
         title="Lists"

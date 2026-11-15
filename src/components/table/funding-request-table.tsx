@@ -111,7 +111,7 @@ export default function FundingRequestTable({
   const newHref = `${basePath}/create`;
 
   return (
-    <RecordsPage grid>
+    <RecordsPage>
       <RecordsHeader
         icon={HandCoins}
         title="Funding requests"

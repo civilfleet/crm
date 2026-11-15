@@ -1,19 +1,48 @@
 "use client";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Mail, Plus, Send, Trash2 } from "lucide-react";
+
+import {
+  Building2,
+  HandHeart,
+  Loader2,
+  Mail,
+  Plus,
+  Send,
+  Trash2,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
 import useSWR from "swr";
-import { z } from "zod";
-import { DataTable } from "@/components/data-table";
-import TableLoadingState from "@/components/loading/table-loading-state";
+import { EmptyState } from "@/components/design/empty-state";
+import {
+  NoMatchState,
+  RecordListToolbar,
+} from "@/components/records/record-list-toolbar";
+import {
+  BulkActionButton,
+  RecordTable,
+} from "@/components/records/record-table";
+import {
+  RecordsHeader,
+  RecordsPage,
+} from "@/components/records/records-layout";
+import {
+  getSortFields,
+  recordListFetcher,
+  useRecordList,
+} from "@/components/records/use-record-list";
 import { RichEmailEditor } from "@/components/rich-email-editor";
 import {
   columns,
   type OrganizationColumns,
 } from "@/components/table/organization-columns";
+import {
+  type OrganizationFieldOption,
+  type OrganizationListFilter,
+  organizationFilterDefinitions,
+  organizationFilterModel,
+  toOrganizationApiFilters,
+} from "@/components/table/organization-filters";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,7 +60,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -42,34 +70,26 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { persistTablePageSize } from "@/lib/table-page-size";
-import ButtonControl from "../helper/button-control";
-import FormInputControl from "../helper/form-input-control";
 
-const querySchema = z.object({
-  query: z.string(),
-});
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+/** Which list: every organization (admin), or a team's CRM or funding ones. */
+type OrganizationListScope = "admin" | "crm" | "funding";
 
 interface IOrganizationProps {
+  scope: OrganizationListScope;
   teamId?: string;
   basePath?: string;
   initialPageSize: number;
+  /** Where "New organization" goes; none hides it. */
+  createHref?: string;
+  /** More actions in the header, e.g. copying the registration link. */
+  headerActions?: React.ReactNode;
 }
 
-type FieldFilter = {
-  key: string;
-  operator:
-    | "contains"
-    | "equals"
-    | "gt"
-    | "lt"
-    | "before"
-    | "after"
-    | "isTrue"
-    | "isFalse";
-  value?: string;
-};
+// The same icons as the sidebar, so the page says which list it is.
+const SCOPE_ICONS = { admin: Building2, crm: Building2, funding: HandHeart };
+
+const getOrganizationRowId = (organization: OrganizationColumns) =>
+  organization.id;
 
 type SenderLabelMode = "default" | "user";
 
@@ -103,14 +123,16 @@ const getSelectedOrganizationTeamIds = (organizations: OrganizationColumns[]) =>
   );
 
 export default function OrganizationTable({
+  scope,
   teamId,
-  basePath,
+  basePath: basePathProp,
   initialPageSize,
+  createHref,
+  headerActions,
 }: IOrganizationProps) {
   const { toast } = useToast();
   const pathname = usePathname();
-  const isAdmin = pathname.startsWith("/admin");
-  const [fieldFilters, setFieldFilters] = useState<FieldFilter[]>([]);
+  const basePath = (basePathProp ?? pathname).replace(/\/$/, "");
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
@@ -121,124 +143,74 @@ export default function OrganizationTable({
   const [emailBody, setEmailBody] = useState("");
   const [emailSenderLabelMode, setEmailSenderLabelMode] =
     useState<SenderLabelMode>("default");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(initialPageSize);
-  const resolvedBasePath = (basePath ?? pathname).replace(/\/$/, "");
-
-  const form = useForm<z.infer<typeof querySchema>>({
-    resolver: zodResolver(querySchema),
-    defaultValues: { query: "" },
-  });
-
-  const query = form.watch("query"); // Get current query value
 
   const { data: orgTypesData } = useSWR(
     teamId ? `/api/organization-types?teamId=${teamId}` : null,
-    fetcher,
+    recordListFetcher,
   );
-  const orgTypes = orgTypesData?.data || [];
-
-  const fieldOptions = useMemo(() => {
-    const map = new Map<string, { key: string; label: string; type: string }>();
-    orgTypes.forEach(
-      (type: {
-        schema?: Array<{ key: string; label: string; type: string }>;
-      }) => {
-        (type.schema || []).forEach((field) => {
-          if (!map.has(field.key)) {
-            map.set(field.key, field);
-          }
-        });
-      },
-    );
+  // The custom fields of the team's organization types, each once.
+  const fieldOptions = useMemo<OrganizationFieldOption[]>(() => {
+    const map = new Map<string, OrganizationFieldOption>();
+    for (const type of (orgTypesData?.data ?? []) as Array<{
+      schema?: OrganizationFieldOption[];
+    }>) {
+      for (const field of type.schema ?? []) {
+        if (!map.has(field.key)) map.set(field.key, field);
+      }
+    }
     return Array.from(map.values());
-  }, [orgTypes]);
+  }, [orgTypesData]);
+  const filterDefinitions = useMemo(
+    () => organizationFilterDefinitions(fieldOptions),
+    [fieldOptions],
+  );
 
-  const operatorOptions = useMemo(() => {
-    return {
-      STRING: [
-        { value: "contains", label: "contains" },
-        { value: "equals", label: "equals" },
-      ],
-      SELECT: [
-        { value: "equals", label: "equals" },
-        { value: "contains", label: "contains" },
-      ],
-      MULTISELECT: [
-        { value: "contains", label: "contains" },
-        { value: "equals", label: "equals" },
-      ],
-      NUMBER: [
-        { value: "equals", label: "equals" },
-        { value: "gt", label: "greater than" },
-        { value: "lt", label: "less than" },
-      ],
-      DATE: [
-        { value: "equals", label: "equals" },
-        { value: "before", label: "before" },
-        { value: "after", label: "after" },
-      ],
-      BOOLEAN: [
-        { value: "isTrue", label: "is true" },
-        { value: "isFalse", label: "is false" },
-      ],
-    } as Record<
-      string,
-      Array<{ value: FieldFilter["operator"]; label: string }>
-    >;
-  }, []);
-
-  const filtersQuery = useMemo(() => {
-    if (!fieldFilters.length) {
-      return "";
-    }
-    return `&filters=${encodeURIComponent(JSON.stringify(fieldFilters.map((filter) => ({ type: "field", ...filter }))))}`;
-  }, [fieldFilters]);
-  const previousQueryStateRef = useRef({ query, filtersQuery });
-
-  useEffect(() => {
-    if (
-      previousQueryStateRef.current.query === query &&
-      previousQueryStateRef.current.filtersQuery === filtersQuery
-    ) {
-      return;
-    }
-    previousQueryStateRef.current = { query, filtersQuery };
-    setPage(1);
+  // Column actions (delete one) refresh the list once it has loaded.
+  const mutateRef = useRef<() => unknown>(() => undefined);
+  const tableColumns = useMemo(
+    () => columns(() => void mutateRef.current(), basePath),
+    [basePath],
+  );
+  const list = useRecordList<OrganizationListFilter, "table" | "cards">({
+    viewKey:
+      scope === "admin"
+        ? "organizations:admin"
+        : `organizations:${scope}:team:${teamId}`,
+    columnDefaults: {},
+    initialPageSize,
+    sortFields: getSortFields(tableColumns),
+    views: ["table", "cards"],
+    filters: organizationFilterModel,
   });
+  const params = list.getSearchParams(
+    scope === "admin" || !teamId ? {} : { teamId },
+  );
+  if (list.activeFilters.length) {
+    params.set(
+      "filters",
+      JSON.stringify(toOrganizationApiFilters(list.activeFilters)),
+    );
+  }
 
   const { data, error, isLoading, isValidating, mutate } = useSWR(
-    `/api/organizations?${isAdmin ? "" : `teamId=${teamId}&`}query=${query}${filtersQuery}&page=${page}&pageSize=${pageSize}`,
-    fetcher,
+    `/api/organizations?${params.toString()}`,
+    recordListFetcher,
+    { keepPreviousData: true },
   );
-  const loading = isLoading || !data;
-  const totalOrganizations = Number(data?.total ?? data?.data?.length ?? 0);
-  const organizations = Array.isArray(data?.data) ? data.data : [];
+  mutateRef.current = mutate;
+  const total = Number(data?.total ?? 0);
+  const organizations: OrganizationColumns[] = Array.isArray(data?.data)
+    ? data.data
+    : [];
 
-  if (error) {
+  useEffect(() => {
+    if (!error) return;
     toast({
-      title: "Error",
-      description: "Error fetching organizations",
+      title: "Unable to load organizations",
+      description: "The organizations could not be fetched. Please try again.",
       variant: "destructive",
     });
-  }
-
-  async function onSubmit(values: z.infer<typeof querySchema>) {
-    form.setValue("query", values.query); // Triggers SWR to re-fetch
-    setPage(1);
-  }
-
-  const handleAddFilter = () => {
-    setFieldFilters((prev) => [
-      ...prev,
-      {
-        key: fieldOptions[0].key,
-        operator: "contains",
-        value: "",
-      },
-    ]);
-    setPage(1);
-  };
+  }, [error, toast]);
 
   const handleDeleteSelected = async (
     selectedRows: OrganizationColumns[],
@@ -371,359 +343,183 @@ export default function OrganizationTable({
     }
   };
 
-  return (
-    <div className="flex flex-col gap-4 px-4 py-3">
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit)}
-          className="flex w-full max-w-xl flex-col gap-2 sm:flex-row sm:items-center"
-        >
-          <div className="flex-1">
-            <FormInputControl
-              form={form}
-              name="query"
-              placeholder="Search..."
-            />
-          </div>
-
-          <ButtonControl
-            type="submit"
-            label="Submit"
-            className="w-full sm:mx-2 sm:w-auto"
-          />
-        </form>
-      </Form>
-
-      {fieldOptions.length > 0 && (
-        <div className="rounded-md border p-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">Field filters</p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleAddFilter}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add filter
-            </Button>
-          </div>
-          {fieldFilters.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No field filters applied.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {fieldFilters.map((filter, index) => {
-                const selectedField = fieldOptions.find(
-                  (option) => option.key === filter.key,
-                );
-                const fieldType = selectedField?.type || "STRING";
-                const operatorsForField =
-                  operatorOptions[fieldType] || operatorOptions.STRING;
-                const operatorValues = operatorsForField.map((op) => op.value);
-                if (!operatorValues.includes(filter.operator)) {
-                  setFieldFilters((prev) =>
-                    prev.map((item, i) =>
-                      i === index
-                        ? { ...item, operator: operatorsForField[0].value }
-                        : item,
-                    ),
-                  );
-                }
-                return (
-                  <div
-                    key={`${filter.key}-${filter.operator}-${filter.value}`}
-                    className="flex flex-wrap items-center gap-2"
-                  >
-                    <Select
-                      onValueChange={(value) =>
-                        setFieldFilters((prev) =>
-                          prev.map((item, i) =>
-                            i === index ? { ...item, key: value } : item,
-                          ),
-                        )
-                      }
-                      value={filter.key}
-                    >
-                      <SelectTrigger className="min-w-[200px]">
-                        <SelectValue placeholder="Field" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {fieldOptions.map((option) => (
-                          <SelectItem key={option.key} value={option.key}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      onValueChange={(value) =>
-                        setFieldFilters((prev) =>
-                          prev.map((item, i) =>
-                            i === index
-                              ? {
-                                  ...item,
-                                  operator: value as FieldFilter["operator"],
-                                }
-                              : item,
-                          ),
-                        )
-                      }
-                      value={filter.operator}
-                    >
-                      <SelectTrigger className="min-w-[160px]">
-                        <SelectValue placeholder="Operator" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {operatorsForField.map((op) => (
-                          <SelectItem key={op.value} value={op.value}>
-                            {op.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {filter.operator !== "isTrue" &&
-                      filter.operator !== "isFalse" && (
-                        <Input
-                          className="min-w-[200px]"
-                          placeholder="Value"
-                          type={
-                            fieldType === "NUMBER"
-                              ? "number"
-                              : fieldType === "DATE"
-                                ? "date"
-                                : "text"
-                          }
-                          value={filter.value ?? ""}
-                          onChange={(event) =>
-                            setFieldFilters((prev) =>
-                              prev.map((item, i) =>
-                                i === index
-                                  ? { ...item, value: event.target.value }
-                                  : item,
-                              ),
-                            )
-                          }
-                        />
-                      )}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() =>
-                        setFieldFilters((prev) =>
-                          prev.filter((_, i) => i !== index),
-                        )
-                      }
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                    {selectedField?.type && (
-                      <span className="text-xs text-muted-foreground">
-                        {selectedField.type}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+  const icon = SCOPE_ICONS[scope];
+  const renderCard = (org: OrganizationColumns) => (
+    <Card className="h-full">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3">
+          <CardTitle className="text-base leading-tight">
+            {org.name || "Untitled Organization"}
+          </CardTitle>
+          <Badge variant={org.isFilledByOrg ? "default" : "secondary"}>
+            {org.isFilledByOrg ? "Self-Registered" : "Admin-Registered"}
+          </Badge>
         </div>
-      )}
-
-      <div className="relative flex min-h-40 flex-col overflow-hidden rounded-lg border bg-card">
-        {isValidating && !loading ? (
-          <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 text-xs text-muted-foreground">
-            Refreshing...
-          </p>
-        ) : null}
-        {loading ? (
-          <TableLoadingState />
-        ) : (
-          <div className="w-full overflow-x-auto">
-            <DataTable
-              columns={columns(mutate, resolvedBasePath)}
-              data={organizations}
-              initialView="table"
-              serverPagination={{
-                page,
-                pageSize,
-                total: totalOrganizations,
-                onPageChange: setPage,
-                onPageSizeChange: (nextPageSize) => {
-                  persistTablePageSize(nextPageSize);
-                  setPageSize(nextPageSize);
-                  setPage(1);
-                },
-              }}
-              selectable
-              renderBatchActions={({ selectedRows, clearSelection }) => (
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-sm text-muted-foreground">
-                    {selectedRows.length} selected
-                  </span>
-                  <div className="flex items-center gap-2">
-                    {(() => {
-                      const typedRows = selectedRows as OrganizationColumns[];
-                      const selectedTeamIds =
-                        getSelectedOrganizationTeamIds(typedRows);
-                      const recipients = getLinkedContactRecipients(typedRows);
-                      const recipientsWithEmail = recipients.filter(
-                        (contact) => contact.email,
-                      );
-                      const emailDisabled =
-                        isDeleting ||
-                        isSendingEmail ||
-                        selectedRows.length === 0 ||
-                        selectedTeamIds.length !== 1 ||
-                        recipientsWithEmail.length === 0;
-
-                      return (
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          disabled={emailDisabled}
-                          onClick={() => openEmailDialog(typedRows)}
-                        >
-                          <Mail className="mr-2 h-4 w-4" />
-                          Email linked contacts
-                        </Button>
-                      );
-                    })()}
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      disabled={isDeleting}
-                      onClick={() =>
-                        handleDeleteSelected(
-                          selectedRows as OrganizationColumns[],
-                          clearSelection,
-                        )
-                      }
-                    >
-                      {isDeleting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Deleting...
-                        </>
-                      ) : (
-                        "Delete selected"
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={isDeleting || selectedRows.length === 0}
-                      onClick={clearSelection}
-                    >
-                      Clear
-                    </Button>
-                  </div>
-                  <OrganizationContactsEmailDialog
-                    open={isEmailDialogOpen}
-                    organizations={emailOrganizations}
-                    subject={emailSubject}
-                    body={emailBody}
-                    senderLabelMode={emailSenderLabelMode}
-                    isSending={isSendingEmail}
-                    onOpenChange={setIsEmailDialogOpen}
-                    onSubjectChange={setEmailSubject}
-                    onBodyChange={setEmailBody}
-                    onSenderLabelModeChange={setEmailSenderLabelMode}
-                    onSend={() => handleSendEmail(clearSelection)}
-                  />
-                </div>
-              )}
-              renderCard={(org: OrganizationColumns) => (
-                <Card className="h-full">
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-3">
-                      <CardTitle className="text-base leading-tight">
-                        {org.name || "Untitled Organization"}
-                      </CardTitle>
-                      <Badge
-                        variant={org.isFilledByOrg ? "default" : "secondary"}
-                      >
-                        {org.isFilledByOrg
-                          ? "Self-Registered"
-                          : "Admin-Registered"}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="grid grid-cols-1 gap-2 text-sm">
-                    <div>
-                      <div className="text-xs text-muted-foreground">Email</div>
-                      <div className="break-all font-medium">
-                        {org.email || "N/A"}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <div className="text-xs text-muted-foreground">
-                          Team
-                        </div>
-                        <div className="font-medium">
-                          {org.team?.name || "N/A"}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">
-                          Country
-                        </div>
-                        <div className="font-medium">
-                          {org.country || "N/A"}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                      <div>
-                        <div className="text-xs text-muted-foreground">
-                          Phone
-                        </div>
-                        <div className="font-medium">{org.phone || "N/A"}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground">
-                          Website
-                        </div>
-                        <div className="font-medium">
-                          {org.website ? (
-                            <Link
-                              href={
-                                org.website.startsWith("http")
-                                  ? org.website
-                                  : `https://${org.website}`
-                              }
-                              target="_blank"
-                              className="text-blue-600 hover:underline"
-                            >
-                              {org.website}
-                            </Link>
-                          ) : (
-                            "N/A"
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="justify-end gap-2">
-                    <Link href={`${resolvedBasePath}/${org.id}`}>
-                      <Button size="sm" variant="outline">
-                        View
-                      </Button>
-                    </Link>
-                  </CardFooter>
-                </Card>
-              )}
-            />
+      </CardHeader>
+      <CardContent className="grid grid-cols-1 gap-2 text-sm">
+        <div>
+          <div className="text-xs text-muted-foreground">Email</div>
+          <div className="break-all font-medium">{org.email || "N/A"}</div>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <div className="text-xs text-muted-foreground">Team</div>
+            <div className="font-medium">{org.team?.name || "N/A"}</div>
           </div>
-        )}
-      </div>
-    </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Country</div>
+            <div className="font-medium">{org.country || "N/A"}</div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <div className="text-xs text-muted-foreground">Phone</div>
+            <div className="font-medium">{org.phone || "N/A"}</div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Website</div>
+            <div className="font-medium">
+              {org.website ? (
+                <Link
+                  href={
+                    org.website.startsWith("http")
+                      ? org.website
+                      : `https://${org.website}`
+                  }
+                  target="_blank"
+                  className="text-blue-600 hover:underline"
+                >
+                  {org.website}
+                </Link>
+              ) : (
+                "N/A"
+              )}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+      <CardFooter className="justify-end gap-2">
+        <Link href={`${basePath}/${org.id}`}>
+          <Button size="sm" variant="outline">
+            View
+          </Button>
+        </Link>
+      </CardFooter>
+    </Card>
+  );
+
+  return (
+    <RecordsPage>
+      <RecordsHeader
+        icon={icon}
+        title="Organizations"
+        count={isLoading ? undefined : total}
+        action={
+          <>
+            {headerActions}
+            {createHref ? (
+              <Button asChild variant="action" size="sm">
+                <Link href={createHref}>
+                  <Plus /> New organization
+                </Link>
+              </Button>
+            ) : null}
+          </>
+        }
+      />
+
+      <RecordListToolbar
+        list={list}
+        columns={tableColumns}
+        filters={filterDefinitions}
+        searchLabel="Search organizations"
+        isRefreshing={isValidating && !isLoading}
+      />
+
+      <RecordTable
+        columns={tableColumns}
+        data={organizations}
+        getRowId={getOrganizationRowId}
+        getRowHref={(organization) => `${basePath}/${organization.id}`}
+        isLoading={isLoading}
+        emptyState={
+          list.isSearching ? (
+            <NoMatchState noun="organizations" onClear={list.handleClearAll} />
+          ) : (
+            <EmptyState
+              size="page"
+              icon={icon}
+              title="No organizations yet"
+              description="Add the organizations you work with."
+              action={
+                createHref ? (
+                  <Button asChild variant="action">
+                    <Link href={createHref}>
+                      <Plus /> New organization
+                    </Link>
+                  </Button>
+                ) : undefined
+              }
+            />
+          )
+        }
+        noun={{ one: "organization", other: "organizations" }}
+        sort={list.sort}
+        onSortChange={list.setSort}
+        columnVisibility={list.columnVisibility.visibility}
+        view={list.view === "cards" ? "cards" : "table"}
+        renderCards={(rows) =>
+          rows.map((org) => <div key={org.id}>{renderCard(org)}</div>)
+        }
+        pagination={{ ...list.pagination, total }}
+        selectable
+        renderBulkActions={({ selectedRows, clearSelection }) => {
+          const selectedTeamIds = getSelectedOrganizationTeamIds(selectedRows);
+          const recipientsWithEmail = getLinkedContactRecipients(
+            selectedRows,
+          ).filter((contact) => contact.email);
+          // Linked contacts of one team only: the e-mail goes out as that team.
+          const emailDisabled =
+            isDeleting ||
+            isSendingEmail ||
+            selectedTeamIds.length !== 1 ||
+            recipientsWithEmail.length === 0;
+          return (
+            <>
+              <BulkActionButton
+                disabled={emailDisabled}
+                onClick={() => openEmailDialog(selectedRows)}
+              >
+                <Mail /> Email linked contacts
+              </BulkActionButton>
+              <BulkActionButton
+                tone="destructive"
+                disabled={isDeleting}
+                onClick={() =>
+                  handleDeleteSelected(selectedRows, clearSelection)
+                }
+              >
+                {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                Delete
+              </BulkActionButton>
+              <OrganizationContactsEmailDialog
+                open={isEmailDialogOpen}
+                organizations={emailOrganizations}
+                subject={emailSubject}
+                body={emailBody}
+                senderLabelMode={emailSenderLabelMode}
+                isSending={isSendingEmail}
+                onOpenChange={setIsEmailDialogOpen}
+                onSubjectChange={setEmailSubject}
+                onBodyChange={setEmailBody}
+                onSenderLabelModeChange={setEmailSenderLabelMode}
+                onSend={() => handleSendEmail(clearSelection)}
+              />
+            </>
+          );
+        }}
+      />
+    </RecordsPage>
   );
 }
 

@@ -117,7 +117,7 @@ export default function DonationAgreementTable({
   const newHref = `${basePath}/create`;
 
   return (
-    <RecordsPage grid>
+    <RecordsPage>
       <RecordsHeader
         icon={FilePenLine}
         title="Donation agreements"

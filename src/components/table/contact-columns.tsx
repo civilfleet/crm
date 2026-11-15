@@ -4,7 +4,6 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { DataTableColumnHeader } from "@/components/table/data-table-column-header";
 import { Badge } from "@/components/ui/badge";
 import {
   ContactAttributeType,
@@ -169,40 +168,36 @@ const ContactEmailCell = ({ contact }: { contact: ContactRow }) => {
   );
 };
 
-export const contactColumns: ColumnDef<ContactRow>[] = [
+export const contactColumns: ColumnDef<ContactRow, unknown>[] = [
   {
     accessorKey: "name",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Name" />
-    ),
+    meta: {
+      label: "Name",
+      sortField: "name",
+      width: 220,
+      pinned: true,
+      alwaysVisible: true,
+    },
     cell: ({ row }) => <ContactNameCell contact={row.original} />,
   },
   {
     accessorKey: "email",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Email" />
-    ),
+    meta: { label: "Email", width: 220 },
     cell: ({ row }) => <ContactEmailCell contact={row.original} />,
   },
   {
     accessorKey: "phone",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Phone" />
-    ),
+    meta: { label: "Phone", width: 150 },
     cell: ({ row }) => <ContactTextCell value={row.original.phone} />,
   },
   {
     accessorKey: "signal",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Signal" />
-    ),
+    meta: { label: "Signal", width: 140 },
     cell: ({ row }) => <ContactTextCell value={row.original.signal} />,
   },
   {
     accessorKey: "website",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Website" />
-    ),
+    meta: { label: "Website", width: 180 },
     cell: ({ row }) => {
       const website = row.original.website;
       if (!website) {
@@ -223,16 +218,12 @@ export const contactColumns: ColumnDef<ContactRow>[] = [
   },
   {
     accessorKey: "city",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="City" />
-    ),
+    meta: { label: "City", sortField: "city", width: 140 },
     cell: ({ row }) => <ContactTextCell value={row.original.city} />,
   },
   {
     accessorKey: "address",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Address" />
-    ),
+    meta: { label: "Address", width: 220 },
     cell: ({ row }) => {
       const parts = [
         row.original.address,
@@ -247,16 +238,12 @@ export const contactColumns: ColumnDef<ContactRow>[] = [
   {
     accessorKey: "profileAttributes",
     enableSorting: false,
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Attributes" />
-    ),
+    meta: { label: "Attributes", width: 220 },
     cell: ({ row }) => renderAttributes(row.original.profileAttributes),
   },
   {
     accessorKey: "createdAt",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Created" />
-    ),
+    meta: { label: "Created", sortField: "createdAt", width: 140 },
     cell: ({ row }) => <span>{formatDate(row.original.createdAt)}</span>,
     sortingFn: (rowA, rowB) =>
       getDateValue(rowA.original.createdAt) -

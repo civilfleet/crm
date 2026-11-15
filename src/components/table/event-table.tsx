@@ -306,7 +306,7 @@ export default function EventTable({
   const newEventHref = `/teams/${teamId}/crm/events/create`;
 
   return (
-    <RecordsPage grid>
+    <RecordsPage>
       <RecordsHeader
         icon={Calendar}
         title="Events"

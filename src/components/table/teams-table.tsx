@@ -162,7 +162,7 @@ export default function TeamsTable({
   );
 
   return (
-    <RecordsPage grid>
+    <RecordsPage>
       <RecordsHeader
         icon={Users}
         title="Teams"

@@ -1,12 +1,8 @@
-import { Users } from "lucide-react";
 import { cookies } from "next/headers";
-import {
-  RecordsHeader,
-  RecordsPage,
-} from "@/components/records/records-layout";
 import ContactTable from "@/components/table/contact-table";
 import {
   parseTablePageSize,
+  RECORDS_PAGE_SIZE,
   TABLE_PAGE_SIZE_COOKIE,
 } from "@/lib/table-page-size";
 
@@ -18,12 +14,8 @@ export default async function ContactsPage({ params }: ContactsPageProps) {
   const [{ teamId }, cookieStore] = await Promise.all([params, cookies()]);
   const initialPageSize = parseTablePageSize(
     cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+    RECORDS_PAGE_SIZE,
   );
 
-  return (
-    <RecordsPage>
-      <RecordsHeader icon={Users} title="Contacts" />
-      <ContactTable teamId={teamId} initialPageSize={initialPageSize} />
-    </RecordsPage>
-  );
+  return <ContactTable teamId={teamId} initialPageSize={initialPageSize} />;
 }

@@ -96,6 +96,43 @@ const formatDay = (value: string) =>
     timeZone: "UTC",
   }).format(new Date(`${value}T00:00:00Z`));
 
+/**
+ * An input that reports typing a moment after it stops (or on Enter), so a
+ * filter doesn't ask the server on every keystroke.
+ */
+export const DebouncedInput = ({
+  value,
+  onCommit,
+  delay = 300,
+  ...props
+}: Omit<React.ComponentProps<typeof Input>, "value" | "onChange"> & {
+  value: string;
+  onCommit: (value: string) => void;
+  delay?: number;
+}) => {
+  const [draft, setDraft] = React.useState(value);
+  const onCommitRef = React.useRef(onCommit);
+  onCommitRef.current = onCommit;
+
+  React.useEffect(() => {
+    if (draft === value) return;
+    const timeout = window.setTimeout(() => onCommitRef.current(draft), delay);
+    return () => window.clearTimeout(timeout);
+  }, [draft, value, delay]);
+
+  return (
+    <Input
+      {...props}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") onCommitRef.current(draft);
+        props.onKeyDown?.(event);
+      }}
+    />
+  );
+};
+
 /** Commits typing a moment after it stops, like the search field. */
 const TextFilterEditor = ({
   label,

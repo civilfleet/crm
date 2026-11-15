@@ -246,7 +246,7 @@ export default function UserTable({
   );
 
   return (
-    <RecordsPage grid>
+    <RecordsPage>
       <RecordsHeader
         icon={BookUser}
         title="Users"

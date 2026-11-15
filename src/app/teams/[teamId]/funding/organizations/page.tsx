@@ -3,6 +3,7 @@ import TeamOrganizationsPage from "@/components/organizations/team-organizations
 import prisma from "@/lib/prisma";
 import {
   parseTablePageSize,
+  RECORDS_PAGE_SIZE,
   TABLE_PAGE_SIZE_COOKIE,
 } from "@/lib/table-page-size";
 import { DEFAULT_TEAM_MODULES } from "@/types";
@@ -15,6 +16,7 @@ export default async function FundingOrganizationsPage({
   const [{ teamId }, cookieStore] = await Promise.all([params, cookies()]);
   const initialPageSize = parseTablePageSize(
     cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+    RECORDS_PAGE_SIZE,
   );
   const team = await prisma.teams.findUnique({
     where: { id: teamId },

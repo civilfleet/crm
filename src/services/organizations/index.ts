@@ -1,6 +1,7 @@
 import { type Prisma, Roles } from "@prisma/client";
 import { auth } from "@/auth";
 import logger from "@/lib/logger";
+import type { RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import {
   getPrimaryEmail,
@@ -534,6 +535,27 @@ const mapOrganizationListItem = <
     })) ?? [],
 });
 
+/** Columns the Organizations lists can be ordered by (see lib/list-request). */
+export const ORGANIZATION_SORT_FIELDS = [
+  "name",
+  "email",
+  "city",
+  "country",
+  "createdAt",
+] as const;
+export type OrganizationSortField = (typeof ORGANIZATION_SORT_FIELDS)[number];
+
+const organizationOrderBy = (
+  sort?: RecordSort<OrganizationSortField>,
+): Prisma.OrganizationOrderByWithRelationInput[] => {
+  // The id keeps rows with equal values in one order across pages.
+  if (!sort) return [{ createdAt: "desc" }, { id: "asc" }];
+  if (sort.field === "email" || sort.field === "createdAt") {
+    return [{ [sort.field]: sort.direction }, { id: "asc" }];
+  }
+  return [{ [sort.field]: { sort: sort.direction, nulls: "last" } }, { id: "asc" }];
+};
+
 const getOrganizations = async (
   searchQuery: string,
   teamId: string,
@@ -541,6 +563,7 @@ const getOrganizations = async (
   pagination?: {
     page: number;
     pageSize: number;
+    sort?: RecordSort<OrganizationSortField>;
   },
 ) => {
   const fieldFilters = filters.filter((filter) => filter.type === "field");
@@ -665,9 +688,7 @@ const getOrganizations = async (
     prisma.organization.findMany({
       where,
       include: organizationListInclude,
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: organizationOrderBy(pagination.sort),
       skip,
       take: pageSize,
     }),

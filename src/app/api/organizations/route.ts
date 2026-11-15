@@ -9,6 +9,7 @@ import {
   verifyOrganizationAccess,
   verifyTeamAccess,
 } from "@/lib/api-guard";
+import { type RecordSort, readList } from "@/lib/list-request";
 import logger from "@/lib/logger";
 import { sendEmail } from "@/lib/nodemailer";
 import prisma from "@/lib/prisma";
@@ -17,6 +18,8 @@ import { getAppUrl, getLoginUrl, handlePrismaError } from "@/lib/utils";
 import {
   createOrUpdateOrganization,
   getOrganizations,
+  ORGANIZATION_SORT_FIELDS,
+  type OrganizationSortField,
 } from "@/services/organizations";
 import { DEFAULT_TEAM_MODULES } from "@/types";
 import { organizationFiltersSchema } from "@/validations/organization-filters";
@@ -31,17 +34,12 @@ export async function GET(req: Request) {
     const searchQuery = searchParams.get("query") || "";
     const teamId = searchParams.get("teamId") || "";
     const filtersParam = searchParams.get("filters");
-    const hasPageParam = searchParams.has("page");
-    const hasPageSizeParam = searchParams.has("pageSize");
-    const hasPagination = hasPageParam || hasPageSizeParam;
-    const pageParam = Number(searchParams.get("page") || "1");
-    const pageSizeParam = Number(searchParams.get("pageSize") || "10");
-    const page =
-      Number.isFinite(pageParam) && pageParam > 0 ? Math.floor(pageParam) : 1;
-    const pageSize =
-      Number.isFinite(pageSizeParam) && pageSizeParam > 0
-        ? Math.min(Math.floor(pageSizeParam), 100)
-        : 10;
+    // Lists page and sort; callers without a page get every organization.
+    const list = readList(searchParams, {
+      sort: ORGANIZATION_SORT_FIELDS,
+      paging: "optional",
+      pageSize: 10,
+    });
     const parsedFilters = filtersParam
       ? organizationFiltersSchema.parse(JSON.parse(filtersParam))
       : [];
@@ -56,9 +54,19 @@ export async function GET(req: Request) {
       searchQuery,
       teamId,
       parsedFilters,
-      hasPagination ? { page, pageSize } : undefined,
+      list
+        ? {
+            page: list.page,
+            pageSize: list.pageSize,
+            ...(list.sort
+              ? { sort: list.sort as RecordSort<OrganizationSortField> }
+              : {}),
+          }
+        : undefined,
     );
-    const totalPages = pageSize > 0 ? Math.ceil(total / pageSize) : 1;
+    const page = list?.page ?? 1;
+    const pageSize = list?.pageSize ?? Math.max(total, 1);
+    const totalPages = Math.max(Math.ceil(total / pageSize), 1);
 
     return NextResponse.json(
       {

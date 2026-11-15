@@ -16,6 +16,7 @@ import {
 import { normalizeCountryCode } from "@/lib/countries";
 import { parseCsv, stringifyCsv } from "@/lib/csv";
 import { normalizePostalCode } from "@/lib/geo";
+import type { RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import { parseVCardContacts } from "@/lib/vcard";
 import { getContactVisibility } from "@/services/contacts/access";
@@ -1089,6 +1090,26 @@ const mapContact = (contact: ContactWithAttributes): ContactType => ({
   deletedAt: contact.deletedAt ?? undefined,
 });
 
+/** Columns the Contacts list can be ordered by (see lib/list-request). */
+export const CONTACT_SORT_FIELDS = [
+  "name",
+  "city",
+  "createdAt",
+  "updatedAt",
+] as const;
+export type ContactSortField = (typeof CONTACT_SORT_FIELDS)[number];
+
+const contactOrderBy = (
+  sort?: RecordSort<ContactSortField>,
+): Prisma.ContactOrderByWithRelationInput[] => {
+  // The id keeps rows with equal values in one order across pages.
+  if (!sort) return [{ createdAt: "desc" }, { id: "asc" }];
+  if (sort.field === "city") {
+    return [{ city: { sort: sort.direction, nulls: "last" } }, { id: "asc" }];
+  }
+  return [{ [sort.field]: sort.direction }, { id: "asc" }];
+};
+
 async function getTeamContacts(
   teamId: string,
   query?: string,
@@ -1102,7 +1123,12 @@ async function getTeamContacts(
   userId: string | undefined,
   filters: ContactFilter[] | undefined,
   roles: Roles[] | undefined,
-  pagination: { page: number; pageSize: number; deletedOnly?: boolean },
+  pagination: {
+    page: number;
+    pageSize: number;
+    deletedOnly?: boolean;
+    sort?: RecordSort<ContactSortField>;
+  },
 ): Promise<{ data: ContactType[]; total: number }>;
 async function getTeamContacts(
   teamId: string,
@@ -1110,7 +1136,12 @@ async function getTeamContacts(
   userId?: string,
   filters?: ContactFilter[],
   roles: Roles[] = [],
-  pagination?: { page: number; pageSize: number; deletedOnly?: boolean },
+  pagination?: {
+    page: number;
+    pageSize: number;
+    deletedOnly?: boolean;
+    sort?: RecordSort<ContactSortField>;
+  },
 ) {
   await ensureDefaultGroup(teamId);
 
@@ -1641,9 +1672,7 @@ async function getTeamContacts(
     prisma.contact.findMany({
       where,
       include: contactInclude,
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: contactOrderBy(pagination?.sort),
       ...(pagination ? { skip, take: pageSize } : {}),
     }),
     pagination ? prisma.contact.count({ where }) : Promise.resolve(0),

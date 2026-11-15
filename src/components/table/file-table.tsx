@@ -272,7 +272,7 @@ export default function FileTable({
   );
 
   return (
-    <RecordsPage grid>
+    <RecordsPage>
       <RecordsHeader
         icon={icon}
         title="Files"

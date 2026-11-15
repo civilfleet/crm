@@ -181,10 +181,10 @@ All three act only on contacts the person can see.
 
 ## Lists and saved views
 
-Records lists (transactions, funding requests, donation agreements, the admin
-teams list, users, files, events, contact lists and an event's registrations;
-contacts and organizations follow) are searched, filtered, sorted and paged
-**on the server**:
+Every records list (contacts, organizations, users, files, events, contact
+lists, an event's registrations, transactions, funding requests, donation
+agreements and the admin teams list) is searched, filtered, sorted and paged
+**on the server**, with one table and toolbar (`src/components/records/`):
 
 - A list request sends `page`, `pageSize` (at most 100), `sort` and `dir`,
   read by `readListRequest` / `readList` (`src/lib/list-request.ts`). Only
@@ -200,6 +200,10 @@ contacts and organizations follow) are searched, filtered, sorted and paged
   type filter), not only the page on screen.
 - Contact lists are counted, sorted and paged after their filters run (a smart
   list's size is only known then); a team has tens of lists.
+- Contact and organization filters are sent as the `filters` JSON the APIs
+  already validated; each filter chip holds one filter in exactly that shape
+  (`src/components/table/contact-filters.tsx`, `organization-filters.tsx`),
+  so a saved view is checked by the same schema the server uses.
 
 **Saved views** (`UserViewPreference`) keep how each person left each list:
 visible columns, sort, filters and view. They are saved automatically, follow

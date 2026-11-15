@@ -21,30 +21,23 @@ import { cn } from "@/lib/utils";
 */
 
 /**
- * Fills the page below the top. Pages that sit inside other content
- * pass `fill={false}` and get a bordered box instead.
+ * Fills the window on desktop so the grid, not the page, scrolls, and the
+ * header and footer stay in view. Lists inside other content (an event's
+ * registrations) pass `fill={false}` and get a bordered box instead.
  */
 export const RecordsPage = ({
   children,
   fill = true,
-  grid = false,
 }: {
   children: React.ReactNode;
   fill?: boolean;
-  /**
-   * A records grid (records/record-table): the page fills the window and
-   * the grid scrolls inside it, so the header and footer stay in view.
-   */
-  grid?: boolean;
 }) => (
   <div
     className={cn(
       "flex min-w-0 flex-col bg-card",
-      !fill
-        ? "overflow-hidden rounded-lg border"
-        : grid
-          ? "min-h-[calc(100svh-3.5rem)] md:h-svh md:min-h-0"
-          : "min-h-[calc(100svh-3.5rem)] md:min-h-svh",
+      fill
+        ? "min-h-[calc(100svh-3.5rem)] md:h-svh md:min-h-0"
+        : "overflow-hidden rounded-lg border",
     )}
   >
     {children}

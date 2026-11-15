@@ -137,7 +137,7 @@ export default function TransactionTable({
   const showCreate = canCreate && Boolean(teamId);
 
   return (
-    <RecordsPage fill={!isEmbedded} grid>
+    <RecordsPage fill={!isEmbedded}>
       {isEmbedded ? null : (
         <RecordsHeader
           icon={ArrowLeftRight}
