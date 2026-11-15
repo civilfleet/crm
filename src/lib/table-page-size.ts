@@ -4,12 +4,18 @@ export const DEFAULT_TABLE_PAGE_SIZE = 10;
 
 export type TablePageSize = (typeof TABLE_PAGE_SIZES)[number];
 
-export function parseTablePageSize(value?: string): TablePageSize {
+/** Records views (People, Organizations) open denser than other tables. */
+export const RECORDS_PAGE_SIZE = 50;
+
+export function parseTablePageSize(
+  value?: string,
+  fallback: TablePageSize = DEFAULT_TABLE_PAGE_SIZE,
+): TablePageSize {
   const pageSize = Number(value);
 
   return TABLE_PAGE_SIZES.includes(pageSize as TablePageSize)
     ? (pageSize as TablePageSize)
-    : DEFAULT_TABLE_PAGE_SIZE;
+    : fallback;
 }
 
 export function buildTablePageSizeCookie(

@@ -15,6 +15,7 @@ rules, change this page, the code and its test together.
   - [E-mail addresses](#e-mail-addresses)
   - [Merging contacts](#merging-contacts)
   - [Trash, restore and permanent delete](#trash-restore-and-permanent-delete)
+- [Lists and saved views](#lists-and-saved-views)
 - [Rules held by the database](#rules-held-by-the-database)
 - [Tests and CI](#tests-and-ci)
 - [Production checks](#production-checks)
@@ -177,6 +178,39 @@ person merging.
   e-mail recipients keep their record, without the contact link.
 
 All three act only on contacts the person can see.
+
+## Lists and saved views
+
+Records lists (transactions, funding requests, donation agreements, the admin
+teams list; more lists follow) are searched, filtered, sorted and paged **on
+the server**:
+
+- A list request sends `page`, `pageSize` (at most 100), `sort` and `dir`,
+  read by `readListRequest` / `readList` (`src/lib/list-request.ts`). Only
+  the fields a route allows can order a list; anything broken falls back to
+  the default instead of failing. Every order ends with the row id, so pages
+  never overlap or skip rows.
+- A caller that asks for no page (a picker, a form) still gets every row, as
+  before (`paging: "optional"`).
+- Every page goes through the same access checks and team or organization
+  scope as the full list did.
+
+**Saved views** (`UserViewPreference`) keep how each person left each list:
+visible columns, sort, filters and view. They are saved automatically, follow
+the person to any browser, and are deleted with the person.
+
+- The key names the list and its scope: `<list>:team:<teamId>`,
+  `<list>:org:<organizationId>` or `<list>:admin`
+  (`src/validations/view-preferences.ts`). A person only reads and writes their
+  own views, and only for a team, organization or admin list they can open
+  (`src/app/api/view-preferences/route.ts`).
+- Saved filters can hold what someone typed (a name, a postcode); views are
+  private to their owner.
+- A saved view never breaks a list: columns, sort fields and filters a list no
+  longer has are ignored when it opens.
+
+Tests: `tests/db/lists.test.ts`, `tests/db/view-preferences.test.ts`,
+`src/lib/list-request.test.ts`, `src/validations/view-preferences.test.ts`.
 
 ## Rules held by the database
 

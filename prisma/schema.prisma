@@ -434,6 +434,7 @@ model User {
   updatedAt      DateTime         @updatedAt @db.Timestamptz(6)
   lastLoginAt    DateTime?        @db.Timestamptz(6)
 
+  viewPreferences UserViewPreference[]
 }
 
 model DonationAgreement {
@@ -1580,4 +1581,18 @@ model PublicDataPublicationState {
   attempts          Int       @default(0)
   lastError         String?   @db.Text
   lastPublishedAt   DateTime? @db.Timestamptz(6)
+}
+
+/// How each user set up each records list (columns, sort, filters, view).
+model UserViewPreference {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// e.g. "transactions:<teamId>", "organizations:admin"
+  viewKey   String   @db.VarChar(120)
+  settings  Json
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  @@unique([userId, viewKey])
 }

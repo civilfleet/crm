@@ -27,16 +27,24 @@ import { cn } from "@/lib/utils";
 export const RecordsPage = ({
   children,
   fill = true,
+  grid = false,
 }: {
   children: React.ReactNode;
   fill?: boolean;
+  /**
+   * A records grid (records/record-table): the page fills the window and
+   * the grid scrolls inside it, so the header and footer stay in view.
+   */
+  grid?: boolean;
 }) => (
   <div
     className={cn(
       "flex min-w-0 flex-col bg-card",
-      fill
-        ? "min-h-[calc(100svh-3.5rem)] md:min-h-svh"
-        : "overflow-hidden rounded-lg border",
+      !fill
+        ? "overflow-hidden rounded-lg border"
+        : grid
+          ? "min-h-[calc(100svh-3.5rem)] md:h-svh md:min-h-0"
+          : "min-h-[calc(100svh-3.5rem)] md:min-h-svh",
     )}
   >
     {children}
@@ -50,6 +58,8 @@ type RecordsHeaderProps = {
   icon: LucideIcon;
   title: string;
   count?: number;
+  /** There are more than `count` (counting stopped there): "1,000+". */
+  countCapped?: boolean;
   /** The primary action, e.g. "New person". */
   action?: React.ReactNode;
   /** Secondary actions, rendered inside the ⋯ menu. */
@@ -60,6 +70,7 @@ export const RecordsHeader = ({
   icon: Icon,
   title,
   count,
+  countCapped = false,
   action,
   menu,
 }: RecordsHeaderProps) => (
@@ -74,6 +85,7 @@ export const RecordsHeader = ({
     {typeof count === "number" ? (
       <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
         {COUNT_FORMAT.format(count)}
+        {countCapped ? "+" : ""}
       </span>
     ) : null}
     <div className="ml-auto flex items-center gap-2">
