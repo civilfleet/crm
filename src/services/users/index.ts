@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import type { RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import { ensureDefaultGroup } from "@/services/groups";
 import { type AppModule, DEFAULT_TEAM_MODULES, Roles } from "@/types";
@@ -324,6 +325,39 @@ const getCurrentUserProfile = async (userId: string, isAdmin: boolean) => {
   };
 };
 
+/** Columns the Users lists can be ordered by (see lib/list-request). */
+export const USER_SORT_FIELDS = [
+  "name",
+  "email",
+  "city",
+  "country",
+  "lastLoginAt",
+  "createdAt",
+] as const;
+export type UserSortField = (typeof USER_SORT_FIELDS)[number];
+
+const NULLABLE_USER_SORT_FIELDS = new Set<UserSortField>([
+  "name",
+  "city",
+  "country",
+  "lastLoginAt",
+]);
+
+const getUserOrderBy = (
+  sort?: RecordSort<UserSortField>,
+): Prisma.UserOrderByWithRelationInput[] => {
+  if (!sort) return [{ createdAt: "desc" }, { id: "asc" }];
+  // The id keeps rows with equal values in one order across pages.
+  const tieBreaker: Prisma.UserOrderByWithRelationInput = { id: "asc" };
+  if (NULLABLE_USER_SORT_FIELDS.has(sort.field)) {
+    return [
+      { [sort.field]: { sort: sort.direction, nulls: "last" } },
+      tieBreaker,
+    ];
+  }
+  return [{ [sort.field]: sort.direction }, tieBreaker];
+};
+
 const getUsers = async (
   {
     teamId,
@@ -338,10 +372,14 @@ const getUsers = async (
   pagination?: {
     page: number;
     pageSize: number;
+    sort?: RecordSort<UserSortField>;
   },
   filters?: {
     field?: string;
     groupId?: string;
+    /** Any of these groups; "none" means in no group of this team. */
+    groupIds?: string[];
+    roles?: Roles[];
   },
 ) => {
   const whereConditions: Prisma.UserWhereInput[] = [];
@@ -383,7 +421,25 @@ const getUsers = async (
     whereConditions.push({ organizations: { some: { id: organizationId } } });
   }
 
-  if (teamId && filters?.groupId) {
+  if (teamId && filters?.groupIds?.length) {
+    const groupIds = filters.groupIds.filter((id) => id !== "none");
+    whereConditions.push({
+      OR: [
+        ...(filters.groupIds.includes("none")
+          ? [{ groups: { none: { group: { teamId } } } }]
+          : []),
+        ...(groupIds.length
+          ? [
+              {
+                groups: {
+                  some: { groupId: { in: groupIds }, group: { teamId } },
+                },
+              },
+            ]
+          : []),
+      ],
+    });
+  } else if (teamId && filters?.groupId) {
     whereConditions.push(
       filters.groupId === "none"
         ? {
@@ -402,6 +458,10 @@ const getUsers = async (
             },
           },
     );
+  }
+
+  if (filters?.roles?.length) {
+    whereConditions.push({ roles: { hasSome: filters.roles } });
   }
 
   const searchableFields = [
@@ -482,7 +542,7 @@ const getUsers = async (
     prisma.user.findMany({
       where,
       include,
-      orderBy: { createdAt: "desc" },
+      orderBy: getUserOrderBy(pagination.sort),
       skip,
       take: pageSize,
     }),

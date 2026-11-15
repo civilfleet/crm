@@ -8,10 +8,17 @@ import {
   verifyOrganizationAccess,
   verifyTeamAccess,
 } from "@/lib/api-guard";
+import { type RecordSort, readList } from "@/lib/list-request";
 import { sendEmail } from "@/lib/nodemailer";
 import { getAppUrl, getLoginUrl, handlePrismaError } from "@/lib/utils";
 import { ensureTeamOwner } from "@/services/teams";
-import { createUser, getUsers, getUsersForDonation } from "@/services/users";
+import {
+  createUser,
+  getUsers,
+  getUsersForDonation,
+  USER_SORT_FIELDS,
+  type UserSortField,
+} from "@/services/users";
 import { Roles } from "@/types";
 import { createUserSchema } from "@/validations/organizations";
 
@@ -24,17 +31,20 @@ export async function GET(req: Request) {
     const teamId = searchParams.get("teamId") || "";
     const fundingRequestId = searchParams.get("fundingRequestId") || "";
     const organizationId = searchParams.get("organizationId") || "";
-    const hasPageParam = searchParams.has("page");
-    const hasPageSizeParam = searchParams.has("pageSize");
-    const hasPagination = hasPageParam || hasPageSizeParam;
-    const pageParam = Number(searchParams.get("page") || "1");
-    const pageSizeParam = Number(searchParams.get("pageSize") || "10");
-    const page =
-      Number.isFinite(pageParam) && pageParam > 0 ? Math.floor(pageParam) : 1;
-    const pageSize =
-      Number.isFinite(pageSizeParam) && pageSizeParam > 0
-        ? Math.min(Math.floor(pageSizeParam), 100)
-        : 10;
+    const groupIds = (searchParams.get("groupIds") || "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+    const roleValues: string[] = Object.values(Roles);
+    const roles = (searchParams.get("roles") || "")
+      .split(",")
+      .filter((role): role is Roles => roleValues.includes(role));
+    // Lists page and sort; callers without a page get every user.
+    const list = readList(searchParams, {
+      sort: USER_SORT_FIELDS,
+      paging: "optional",
+      pageSize: 10,
+    });
 
     if (teamId) {
       await verifyTeamAccess(teamId);
@@ -66,8 +76,21 @@ export async function GET(req: Request) {
               organizationId: organizationId || undefined,
             },
             searchQuery,
-            hasPagination ? { page, pageSize } : undefined,
-            { field: searchField, groupId },
+            list
+              ? {
+                  page: list.page,
+                  pageSize: list.pageSize,
+                  ...(list.sort
+                    ? { sort: list.sort as RecordSort<UserSortField> }
+                    : {}),
+                }
+              : undefined,
+            {
+              field: searchField,
+              groupId,
+              ...(groupIds.length ? { groupIds } : {}),
+              ...(roles.length ? { roles } : {}),
+            },
           );
 
     const ownerPromise = teamId ? ensureTeamOwner(teamId) : undefined;
@@ -79,7 +102,9 @@ export async function GET(req: Request) {
 
     const data = Array.isArray(result) ? result : result.data;
     const total = Array.isArray(result) ? result.length : result.total;
-    const totalPages = pageSize > 0 ? Math.ceil(total / pageSize) : 1;
+    const page = list?.page ?? 1;
+    const pageSize = list?.pageSize ?? Math.max(total, 1);
+    const totalPages = Math.max(Math.ceil(total / pageSize), 1);
 
     return NextResponse.json(
       { data, ownerId: ownerId ?? null, total, page, pageSize, totalPages },

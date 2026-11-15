@@ -4,11 +4,15 @@ import {
   handleApiError,
   verifyTeamAccess,
 } from "@/lib/api-guard";
+import { type RecordSort, readList } from "@/lib/list-request";
 import { handlePrismaError } from "@/lib/utils";
 import {
   canUserAccessContactScope,
   canUserAccessTeamOrOrgScope,
+  FILE_SORT_FIELDS,
+  type FileSortField,
   getFiles,
+  getFilesPage,
 } from "@/services/file";
 
 export async function GET(req: Request) {
@@ -48,15 +52,33 @@ export async function GET(req: Request) {
     }
 
     if (organizationId || teamId || contactId) {
-      const data = await getFiles(
-        {
-          organizationId,
-          teamId,
-          contactId,
-          includeContactFiles,
-        },
-        searchQuery,
-      );
+      const scope = { organizationId, teamId, contactId, includeContactFiles };
+      const types = (searchParams.get("types") || "")
+        .split(",")
+        .map((type) => type.trim())
+        .filter(Boolean);
+      // The Files lists page and sort; other callers get every file.
+      const list = readList(searchParams, {
+        sort: FILE_SORT_FIELDS,
+        fallback: { field: "createdAt", direction: "desc" },
+        paging: "optional",
+      });
+      if (list) {
+        const result = await getFilesPage(scope, searchQuery, {
+          page: list.page,
+          pageSize: list.pageSize,
+          sort: (list.sort ?? {
+            field: "createdAt",
+            direction: "desc",
+          }) as RecordSort<FileSortField>,
+          types,
+        });
+        return NextResponse.json(
+          { ...result, page: list.page, pageSize: list.pageSize },
+          { status: 201 },
+        );
+      }
+      const data = await getFiles(scope, searchQuery, { types });
       return NextResponse.json(
         { data },
 

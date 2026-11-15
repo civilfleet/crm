@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as listRequest from "@/lib/list-request";
 import { updateTeamUserSchema } from "../src/validations/users";
 import { loadModule } from "./helpers/load-module";
 
@@ -390,6 +391,7 @@ test("donation user lookup rejects a funding request from another team", async (
   let requestTeam = "team-b";
   const route = loadModule<GetRoute>("src/app/api/users/route.ts", {
     ...base,
+    "@/lib/list-request": listRequest,
     "@/constants/app": {},
     "@/lib/nodemailer": {},
     "@/validations/organizations": {},

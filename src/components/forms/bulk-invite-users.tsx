@@ -18,13 +18,29 @@ import { Roles } from "@/types";
 
 type BulkInviteUsersDialogProps = {
   teamId: string;
+  /** Controlled from elsewhere (a menu item); the dialog then has no trigger of its own. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Called after at least one invitation went out. */
+  onInvited?: () => void;
 };
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function BulkInviteUsersDialog({ teamId }: BulkInviteUsersDialogProps) {
+export function BulkInviteUsersDialog({
+  teamId,
+  open: controlledOpen,
+  onOpenChange,
+  onInvited,
+}: BulkInviteUsersDialogProps) {
   const { toast } = useToast();
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : uncontrolledOpen;
+  const setOpen = (value: boolean) => {
+    if (!isControlled) setUncontrolledOpen(value);
+    onOpenChange?.(value);
+  };
   const [rawInput, setRawInput] = useState("");
   const [isInviting, setIsInviting] = useState(false);
 
@@ -90,6 +106,7 @@ export function BulkInviteUsersDialog({ teamId }: BulkInviteUsersDialogProps) {
     setIsInviting(false);
 
     if (successCount) {
+      onInvited?.();
       toast({
         title: "Invitations sent",
         description: `Successfully invited ${successCount} ${
@@ -116,12 +133,14 @@ export function BulkInviteUsersDialog({ teamId }: BulkInviteUsersDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={(value) => !isInviting && setOpen(value)}>
-      <DialogTrigger asChild>
-        <Button type="button" variant="outline">
-          <Users className="mr-2 h-4 w-4" aria-hidden="true" />
-          Bulk Invite Users
-        </Button>
-      </DialogTrigger>
+      {isControlled ? null : (
+        <DialogTrigger asChild>
+          <Button type="button" variant="outline">
+            <Users className="mr-2 h-4 w-4" aria-hidden="true" />
+            Bulk Invite Users
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Bulk Invite Users</DialogTitle>

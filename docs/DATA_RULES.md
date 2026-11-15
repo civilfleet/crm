@@ -182,8 +182,9 @@ All three act only on contacts the person can see.
 ## Lists and saved views
 
 Records lists (transactions, funding requests, donation agreements, the admin
-teams list; more lists follow) are searched, filtered, sorted and paged **on
-the server**:
+teams list, users, files, events, contact lists and an event's registrations;
+contacts and organizations follow) are searched, filtered, sorted and paged
+**on the server**:
 
 - A list request sends `page`, `pageSize` (at most 100), `sort` and `dir`,
   read by `readListRequest` / `readList` (`src/lib/list-request.ts`). Only
@@ -193,7 +194,12 @@ the server**:
 - A caller that asks for no page (a picker, a form) still gets every row, as
   before (`paging: "optional"`).
 - Every page goes through the same access checks and team or organization
-  scope as the full list did.
+  scope as the full list did. An event's registrations come from
+  `GET /api/events/:id/registrations`, scoped to the event's team.
+- "Download all" on Files zips every file the filtered list shows (search and
+  type filter), not only the page on screen.
+- Contact lists are counted, sorted and paged after their filters run (a smart
+  list's size is only known then); a team has tens of lists.
 
 **Saved views** (`UserViewPreference`) keep how each person left each list:
 visible columns, sort, filters and view. They are saved automatically, follow

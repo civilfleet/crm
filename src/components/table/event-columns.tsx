@@ -1,14 +1,28 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { format } from "date-fns";
-import { Check, Copy } from "lucide-react";
+import { format, isSameDay, isSameYear } from "date-fns";
+import {
+  CalendarClock,
+  CalendarDays,
+  CalendarPlus,
+  Eye,
+  List,
+  MapPin,
+  Shapes,
+  UserCheck,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState } from "react";
-import { DataTableColumnHeader } from "@/components/table/data-table-column-header";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import {
+  ChipList,
+  DateCell,
+  RecordChip,
+  RecordIcon,
+  RecordNameCell,
+  TextCell,
+} from "@/components/records/record-cells";
+import { cn } from "@/lib/utils";
 
 export type EventRow = {
   id: string;
@@ -46,350 +60,255 @@ export type EventRow = {
       color?: string;
     }>;
   }>;
+  lists?: Array<{ id: string; name: string }>;
   createdAt: string | Date;
   updatedAt: string | Date;
 };
 
-const _formatDate = (value?: string | Date | null) => {
-  if (!value) {
-    return "—";
-  }
-
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value instanceof Date ? value.toISOString() : value;
-  }
-
-  return format(parsed, "PP");
+const toDate = (value?: string | Date | null) => {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
 };
 
-const formatDateTime = (value?: string | Date | null) => {
-  if (!value) {
-    return "—";
+/**
+ * "28 Dec 2026, 10:00", "23 Oct 2026, 19:00–21:00",
+ * "28 Dec, 10:00 – 31 Dec 2026, 10:00": always one line.
+ */
+export const formatEventWhen = (
+  startValue: string | Date,
+  endValue?: string | Date | null,
+) => {
+  const start = toDate(startValue);
+  if (!start) return "";
+  const end = toDate(endValue);
+  if (!end || end.getTime() === start.getTime()) {
+    return format(start, "d MMM yyyy, HH:mm");
   }
-
-  const parsed = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value instanceof Date ? value.toISOString() : value;
+  if (isSameDay(start, end)) {
+    return `${format(start, "d MMM yyyy, HH:mm")}–${format(end, "HH:mm")}`;
   }
-
-  return format(parsed, "PPp");
+  if (isSameYear(start, end)) {
+    return `${format(start, "d MMM, HH:mm")} – ${format(end, "d MMM yyyy, HH:mm")}`;
+  }
+  return `${format(start, "d MMM yyyy, HH:mm")} – ${format(end, "d MMM yyyy, HH:mm")}`;
 };
 
-const renderContacts = (contacts: EventRow["contacts"] = []) => {
-  if (!contacts.length) {
-    return <span className="text-muted-foreground">No contacts</span>;
-  }
+export const eventPlace = (event: EventRow) =>
+  event.isOnline
+    ? event.location || "Online"
+    : event.location || [event.city, event.state].filter(Boolean).join(", ");
 
-  return (
-    <div className="flex flex-wrap gap-1">
-      {contacts.slice(0, 3).map((contact) => (
-        <div key={contact.id} className="flex flex-col gap-0.5">
-          <Badge variant="secondary" className="text-xs font-normal">
-            {contact.name}
-          </Badge>
-          {contact.roles.length > 0 && (
-            <div className="flex flex-wrap gap-0.5">
-              {contact.roles.map((role) => (
-                <Badge
-                  key={role.id}
-                  variant="outline"
-                  className="text-[10px] px-1 py-0"
-                  style={
-                    role.color
-                      ? { borderColor: role.color, color: role.color }
-                      : {}
-                  }
-                >
-                  {role.name}
-                </Badge>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-      {contacts.length > 3 && (
-        <Badge variant="secondary" className="text-xs font-normal">
-          +{contacts.length - 3} more
-        </Badge>
+export const eventHref = (event: EventRow) =>
+  `/teams/${event.teamId}/crm/events/${event.id}`;
+
+/** Columns that open hidden; the Columns menu brings them back. */
+export const EVENT_COLUMN_DEFAULTS: Record<string, boolean> = {
+  state: false,
+  expectedGuests: false,
+  lists: false,
+  createdAt: false,
+};
+
+export const EventTypeChip = ({ type }: { type?: EventRow["eventType"] }) =>
+  type ? (
+    <RecordChip color={type.color} title={type.name}>
+      {type.name}
+    </RecordChip>
+  ) : null;
+
+const CountCell = ({ value }: { value?: number | null }) =>
+  value === null || value === undefined ? null : (
+    <span
+      className={cn(
+        "block tabular-nums",
+        value === 0 && "text-muted-foreground",
       )}
-    </div>
-  );
-};
-
-const EventTitleCell = ({ event }: { event: EventRow }) => {
-  const params = useParams();
-  const teamId = params.teamId as string;
-
-  return (
-    <Link
-      href={`/teams/${teamId}/crm/events/${event.id}`}
-      className="font-medium hover:underline"
     >
-      {event.title}
-    </Link>
+      {value.toLocaleString("en")}
+    </span>
   );
-};
 
-const CopyPublicLinkButton = ({ event }: { event: EventRow }) => {
-  const [copied, setCopied] = useState(false);
+type EventPerson = EventRow["contacts"][number];
 
-  const copyPublicLink = () => {
-    if (!event.isPublic || !event.slug) {
-      return;
-    }
+const personLabel = (person: EventPerson) =>
+  person.roles.length > 0
+    ? `${person.name} (${person.roles.map((role) => role.name).join(", ")})`
+    : person.name;
 
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-    const publicUrl = `${baseUrl}/public/${event.teamId}/events/${event.slug}`;
-
-    navigator.clipboard.writeText(publicUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
-
-  if (!event.isPublic || !event.slug) {
-    return null;
-  }
-
-  return (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={copyPublicLink}
-      className="gap-2"
-      title="Copy public registration link"
-    >
-      {copied ? (
-        <>
-          <Check className="h-4 w-4 text-green-600" />
-          <span className="text-green-600">Copied!</span>
-        </>
-      ) : (
-        <>
-          <Copy className="h-4 w-4" />
-          <span>Copy Link</span>
-        </>
-      )}
-    </Button>
-  );
-};
-
-const CopyContactsButton = ({ event }: { event: EventRow }) => {
-  const [copied, setCopied] = useState(false);
-
-  const copyContactsToClipboard = () => {
-    if (event.contacts.length === 0) {
-      return;
-    }
-
-    // Format contacts with names, emails, phones, and roles
-    const contactsText = event.contacts
-      .map((contact) => {
-        const parts = [contact.name];
-        if (contact.email) parts.push(contact.email);
-        if (contact.phone) parts.push(contact.phone);
-        if (contact.roles.length > 0) {
-          parts.push(`(${contact.roles.map((r) => r.name).join(", ")})`);
-        }
-        return parts.join(" - ");
-      })
-      .join("\n");
-
-    navigator.clipboard.writeText(contactsText).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
-
-  if (event.contacts.length === 0) {
-    return null;
-  }
-
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={copyContactsToClipboard}
-      className="gap-2"
-      title="Copy contacts to clipboard"
-    >
-      {copied ? (
-        <>
-          <Check className="h-4 w-4 text-green-600" />
-          <span className="text-green-600">Copied!</span>
-        </>
-      ) : (
-        <>
-          <Copy className="h-4 w-4" />
-          <span>Copy Contacts</span>
-        </>
-      )}
-    </Button>
-  );
-};
-
-export const eventColumns: ColumnDef<EventRow>[] = [
+export const eventColumns: ColumnDef<EventRow, unknown>[] = [
   {
+    id: "title",
     accessorKey: "title",
-    header: "Title",
-    cell: ({ row }) => <EventTitleCell event={row.original} />,
-  },
-  {
-    accessorKey: "eventType",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Type" />
-    ),
-    cell: ({ row }) => {
-      const type = row.original.eventType;
-      if (!type) {
-        return <span className="text-muted-foreground">—</span>;
-      }
-      return (
-        <Badge
-          variant="outline"
-          className="text-xs"
-          style={
-            type.color ? { borderColor: type.color, color: type.color } : {}
-          }
-        >
-          {type.color && (
-            <span
-              className="mr-1 inline-block h-2 w-2 rounded-full"
-              style={{ backgroundColor: type.color }}
-            />
-          )}
-          {type.name}
-        </Badge>
-      );
+    meta: {
+      label: "Event",
+      icon: CalendarDays,
+      sortField: "title",
+      width: 280,
+      pinned: true,
+      alwaysVisible: true,
     },
-  },
-  {
-    accessorKey: "location",
-    header: "Location",
-    cell: ({ row }) => <span>{row.original.location || "—"}</span>,
-  },
-  {
-    accessorKey: "startDate",
-    header: "Start Date",
-    cell: ({ row }) => <span>{formatDateTime(row.original.startDate)}</span>,
-  },
-  {
-    accessorKey: "endDate",
-    header: "End Date",
-    cell: ({ row }) => <span>{formatDateTime(row.original.endDate)}</span>,
-  },
-  {
-    accessorKey: "registrationCount",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Registrants" />
-    ),
     cell: ({ row }) => (
-      <span className="tabular-nums">{row.original.registrationCount}</span>
+      <RecordNameCell
+        kind="record"
+        icon={CalendarDays}
+        name={row.original.title}
+        href={eventHref(row.original)}
+      />
     ),
   },
   {
-    accessorKey: "contacts",
-    header: "Contacts",
-    cell: ({ row }) => renderContacts(row.original.contacts),
+    id: "type",
+    meta: { label: "Type", icon: Shapes, width: 170 },
+    cell: ({ row }) => <EventTypeChip type={row.original.eventType} />,
   },
   {
-    id: "actions",
-    header: "Actions",
+    id: "when",
+    meta: {
+      label: "When",
+      icon: CalendarClock,
+      sortField: "startDate",
+      width: 290,
+    },
     cell: ({ row }) => (
-      <div className="flex items-center gap-2">
-        <CopyPublicLinkButton event={row.original} />
-        <CopyContactsButton event={row.original} />
-      </div>
+      <TextCell
+        value={formatEventWhen(row.original.startDate, row.original.endDate)}
+        className="tabular-nums"
+      />
     ),
+  },
+  {
+    id: "location",
+    meta: {
+      label: "Location",
+      icon: MapPin,
+      sortField: "location",
+      width: 200,
+    },
+    cell: ({ row }) => <TextCell value={eventPlace(row.original)} />,
+  },
+  {
+    id: "state",
+    accessorKey: "state",
+    meta: { label: "State", icon: MapPin, width: 150 },
+    cell: ({ row }) => <TextCell value={row.original.state} />,
+  },
+  {
+    id: "registrations",
+    meta: {
+      label: "Registrations",
+      icon: UserCheck,
+      sortField: "registrationCount",
+      width: 140,
+    },
+    cell: ({ row }) => <CountCell value={row.original.registrationCount} />,
+  },
+  {
+    id: "expectedGuests",
+    meta: { label: "Expected guests", icon: Users, width: 150 },
+    cell: ({ row }) => <CountCell value={row.original.expectedGuests} />,
+  },
+  {
+    id: "people",
+    meta: { label: "People", icon: Users, width: 260 },
+    cell: ({ row }) => (
+      <ChipList
+        items={row.original.contacts ?? []}
+        getKey={(person) => person.id}
+        getLabel={personLabel}
+        max={1}
+        renderChip={(person) => (
+          <RecordChip
+            title={personLabel(person)}
+            avatar={{ name: person.name, kind: "person" }}
+          >
+            {person.name}
+            {person.roles.length > 0 ? (
+              <span className="text-muted-foreground">
+                {" "}
+                · {person.roles.map((role) => role.name).join(", ")}
+              </span>
+            ) : null}
+          </RecordChip>
+        )}
+      />
+    ),
+  },
+  {
+    id: "visibility",
+    meta: { label: "Visibility", icon: Eye, width: 120 },
+    // Private is the normal case and stays blank; public is worth marking.
+    cell: ({ row }) =>
+      row.original.isPublic ? (
+        <RecordChip title="Listed on the public events page">Public</RecordChip>
+      ) : null,
+  },
+  {
+    id: "lists",
+    meta: { label: "Lists", icon: List, width: 200 },
+    cell: ({ row }) => (
+      <ChipList
+        items={row.original.lists ?? []}
+        getKey={(list) => list.id}
+        getLabel={(list) => list.name}
+        max={1}
+        renderChip={(list) => (
+          <RecordChip title={list.name}>{list.name}</RecordChip>
+        )}
+      />
+    ),
+  },
+  {
+    id: "createdAt",
+    meta: {
+      label: "Created",
+      icon: CalendarPlus,
+      sortField: "createdAt",
+      width: 140,
+    },
+    cell: ({ row }) => <DateCell value={row.original.createdAt} />,
   },
 ];
 
 export const renderEventCard = (event: EventRow) => {
+  const place = eventPlace(event);
+  const people = event.contacts.length;
+
   return (
-    <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-4 space-y-3">
-      <div>
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="text-base font-semibold">{event.title}</h3>
-          {event.isPublic && (
-            <Badge variant="secondary" className="text-xs">
-              Public
-            </Badge>
-          )}
-        </div>
-        {event.eventType && (
-          <Badge
-            variant="outline"
-            className="mt-2 text-xs"
-            style={
-              event.eventType.color
-                ? {
-                    borderColor: event.eventType.color,
-                    color: event.eventType.color,
-                  }
-                : {}
-            }
-          >
-            {event.eventType.color && (
-              <span
-                className="mr-1 inline-block h-2 w-2 rounded-full"
-                style={{ backgroundColor: event.eventType.color }}
-              />
-            )}
-            {event.eventType.name}
-          </Badge>
-        )}
-        {event.description && (
-          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-            {event.description}
-          </p>
-        )}
-      </div>
-
-      <div className="space-y-1 text-sm">
-        {event.location && (
-          <p className="text-muted-foreground">
-            <span className="font-medium">Location:</span> {event.location}
-          </p>
-        )}
-        {!event.isOnline &&
-          (event.address || event.city || event.postalCode) && (
-            <p className="text-muted-foreground">
-              <span className="font-medium">Address:</span>{" "}
-              {[event.address, event.postalCode, event.city, event.state]
-                .filter(Boolean)
-                .join(", ")}
+    <Link
+      key={event.id}
+      href={eventHref(event)}
+      className="block min-w-0 rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
+    >
+      <div className="flex h-full min-w-0 flex-col gap-3 rounded-lg border bg-card p-4 text-card-foreground transition-colors hover:border-input hover:bg-accent/40">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <RecordIcon icon={CalendarDays} className="size-8" />
+          <div className="min-w-0">
+            <p className="truncate font-medium" title={event.title}>
+              {event.title}
             </p>
-          )}
-        <p className="text-muted-foreground">
-          <span className="font-medium">Start:</span>{" "}
-          {formatDateTime(event.startDate)}
-        </p>
-        {event.endDate && (
-          <p className="text-muted-foreground">
-            <span className="font-medium">End:</span>{" "}
-            {formatDateTime(event.endDate)}
-          </p>
-        )}
-        <p className="text-muted-foreground">
-          <span className="font-medium">Registrants:</span>{" "}
-          {event.registrationCount}
-        </p>
-      </div>
-
-      {event.contacts.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">
-            Contacts
-          </p>
-          {renderContacts(event.contacts)}
+            <p className="truncate text-xs tabular-nums text-muted-foreground">
+              {formatEventWhen(event.startDate, event.endDate)}
+            </p>
+          </div>
         </div>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
-        <CopyPublicLinkButton event={event} />
-        <CopyContactsButton event={event} />
+        {event.eventType || event.isPublic ? (
+          <div className="flex min-w-0 flex-wrap gap-1">
+            <EventTypeChip type={event.eventType} />
+            {event.isPublic ? <RecordChip>Public</RecordChip> : null}
+          </div>
+        ) : null}
+        <div className="mt-auto flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span className="truncate">{place}</span>
+          <span className="shrink-0 tabular-nums">
+            {event.registrationCount > 0
+              ? `${event.registrationCount} registered`
+              : people > 0
+                ? `${people} ${people === 1 ? "person" : "people"}`
+                : null}
+          </span>
+        </div>
       </div>
-    </div>
+    </Link>
   );
 };

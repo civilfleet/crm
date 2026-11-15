@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import type { RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
 import { primaryContactEmailSelect } from "@/services/contact-emails";
@@ -18,20 +19,106 @@ const getFileById = async (id: string) => {
   }
 };
 
-const getFiles = async (
-  {
-    organizationId,
-    teamId,
-    contactId,
-    includeContactFiles = false,
-  }: {
-    organizationId?: string;
-    teamId?: string;
-    contactId?: string;
-    includeContactFiles?: boolean;
+type FileScope = {
+  organizationId?: string;
+  teamId?: string;
+  contactId?: string;
+  includeContactFiles?: boolean;
+};
+
+type FileListFilters = {
+  /** Only files of these types (stored types: enum values or MIME types). */
+  types?: string[];
+};
+
+/** Columns the Files lists can be ordered by (see lib/list-request). */
+export const FILE_SORT_FIELDS = [
+  "name",
+  "type",
+  "createdAt",
+  "updatedAt",
+] as const;
+export type FileSortField = (typeof FILE_SORT_FIELDS)[number];
+
+const fileListInclude = {
+  organization: {
+    select: {
+      name: true,
+    },
   },
-  searchQuery: string,
-) => {
+  FundingRequest: {
+    select: {
+      id: true,
+      name: true,
+      teamId: true,
+      organizationId: true,
+    },
+  },
+  donationAgreement: {
+    select: {
+      id: true,
+      teamId: true,
+      organizationId: true,
+      fundingRequest: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  },
+  Transaction: {
+    select: {
+      id: true,
+      teamId: true,
+      organizationId: true,
+      fundingRequest: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  },
+  contact: {
+    select: {
+      id: true,
+      teamId: true,
+      name: true,
+      emails: primaryContactEmailSelect,
+    },
+  },
+  downloadAudits: {
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 1,
+    select: {
+      createdAt: true,
+      user: {
+        select: {
+          email: true,
+        },
+      },
+    },
+  },
+  updatedBy: {
+    select: {
+      email: true,
+    },
+  },
+  createdBy: {
+    select: {
+      email: true,
+    },
+  },
+} satisfies Prisma.FileInclude;
+
+/** Which files a team, an organization or a contact has. */
+const getFileScopeWhere = async ({
+  organizationId,
+  teamId,
+  contactId,
+  includeContactFiles = false,
+}: FileScope): Promise<Prisma.FileWhereInput> => {
   let where: Prisma.FileWhereInput = {};
 
   if (teamId) {
@@ -70,101 +157,121 @@ const getFiles = async (
     };
   }
 
-  if (searchQuery.trim()) {
-    const queryFilter: Prisma.FileWhereInput = {
-      OR: [
-        { name: { contains: searchQuery, mode: "insensitive" } },
-        { type: { contains: searchQuery, mode: "insensitive" } },
-        { url: { contains: searchQuery, mode: "insensitive" } },
-      ],
-    };
+  return where;
+};
 
-    where = Object.keys(where).length
-      ? {
-          AND: [where, queryFilter],
-        }
-      : queryFilter;
-  }
+const getSearchWhere = (searchQuery: string): Prisma.FileWhereInput | null => {
+  const query = searchQuery.trim();
+  if (!query) return null;
+  return {
+    OR: [
+      { name: { contains: query, mode: "insensitive" } },
+      { type: { contains: query, mode: "insensitive" } },
+      { url: { contains: query, mode: "insensitive" } },
+    ],
+  };
+};
 
-  const users = await prisma.file.findMany({
+const combineWhere = (
+  clauses: Array<Prisma.FileWhereInput | null>,
+): Prisma.FileWhereInput => {
+  const present = clauses.filter(
+    (clause): clause is Prisma.FileWhereInput =>
+      Boolean(clause) && Object.keys(clause ?? {}).length > 0,
+  );
+  if (present.length === 0) return {};
+  if (present.length === 1) return present[0];
+  return { AND: present };
+};
+
+/** Every file of a scope that matches, newest first (downloads, pickers). */
+const getFiles = async (
+  scope: FileScope,
+  searchQuery: string,
+  filters: FileListFilters = {},
+) => {
+  const where = combineWhere([
+    await getFileScopeWhere(scope),
+    getSearchWhere(searchQuery),
+    filters.types?.length ? { type: { in: filters.types } } : null,
+  ]);
+
+  return prisma.file.findMany({
     where,
-    include: {
-      organization: {
-        select: {
-          name: true,
-        },
-      },
-      FundingRequest: {
-        select: {
-          id: true,
-          name: true,
-          teamId: true,
-          organizationId: true,
-        },
-      },
-      donationAgreement: {
-        select: {
-          id: true,
-          teamId: true,
-          organizationId: true,
-          fundingRequest: {
-            select: {
-              name: true,
-            },
-          },
-        },
-      },
-      Transaction: {
-        select: {
-          id: true,
-          teamId: true,
-          organizationId: true,
-          fundingRequest: {
-            select: {
-              name: true,
-            },
-          },
-        },
-      },
-      contact: {
-        select: {
-          id: true,
-          teamId: true,
-          name: true,
-          emails: primaryContactEmailSelect,
-        },
-      },
-      downloadAudits: {
-        orderBy: {
-          createdAt: "desc",
-        },
-        take: 1,
-        select: {
-          createdAt: true,
-          user: {
-            select: {
-              email: true,
-            },
-          },
-        },
-      },
-      updatedBy: {
-        select: {
-          email: true,
-        },
-      },
-      createdBy: {
-        select: {
-          email: true,
-        },
-      },
-    },
+    include: fileListInclude,
     orderBy: {
       createdAt: "desc",
     },
   });
+};
 
-  return users;
+const getFileOrderBy = (
+  sort: RecordSort<FileSortField>,
+): Prisma.FileOrderByWithRelationInput[] => {
+  // The id keeps rows with equal values in one order across pages.
+  const tieBreaker: Prisma.FileOrderByWithRelationInput = { id: "asc" };
+  if (sort.field === "name") {
+    return [
+      { name: { sort: sort.direction, nulls: "last" } },
+      { url: sort.direction },
+      tieBreaker,
+    ];
+  }
+  return [{ [sort.field]: sort.direction }, tieBreaker];
+};
+
+/**
+ * One page of a Files list, with the total and the types present in it
+ * (before the type filter, so the filter can offer every type there is).
+ */
+const getFilesPage = async (
+  scope: FileScope,
+  searchQuery: string,
+  {
+    page,
+    pageSize,
+    sort,
+    types,
+  }: FileListFilters & {
+    page: number;
+    pageSize: number;
+    sort: RecordSort<FileSortField>;
+  },
+) => {
+  const baseWhere = combineWhere([
+    await getFileScopeWhere(scope),
+    getSearchWhere(searchQuery),
+  ]);
+  const where = combineWhere([
+    baseWhere,
+    types?.length ? { type: { in: types } } : null,
+  ]);
+
+  const [data, total, typeGroups] = await Promise.all([
+    prisma.file.findMany({
+      where,
+      include: fileListInclude,
+      orderBy: getFileOrderBy(sort),
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.file.count({ where }),
+    prisma.file.groupBy({
+      by: ["type"],
+      where: baseWhere,
+      _count: { _all: true },
+      orderBy: { type: "asc" },
+    }),
+  ]);
+
+  return {
+    data,
+    total,
+    types: typeGroups.map((group) => ({
+      type: group.type,
+      count: group._count._all,
+    })),
+  };
 };
 
 const getFileByIdWithRelations = async (id: string) => {
@@ -491,6 +598,7 @@ const getFileDownloadAudits = async ({
 };
 
 export {
+  getFilesPage,
   canUserAccessFile,
   canUserAccessContactScope,
   canUserAccessTeamOrOrgScope,

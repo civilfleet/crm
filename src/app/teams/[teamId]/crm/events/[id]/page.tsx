@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import EventForm from "@/components/forms/event";
 import { RecordTopBar } from "@/components/records/record-page";
-import type { EventRegistrationRow } from "@/components/table/event-registration-columns";
 import EventRegistrationsTable from "@/components/table/event-registrations-table";
 import {
   Card,
@@ -12,8 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getPrimaryEmail } from "@/services/contact-emails";
-import { getEventById, getEventRegistrations } from "@/services/events";
+import { getEventById } from "@/services/events";
 
 interface EventDetailPageProps {
   params: Promise<{ teamId: string; id: string }>;
@@ -36,23 +34,6 @@ export default async function EventDetailPage({
     notFound();
   }
 
-  const registrations = await getEventRegistrations(id, teamId);
-
-  const registrationRows: EventRegistrationRow[] = registrations.map(
-    (registration) => ({
-      id: registration.id,
-      name: registration.name,
-      email: registration.email,
-      phone: registration.phone ?? undefined,
-      notes: registration.notes ?? undefined,
-      createdAt: registration.createdAt.toISOString(),
-      contactId: registration.contact.id,
-      contactName: registration.contact.name ?? registration.name,
-      contactEmail: getPrimaryEmail(registration.contact) ?? undefined,
-      contactPhone: registration.contact.phone ?? undefined,
-    }),
-  );
-
   return (
     <>
       <RecordTopBar
@@ -74,7 +55,7 @@ export default async function EventDetailPage({
                 <Card className="w-full shadow-sm lg:sticky lg:top-6">
                   <CardHeader className="border-b pb-3">
                     <CardTitle>
-                      Registrations ({registrationRows.length})
+                      Registrations ({event.registrationCount})
                     </CardTitle>
                     <CardDescription>
                       Track everyone who registered for this event. Each entry
@@ -82,10 +63,7 @@ export default async function EventDetailPage({
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-4">
-                    <EventRegistrationsTable
-                      teamId={teamId}
-                      registrations={registrationRows}
-                    />
+                    <EventRegistrationsTable teamId={teamId} eventId={id} />
                   </CardContent>
                 </Card>
               }

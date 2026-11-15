@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { handleApiError, verifyTeamAccess } from "@/lib/api-guard";
+import { type RecordSort, readList } from "@/lib/list-request";
 import { handlePrismaError } from "@/lib/utils";
-import { createEvent, deleteEvents, getTeamEvents } from "@/services/events";
+import {
+  createEvent,
+  deleteEvents,
+  EVENT_SORT_FIELDS,
+  type EventSortField,
+  getTeamEvents,
+  getTeamEventsPage,
+} from "@/services/events";
 import { createEventSchema, deleteEventsSchema } from "@/validations/events";
 
 export async function GET(req: Request) {
@@ -23,12 +31,43 @@ export async function GET(req: Request) {
 
     await verifyTeamAccess(teamId, { requireModule: "CRM" });
 
-    const events = await getTeamEvents(teamId, query || undefined, {
+    const filters = {
       eventTypeId: eventTypeId || undefined,
+      eventTypeIds: (searchParams.get("eventTypeIds") || "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean),
       from: from || undefined,
       to: to || undefined,
       state: state || undefined,
+    };
+    // The Events list pages and sorts; the calendar gets every event.
+    const list = readList(searchParams, {
+      sort: EVENT_SORT_FIELDS,
+      fallback: { field: "startDate", direction: "desc" },
+      paging: "optional",
     });
+    if (list) {
+      const { data, total } = await getTeamEventsPage(
+        teamId,
+        query || undefined,
+        filters,
+        {
+          page: list.page,
+          pageSize: list.pageSize,
+          sort: (list.sort ?? {
+            field: "startDate",
+            direction: "desc",
+          }) as RecordSort<EventSortField>,
+        },
+      );
+      return NextResponse.json(
+        { data, total, page: list.page, pageSize: list.pageSize },
+        { status: 200 },
+      );
+    }
+
+    const events = await getTeamEvents(teamId, query || undefined, filters);
     return NextResponse.json({ data: events }, { status: 200 });
   } catch (e) {
     const apiError = handleApiError(e);

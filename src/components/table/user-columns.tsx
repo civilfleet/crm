@@ -1,357 +1,263 @@
+"use client";
+
 import type { ColumnDef } from "@tanstack/react-table";
-import { format } from "date-fns";
-import { Crown, Trash2 } from "lucide-react";
-import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { type ReactNode, useState } from "react";
-import { DataTableColumnHeader } from "@/components/table/data-table-column-header";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
-
-import type { User } from "@/types";
-
-const userDetailPath = (id: string) => `users/${id}`;
+  CalendarClock,
+  CalendarPlus,
+  CircleUserRound,
+  KeyRound,
+  LogIn,
+  Mail,
+  MapPin,
+  Phone,
+  ShieldCheck,
+  UsersRound,
+} from "lucide-react";
+import Link from "next/link";
+import {
+  ChipList,
+  DateCell,
+  EmailCell,
+  formatRecordDate,
+  LocationCell,
+  RecordAvatar,
+  RecordChip,
+  RecordNameCell,
+  TextCell,
+} from "@/components/records/record-cells";
 
 type UserLoginAccount = {
   provider: string;
 };
 
-type UserRow = User & {
-  isOwner?: boolean;
+export type UserRow = {
+  id: string;
+  name?: string | null;
+  pronouns?: string | null;
+  image?: string | null;
+  email: string;
+  phone?: string | null;
+  city?: string | null;
+  country?: string | null;
+  roles?: string[];
+  groups?: Array<{ groupId: string; group: { id: string; name: string } }>;
   accounts?: UserLoginAccount[];
-  canManageUsers?: boolean;
+  lastLoginAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  isOwner?: boolean;
 };
 
-const NavigableCell = ({
-  id,
-  children,
-  className,
-}: {
-  id: string;
-  children: ReactNode;
-  className?: string;
-}) => (
-  <Link
-    href={userDetailPath(id)}
-    className={cn(
-      "block text-left cursor-pointer hover:text-primary rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-      className,
-    )}
-  >
-    {children}
-  </Link>
-);
+export const USER_ROLE_LABELS: Record<string, string> = {
+  Admin: "Admin",
+  Team: "Team member",
+  Organization: "Organization member",
+};
 
-const toLoginMethodLabel = (accounts?: UserLoginAccount[]) => {
-  if (!accounts?.length) {
-    return "Unknown";
-  }
+export const getUserName = (user: Pick<UserRow, "name" | "email">) =>
+  user.name?.trim() || user.email;
 
+const getLoginMethodLabel = (accounts?: UserLoginAccount[]) => {
   const methods = new Set<string>();
-
-  for (const account of accounts) {
+  for (const account of accounts ?? []) {
     const provider = account.provider?.trim();
-    if (!provider) {
-      continue;
-    }
-
+    if (!provider) continue;
     if (provider === "nodemailer") {
       methods.add("Email");
-      continue;
-    }
-
-    if (provider.startsWith("oidc-")) {
+    } else if (provider.startsWith("oidc-")) {
       methods.add("SSO");
-      continue;
+    } else {
+      methods.add(provider);
     }
-
-    methods.add(`Other (${provider})`);
   }
-
-  if (!methods.size) {
-    return "Unknown";
-  }
-
-  if (methods.size === 1) {
-    return Array.from(methods)[0];
-  }
-
-  return "Mixed";
+  if (methods.size === 0) return "";
+  if (methods.size === 1) return Array.from(methods)[0];
+  return "Email and SSO";
 };
 
-export const columns: ColumnDef<UserRow>[] = [
+/** Columns that open hidden; the Columns menu brings them back. */
+export const USER_COLUMN_DEFAULTS: Record<string, boolean> = {
+  loginMethod: false,
+  phone: false,
+  location: false,
+  updatedAt: false,
+};
+
+export const getUserColumns = ({
+  basePath,
+  showGroups,
+}: {
+  basePath: string;
+  /** Groups belong to teams; an organization's users have none. */
+  showGroups: boolean;
+}): ColumnDef<UserRow, unknown>[] => [
   {
+    id: "name",
     accessorKey: "name",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Name" />
-    ),
+    meta: {
+      label: "Name",
+      icon: CircleUserRound,
+      sortField: "name",
+      width: 260,
+      pinned: true,
+      alwaysVisible: true,
+    },
     cell: ({ row }) => (
-      <NavigableCell id={row.original.id} className="flex items-center gap-2">
-        <span>{row.original?.name || "N/A"}</span>
-        {row.original.isOwner ? (
-          <Badge variant="secondary" className="flex items-center gap-1">
-            <Crown className="h-3 w-3" />
-            Owner
-          </Badge>
-        ) : null}
-      </NavigableCell>
+      <RecordNameCell
+        kind="person"
+        name={getUserName(row.original)}
+        imageSrc={row.original.image}
+        href={`${basePath}/${row.original.id}`}
+        meta={
+          [row.original.pronouns, row.original.isOwner ? "Owner" : null]
+            .filter(Boolean)
+            .join(" · ") || null
+        }
+      />
     ),
   },
   {
+    id: "email",
     accessorKey: "email",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Email" />
-    ),
+    meta: { label: "Email", icon: Mail, sortField: "email", width: 260 },
+    cell: ({ row }) => <EmailCell email={row.original.email} />,
+  },
+  {
+    id: "roles",
+    meta: { label: "Role", icon: ShieldCheck, width: 200 },
     cell: ({ row }) => (
-      <NavigableCell id={row.original.id}>
-        {row.original?.email || "N/A"}
-      </NavigableCell>
+      <ChipList
+        items={row.original.roles ?? []}
+        getKey={(role) => role}
+        getLabel={(role) => USER_ROLE_LABELS[role] ?? role}
+        renderChip={(role) => (
+          <RecordChip>{USER_ROLE_LABELS[role] ?? role}</RecordChip>
+        )}
+      />
     ),
   },
+  ...(showGroups
+    ? [
+        {
+          id: "groups",
+          meta: { label: "Groups", icon: UsersRound, width: 220 },
+          cell: ({ row }) => (
+            <ChipList
+              items={row.original.groups ?? []}
+              getKey={(membership) => membership.groupId}
+              getLabel={(membership) => membership.group.name}
+              renderChip={(membership) => (
+                <RecordChip title={membership.group.name}>
+                  {membership.group.name}
+                </RecordChip>
+              )}
+            />
+          ),
+        } satisfies ColumnDef<UserRow, unknown>,
+      ]
+    : []),
   {
     id: "loginMethod",
-    accessorFn: (row) => toLoginMethodLabel(row.accounts),
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Login method" />
-    ),
+    meta: { label: "Signs in with", icon: KeyRound, width: 140 },
     cell: ({ row }) => (
-      <NavigableCell id={row.original.id}>
-        {toLoginMethodLabel(row.original.accounts)}
-      </NavigableCell>
+      <TextCell value={getLoginMethodLabel(row.original.accounts)} />
     ),
   },
   {
+    id: "lastLoginAt",
     accessorKey: "lastLoginAt",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Last login" />
-    ),
-    cell: ({ row }) => (
-      <NavigableCell id={row.original.id}>
-        {row.original.lastLoginAt
-          ? format(new Date(row.original.lastLoginAt), "PPp")
-          : "Never"}
-      </NavigableCell>
-    ),
+    meta: {
+      label: "Last sign-in",
+      icon: LogIn,
+      sortField: "lastLoginAt",
+      width: 140,
+    },
+    cell: ({ row }) => <DateCell value={row.original.lastLoginAt} />,
   },
   {
+    id: "phone",
     accessorKey: "phone",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Phone" />
-    ),
+    meta: { label: "Phone", icon: Phone, width: 160 },
+    cell: ({ row }) => <TextCell value={row.original.phone} />,
+  },
+  {
+    id: "location",
+    meta: { label: "Location", icon: MapPin, sortField: "city", width: 180 },
     cell: ({ row }) => (
-      <NavigableCell id={row.original.id}>
-        {row.original?.phone || "N/A"}
-      </NavigableCell>
+      <LocationCell city={row.original.city} country={row.original.country} />
     ),
   },
   {
-    accessorKey: "city",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="City" />
-    ),
-    cell: ({ row }) => (
-      <NavigableCell id={row.original.id}>
-        {row.original?.city || "N/A"}
-      </NavigableCell>
-    ),
-  },
-  {
-    accessorKey: "country",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Country" />
-    ),
-    cell: ({ row }) => (
-      <NavigableCell id={row.original.id}>
-        {row.original?.country || "N/A"}
-      </NavigableCell>
-    ),
-  },
-  {
-    accessorKey: "roles",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Roles" />
-    ),
-    cell: ({ row }) => (
-      <NavigableCell id={row.original.id}>
-        {Array.isArray(row.original?.roles)
-          ? row.original.roles.join(", ")
-          : row.original?.roles || "N/A"}
-      </NavigableCell>
-    ),
-  },
-  {
-    accessorKey: "groups",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Groups" />
-    ),
-    cell: ({ row }) => {
-      const groups = row.original?.groups;
-      if (!groups || groups.length === 0) {
-        return <NavigableCell id={row.original.id}>No groups</NavigableCell>;
-      }
-      return (
-        <NavigableCell id={row.original.id} className="flex flex-wrap gap-1">
-          {groups.map(
-            (userGroup: {
-              groupId: string;
-              group: { id: string; name: string };
-            }) => (
-              <Badge
-                key={userGroup.groupId}
-                variant="secondary"
-                className="text-xs"
-              >
-                {userGroup.group.name}
-              </Badge>
-            ),
-          )}
-        </NavigableCell>
-      );
-    },
-  },
-  {
+    id: "createdAt",
     accessorKey: "createdAt",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Created At" />
-    ),
-    cell: ({ row }) => (
-      <NavigableCell id={row.original.id}>
-        {row.original?.createdAt
-          ? format(new Date(row.original.createdAt), "PP")
-          : "N/A"}
-      </NavigableCell>
-    ),
-  },
-  {
-    accessorKey: "updatedAt",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Updated At" />
-    ),
-    cell: ({ row }) => (
-      <NavigableCell id={row.original.id}>
-        {row.original?.updatedAt
-          ? format(new Date(row.original.updatedAt), "PP")
-          : "N/A"}
-      </NavigableCell>
-    ),
-  },
-  {
-    id: "actions",
-    cell: ({ row }) => {
-      const user = row.original;
-      return user.canManageUsers ? <UserActions user={user} /> : null;
+    meta: {
+      label: "Added",
+      icon: CalendarPlus,
+      sortField: "createdAt",
+      width: 130,
     },
+    cell: ({ row }) => <DateCell value={row.original.createdAt} />,
+  },
+  {
+    id: "updatedAt",
+    accessorKey: "updatedAt",
+    meta: { label: "Updated", icon: CalendarClock, width: 130 },
+    cell: ({ row }) => <DateCell value={row.original.updatedAt} />,
   },
 ];
 
-const UserActions = ({ user }: { user: UserRow }) => {
-  const { toast } = useToast();
-  const router = useRouter();
-  const params = useParams();
-  const [open, setOpen] = useState(false);
-  const [isRemoving, setIsRemoving] = useState(false);
-
-  const teamId = params?.teamId ? params?.teamId : "";
-  const organizationId = params?.organizationId ? params.organizationId : "";
-  const scopeLabel = teamId ? "team" : "organization";
-
-  const handleDelete = async () => {
-    try {
-      setIsRemoving(true);
-      const response = await fetch(`/api/users/${user.id}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ organizationId, teamId }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to delete user");
-      }
-
-      toast({
-        title: "Success",
-        description: "User has been removed successfully",
-      });
-
-      router.refresh();
-      setOpen(false);
-    } catch (_error) {
-      toast({
-        title: "Error",
-        description: "Failed to remove user",
-        variant: "destructive",
-      });
-    } finally {
-      setIsRemoving(false);
-    }
-  };
-
-  if (user.isOwner) {
-    return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        disabled
-        aria-label="Team owner cannot be removed"
-        title="Transfer ownership before removing this user"
-        className="h-8 w-8 p-0"
-      >
-        <Trash2 className="h-4 w-4" aria-hidden="true" />
-      </Button>
-    );
-  }
+export const renderUserCard = (user: UserRow, basePath: string) => {
+  const name = getUserName(user);
+  const lastLogin = formatRecordDate(user.lastLoginAt);
 
   return (
-    <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={`Remove ${user.name || user.email} from ${scopeLabel}`}
-          className="h-8 w-8 p-0 text-red-600 hover:bg-red-50 hover:text-red-700"
-        >
-          <Trash2 className="h-4 w-4" aria-hidden="true" />
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>
-            Remove This User from the {teamId ? "Team" : "Organization"}?
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            {user.name || user.email} will lose access to this {scopeLabel}
-            {teamId ? " and all of its groups" : ""}. Their account and other
-            memberships remain intact.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={isRemoving}>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleDelete}
-            disabled={isRemoving}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-          >
-            {isRemoving ? "Removing…" : "Remove User"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <Link
+      key={user.id}
+      href={`${basePath}/${user.id}`}
+      className="block min-w-0 rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
+    >
+      <div className="flex h-full min-w-0 flex-col gap-3 rounded-lg border bg-card p-4 text-card-foreground transition-colors hover:border-input hover:bg-accent/40">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <RecordAvatar
+            name={name}
+            kind="person"
+            imageSrc={user.image}
+            className="size-8 text-xs"
+          />
+          <div className="min-w-0">
+            <p className="truncate font-medium" title={name}>
+              {name}
+              {user.isOwner ? (
+                <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                  Owner
+                </span>
+              ) : null}
+            </p>
+            {user.name?.trim() ? (
+              <p className="truncate text-xs text-muted-foreground">
+                {user.email}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        {user.roles?.length || user.groups?.length ? (
+          <div className="flex min-w-0 flex-wrap gap-1">
+            {(user.roles ?? []).map((role) => (
+              <RecordChip key={role}>
+                {USER_ROLE_LABELS[role] ?? role}
+              </RecordChip>
+            ))}
+            {(user.groups ?? []).map((membership) => (
+              <RecordChip key={membership.groupId}>
+                {membership.group.name}
+              </RecordChip>
+            ))}
+          </div>
+        ) : null}
+        <div className="mt-auto text-xs text-muted-foreground">
+          {lastLogin ? `Last sign-in ${lastLogin}` : "Not signed in yet"}
+        </div>
+      </div>
+    </Link>
   );
 };

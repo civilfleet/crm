@@ -1,21 +1,23 @@
-import { Files } from "lucide-react";
-import {
-  RecordsHeader,
-  RecordsPage,
-} from "@/components/records/records-layout";
+import { cookies } from "next/headers";
 import FileTable from "@/components/table/file-table";
+import {
+  parseTablePageSize,
+  RECORDS_PAGE_SIZE,
+  TABLE_PAGE_SIZE_COOKIE,
+} from "@/lib/table-page-size";
 
 interface FilesPageProps {
   params: Promise<{ teamId: string }>;
 }
 
 export default async function FilesPage({ params }: FilesPageProps) {
-  const { teamId } = await params;
+  const [{ teamId }, cookieStore] = await Promise.all([params, cookies()]);
+  const initialPageSize = parseTablePageSize(
+    cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+    RECORDS_PAGE_SIZE,
+  );
 
   return (
-    <RecordsPage>
-      <RecordsHeader icon={Files} title="Files" />
-      <FileTable teamId={teamId} organizationId="" includeContactFiles />
-    </RecordsPage>
+    <FileTable scope="crm" teamId={teamId} initialPageSize={initialPageSize} />
   );
 }

@@ -5,6 +5,7 @@ import {
   Check,
   Copy,
   Download,
+  List,
   Loader2,
   Mail,
   Pencil,
@@ -17,9 +18,29 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
-import { DataTable } from "@/components/data-table";
+import { EmptyState } from "@/components/design/empty-state";
 import { InternalCopyFields } from "@/components/emails/internal-copy-fields";
 import { ContactListExportDialog } from "@/components/forms/contact-list-export-dialog";
+import { DateCell } from "@/components/records/record-cells";
+import {
+  NoMatchState,
+  optionFilter,
+  RecordListToolbar,
+} from "@/components/records/record-list-toolbar";
+import {
+  BulkActionButton,
+  RecordTable,
+} from "@/components/records/record-table";
+import {
+  RecordsHeader,
+  RecordsPage,
+} from "@/components/records/records-layout";
+import {
+  type OptionFilterDefinition,
+  optionFilters,
+  recordListFetcher,
+  useRecordList,
+} from "@/components/records/use-record-list";
 import { RichEmailEditor } from "@/components/rich-email-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,6 +74,7 @@ type ContactList = {
   description?: string;
   type: ContactListType;
   contactCount: number;
+  createdAt?: string | Date;
   updatedAt: string | Date;
   contacts: {
     id: string;
@@ -69,7 +91,20 @@ type ListEmailRecipient = {
 
 interface ContactListsManagerProps {
   teamId: string;
+  initialPageSize: number;
 }
+
+const TYPE_FILTER: OptionFilterDefinition = {
+  key: "type",
+  label: "Type",
+  options: [
+    { value: ContactListType.MANUAL, label: "Manual" },
+    { value: ContactListType.SMART, label: "Smart" },
+  ],
+};
+const FILTER_MODEL = optionFilters([TYPE_FILTER]);
+const FILTER_DEFINITIONS = [optionFilter(TYPE_FILTER)];
+const getListRowId = (list: ContactList) => list.id;
 
 type SenderLabelMode = "default" | "user";
 
@@ -79,10 +114,9 @@ const parseEmailList = (value: string) =>
     .map((email) => email.trim())
     .filter(Boolean);
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
-
 export default function ContactListsManager({
   teamId,
+  initialPageSize,
 }: ContactListsManagerProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -101,45 +135,36 @@ export default function ContactListsManager({
   const [emailSenderLabelMode, setEmailSenderLabelMode] =
     useState<SenderLabelMode>("default");
   const [copiedListId, setCopiedListId] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<string>("updated-desc");
   const [exportingList, setExportingList] = useState<{
     id: string;
     name: string;
   } | null>(null);
 
-  const { data: listsData, mutate } = useSWR(
-    `/api/contact-lists?teamId=${teamId}`,
-    fetcher,
-  );
+  const list = useRecordList({
+    viewKey: `lists:team:${teamId}`,
+    columnDefaults: {},
+    initialPageSize,
+    sortFields: ["name", "contactCount", "updatedAt", "createdAt"],
+    views: ["table", "cards"],
+    filters: FILTER_MODEL,
+  });
+  const params = list.getSearchParams({ teamId });
+  const typeFilter = list.getFilterValues("type");
+  if (typeFilter.length) params.set("types", typeFilter.join(","));
+  const {
+    data: listsData,
+    mutate,
+    isLoading,
+    isValidating,
+  } = useSWR(`/api/contact-lists?${params.toString()}`, recordListFetcher, {
+    keepPreviousData: true,
+  });
 
   const lists: ContactList[] = useMemo(
     () => (listsData?.data as ContactList[]) || [],
     [listsData],
   );
-  const sortedLists = useMemo(() => {
-    const sortable = [...lists];
-    switch (sortKey) {
-      case "name-asc":
-        return sortable.sort((a, b) => a.name.localeCompare(b.name));
-      case "name-desc":
-        return sortable.sort((a, b) => b.name.localeCompare(a.name));
-      case "count-desc":
-        return sortable.sort((a, b) => b.contactCount - a.contactCount);
-      case "count-asc":
-        return sortable.sort((a, b) => a.contactCount - b.contactCount);
-      case "updated-asc":
-        return sortable.sort(
-          (a, b) =>
-            new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime(),
-        );
-      default:
-        return sortable.sort(
-          (a, b) =>
-            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-        );
-    }
-  }, [lists, sortKey]);
-  const isLoading = !listsData;
+  const total = Number(listsData?.total ?? 0);
 
   const handleDelete = useCallback(
     async (listId: string, listName: string) => {
@@ -423,11 +448,18 @@ export default function ContactListsManager({
     }
   };
 
-  const columns = useMemo<ColumnDef<ContactList>[]>(
+  const columns = useMemo<ColumnDef<ContactList, unknown>[]>(
     () => [
       {
+        id: "name",
         accessorKey: "name",
-        header: "Name",
+        meta: {
+          label: "Name",
+          sortField: "name",
+          width: 280,
+          pinned: true,
+          alwaysVisible: true,
+        },
         cell: ({ row }) => {
           const list = row.original;
           return (
@@ -446,8 +478,9 @@ export default function ContactListsManager({
         },
       },
       {
+        id: "contactCount",
         accessorKey: "contactCount",
-        header: "Contacts",
+        meta: { label: "Contacts", sortField: "contactCount", width: 120 },
         cell: ({ row }) => (
           <Badge className="flex w-fit items-center gap-1" variant="secondary">
             <Users className="h-3 w-3" />
@@ -456,8 +489,14 @@ export default function ContactListsManager({
         ),
       },
       {
+        id: "updatedAt",
+        meta: { label: "Updated", sortField: "updatedAt", width: 140 },
+        cell: ({ row }) => <DateCell value={row.original.updatedAt} />,
+      },
+      {
+        id: "description",
         accessorKey: "description",
-        header: "Description",
+        meta: { label: "Description", width: 360 },
         cell: ({ row }) =>
           row.original.description ? (
             <p className="max-w-[360px] truncate text-sm text-muted-foreground">
@@ -469,7 +508,7 @@ export default function ContactListsManager({
       },
       {
         id: "actions",
-        header: () => <div className="text-right">Actions</div>,
+        meta: { label: "Actions", width: 180, align: "right" },
         cell: ({ row }) => {
           const list = row.original;
           return (
@@ -607,146 +646,108 @@ export default function ContactListsManager({
     </div>
   );
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <div>
-          <h1 className="text-2xl font-semibold">Contact Lists</h1>
-          <p className="text-sm text-muted-foreground">
-            Organize your contacts for targeted communication and outreach.
-          </p>
-        </div>
-      </div>
+  const newListHref = `/teams/${teamId}/crm/lists/new`;
 
-      <div className="rounded-md border p-2">
-        {isLoading ? (
-          <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Loading lists…
-          </div>
-        ) : (
-          <DataTable
-            columns={columns}
-            data={sortedLists}
-            renderCard={renderListCard}
-            initialView="table"
-            selectable
-            renderBatchActions={({ selectedRows, clearSelection }) => (
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm text-muted-foreground">
-                  {selectedRows.length} selected
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={
-                      isBulkDeleting ||
-                      isSendingEmail ||
-                      getEmailRecipientsFromLists(selectedRows).length === 0
-                    }
-                    onClick={() => openEmailDialog(selectedRows)}
-                  >
-                    <Mail className="mr-2 h-4 w-4" />
-                    Email selected
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    disabled={isBulkDeleting}
-                    onClick={() =>
-                      handleDeleteSelected(selectedRows, clearSelection)
-                    }
-                  >
-                    {isBulkDeleting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Deleting…
-                      </>
-                    ) : (
-                      "Delete selected"
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={isBulkDeleting || selectedRows.length === 0}
-                    onClick={clearSelection}
-                  >
-                    Clear
-                  </Button>
-                </div>
-                <ListEmailDialog
-                  open={isEmailDialogOpen}
-                  recipients={emailRecipients}
-                  subject={emailSubject}
-                  body={emailBody}
-                  bcc={emailBcc}
-                  internalCopyMode={emailInternalCopyMode}
-                  senderLabelMode={emailSenderLabelMode}
-                  isSending={isSendingEmail}
-                  onOpenChange={setIsEmailDialogOpen}
-                  onSubjectChange={setEmailSubject}
-                  onBodyChange={setEmailBody}
-                  onBccChange={setEmailBcc}
-                  onInternalCopyModeChange={setEmailInternalCopyMode}
-                  onSenderLabelModeChange={setEmailSenderLabelMode}
-                  onSend={() => handleSendEmail(clearSelection)}
-                />
-              </div>
-            )}
-            toolbar={
-              <div className="flex flex-wrap items-center gap-2">
-                <Select value={sortKey} onValueChange={setSortKey}>
-                  <SelectTrigger className="w-full sm:w-[190px]">
-                    <SelectValue placeholder="Sort lists" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="updated-desc">
-                      Updated (newest)
-                    </SelectItem>
-                    <SelectItem value="updated-asc">
-                      Updated (oldest)
-                    </SelectItem>
-                    <SelectItem value="name-asc">Name (A–Z)</SelectItem>
-                    <SelectItem value="name-desc">Name (Z–A)</SelectItem>
-                    <SelectItem value="count-desc">
-                      Contacts (high → low)
-                    </SelectItem>
-                    <SelectItem value="count-asc">
-                      Contacts (low → high)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button asChild className="hidden sm:inline-flex">
-                  <Link href={`/teams/${teamId}/crm/lists/new`}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add list
+  return (
+    <RecordsPage grid>
+      <RecordsHeader
+        icon={List}
+        title="Lists"
+        count={isLoading ? undefined : total}
+        action={
+          <Button asChild variant="action" size="sm">
+            <Link href={newListHref}>
+              <Plus /> Add list
+            </Link>
+          </Button>
+        }
+      />
+
+      <RecordListToolbar
+        list={list}
+        columns={columns}
+        filters={FILTER_DEFINITIONS}
+        searchLabel="Search lists"
+        isRefreshing={isValidating && !isLoading}
+      />
+
+      <RecordTable
+        columns={columns}
+        data={lists}
+        getRowId={getListRowId}
+        getRowHref={(item) => `/teams/${teamId}/crm/lists/${item.id}`}
+        isLoading={isLoading}
+        emptyState={
+          list.isSearching ? (
+            <NoMatchState noun="lists" onClear={list.handleClearAll} />
+          ) : (
+            <EmptyState
+              size="page"
+              icon={List}
+              title="No lists yet"
+              description="Organize your contacts for targeted communication and outreach."
+              action={
+                <Button asChild variant="action">
+                  <Link href={newListHref}>
+                    <Plus /> Add list
                   </Link>
                 </Button>
-              </div>
-            }
-          />
+              }
+            />
+          )
+        }
+        noun={{ one: "list", other: "lists" }}
+        sort={list.sort}
+        onSortChange={list.setSort}
+        columnVisibility={list.columnVisibility.visibility}
+        view={list.view === "cards" ? "cards" : "table"}
+        renderCards={(rows) => rows.map((row) => renderListCard(row))}
+        pagination={{ ...list.pagination, total }}
+        selectable
+        renderBulkActions={({ selectedRows, clearSelection }) => (
+          <>
+            <BulkActionButton
+              disabled={
+                isBulkDeleting ||
+                isSendingEmail ||
+                getEmailRecipientsFromLists(selectedRows).length === 0
+              }
+              onClick={() => openEmailDialog(selectedRows)}
+            >
+              <Mail /> Email
+            </BulkActionButton>
+            <BulkActionButton
+              tone="destructive"
+              disabled={isBulkDeleting}
+              onClick={() => handleDeleteSelected(selectedRows, clearSelection)}
+            >
+              {isBulkDeleting ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Trash2 />
+              )}
+              Delete
+            </BulkActionButton>
+            <ListEmailDialog
+              open={isEmailDialogOpen}
+              recipients={emailRecipients}
+              subject={emailSubject}
+              body={emailBody}
+              bcc={emailBcc}
+              internalCopyMode={emailInternalCopyMode}
+              senderLabelMode={emailSenderLabelMode}
+              isSending={isSendingEmail}
+              onOpenChange={setIsEmailDialogOpen}
+              onSubjectChange={setEmailSubject}
+              onBodyChange={setEmailBody}
+              onBccChange={setEmailBcc}
+              onInternalCopyModeChange={setEmailInternalCopyMode}
+              onSenderLabelModeChange={setEmailSenderLabelMode}
+              onSend={() => handleSendEmail(clearSelection)}
+            />
+          </>
         )}
-      </div>
-
-      <Link
-        href={`/teams/${teamId}/crm/lists/new`}
-        aria-label="Add list"
-        className="fixed bottom-5 right-5 z-40 sm:hidden"
-      >
-        <Button
-          type="button"
-          size="icon"
-          className="h-12 w-12 rounded-full shadow-lg"
-        >
-          <Plus className="h-5 w-5" />
-          <span className="sr-only">Add list</span>
-        </Button>
-      </Link>
+      />
 
       <ContactListExportDialog
         open={!!exportingList}
@@ -754,7 +755,7 @@ export default function ContactListsManager({
         list={exportingList}
         teamId={teamId}
       />
-    </div>
+    </RecordsPage>
   );
 }
 

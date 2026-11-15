@@ -1,37 +1,180 @@
-import type { ColumnDef } from "@tanstack/react-table";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import type { File } from "@/types";
+"use client";
 
-const getBaseFundingPath = (teamId: string, organizationId: string) => {
-  if (teamId) {
-    return `/teams/${teamId}/funding`;
-  }
-  return `/organizations/${organizationId}`;
+import type { ColumnDef } from "@tanstack/react-table";
+import {
+  ArrowLeftRight,
+  Building2,
+  CalendarClock,
+  CalendarPlus,
+  Download,
+  FileArchive,
+  File as FileIcon,
+  FileImage,
+  FilePenLine,
+  FileSpreadsheet,
+  FileText,
+  HandCoins,
+  Link2,
+  type LucideIcon,
+  Shapes,
+  UserRound,
+} from "lucide-react";
+import Link from "next/link";
+import {
+  DateCell,
+  formatRecordDate,
+  RecordChip,
+  RecordIcon,
+  RecordNameCell,
+  TextCell,
+} from "@/components/records/record-cells";
+
+/** CRM and Funding files of a team, or the files of one organization. */
+export type FileListScope = "crm" | "funding" | "org";
+
+export type FileRow = {
+  id: string;
+  name?: string | null;
+  url: string;
+  type: string;
+  createdAt: string;
+  updatedAt: string;
+  organizationId?: string | null;
+  organization?: { id: string; teamId?: string | null; name?: string | null };
+  FundingRequest?: { id: string; name?: string | null } | null;
+  donationAgreement?: Array<{
+    id: string;
+    fundingRequest?: { name?: string | null } | null;
+  }>;
+  Transaction?: Array<{
+    id: string;
+    fundingRequest?: { name?: string | null } | null;
+  }>;
+  contact?: { id: string; teamId: string; name: string } | null;
+  createdBy?: { email: string } | null;
+  updatedBy?: { email: string } | null;
+  downloadAudits?: Array<{ createdAt: string; user: { email: string } }>;
 };
 
-const getAssociatedResource = (
-  file: File,
+const FILE_TYPE_LABELS: Record<string, string> = {
+  TAX_EXEMPTION_CERTIFICATE: "Tax certificate",
+  ARTICLES_OF_ASSOCIATION: "Articles of association",
+  REPORT: "Report",
+  LOGO: "Logo",
+  DONATION_AGREEMENT: "Donation agreement",
+  DONATION_RECEIPT: "Donation receipt",
+  STATEMENT: "Statement",
+  TRANSACTION_RECEIPT: "Transaction receipt",
+  "application/pdf": "PDF",
+  "application/msword": "Word document",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    "Word document",
+  "application/vnd.ms-excel": "Spreadsheet",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+    "Spreadsheet",
+  "text/csv": "CSV",
+  "text/plain": "Text",
+  "application/zip": "ZIP archive",
+};
+
+/** "TAX_EXEMPTION_CERTIFICATE" → "Tax certificate", "image/png" → "Image". */
+export const getFileTypeLabel = (type?: string | null) => {
+  if (!type) return "";
+  const known = FILE_TYPE_LABELS[type];
+  if (known) return known;
+  if (type.startsWith("image/")) return "Image";
+  if (type.includes("/")) return "File";
+  const words = type.replace(/[_-]+/g, " ").trim().toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+const getExtension = (file: Pick<FileRow, "name" | "url">) => {
+  const source = file.url || file.name || "";
+  const match = /\.([a-z0-9]{1,5})$/i.exec(source);
+  return match?.[1]?.toLowerCase() ?? "";
+};
+
+const getFileKindIcon = (file: Pick<FileRow, "name" | "url" | "type">) => {
+  const extension = getExtension(file);
+  if (
+    file.type.startsWith("image/") ||
+    ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(extension)
+  ) {
+    return FileImage;
+  }
+  if (["xls", "xlsx", "csv", "ods"].includes(extension)) {
+    return FileSpreadsheet;
+  }
+  if (["zip", "gz", "7z", "rar"].includes(extension)) return FileArchive;
+  if (["pdf", "doc", "docx", "odt", "txt", "md", "rtf"].includes(extension)) {
+    return FileText;
+  }
+  return FileIcon;
+};
+
+export const getFileName = (file: Pick<FileRow, "name" | "url">) =>
+  file.name?.trim() || file.url.split("/").pop() || file.url;
+
+/**
+ * Where a file row leads: its record in the CRM, or the file itself (shown
+ * in the browser) where there is no record page.
+ */
+export const getFileHref = (
+  file: Pick<FileRow, "id">,
+  scope: FileListScope,
+  teamId: string,
+) =>
+  scope === "crm"
+    ? `/teams/${teamId}/crm/files/${file.id}`
+    : `/api/files/${file.id}?preview=true`;
+
+export const getFileDownloadHref = (file: Pick<FileRow, "id">) =>
+  `/api/files/${file.id}`;
+
+type LinkedRecord = {
+  kind: string;
+  label: string;
+  href: string;
+  icon?: LucideIcon;
+  person?: boolean;
+};
+
+/** The record a file belongs to: a person, a request, an agreement, a transaction. */
+export const getLinkedRecord = (
+  file: FileRow,
+  scope: FileListScope,
   teamId: string,
   organizationId: string,
-) => {
-  const basePath = getBaseFundingPath(teamId, organizationId);
-
-  const donationAgreement = file.donationAgreement?.[0];
-  if (donationAgreement?.id) {
+): LinkedRecord | null => {
+  if (file.contact?.id) {
     return {
-      label: donationAgreement.fundingRequest?.name
-        ? `Donation Agreement: ${donationAgreement.fundingRequest.name}`
-        : "Donation Agreement",
-      href: `${basePath}/donation-agreements/${donationAgreement.id}`,
+      kind: "Person",
+      label: file.contact.name,
+      href: `/teams/${file.contact.teamId}/crm/contacts/${file.contact.id}`,
+      person: true,
+    };
+  }
+
+  const basePath =
+    scope === "org"
+      ? `/organizations/${organizationId}`
+      : `/teams/${teamId}/funding`;
+
+  const agreement = file.donationAgreement?.[0];
+  if (agreement?.id) {
+    return {
+      kind: "Donation agreement",
+      icon: FilePenLine,
+      label: agreement.fundingRequest?.name || "Donation agreement",
+      href: `${basePath}/donation-agreements/${agreement.id}`,
     };
   }
 
   if (file.FundingRequest?.id) {
     return {
-      label: file.FundingRequest.name
-        ? `Funding Request: ${file.FundingRequest.name}`
-        : "Funding Request",
+      kind: "Funding request",
+      icon: HandCoins,
+      label: file.FundingRequest.name || "Funding request",
       href: `${basePath}/funding-requests/${file.FundingRequest.id}`,
     };
   }
@@ -39,9 +182,9 @@ const getAssociatedResource = (
   const transaction = file.Transaction?.[0];
   if (transaction) {
     return {
-      label: transaction.fundingRequest?.name
-        ? `Transaction: ${transaction.fundingRequest.name}`
-        : "Transaction",
+      kind: "Transaction",
+      icon: ArrowLeftRight,
+      label: transaction.fundingRequest?.name || "Transaction",
       href: `${basePath}/transactions`,
     };
   }
@@ -49,159 +192,200 @@ const getAssociatedResource = (
   return null;
 };
 
-export const getFileColumns = (
-  teamId: string,
-  organizationId: string,
-  includeContactFiles = false,
-  onDelete?: (file: File) => void,
-): ColumnDef<File>[] => [
-  {
-    id: "actions",
-    header: () => <div className="text-left w-28">Actions</div>,
-    cell: ({ row }) => (
-      <div className="flex items-center gap-2 text-left">
-        <Button asChild size="sm" variant="outline">
-          <Link href={`/api/files/${row.original?.id}`}>Download</Link>
-        </Button>
-        {onDelete ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="destructive"
-            onClick={() => onDelete(row.original)}
-          >
-            Delete
-          </Button>
-        ) : null}
-      </div>
-    ),
-  },
-  {
-    accessorKey: "url",
-    header: () => <div className="text-left w-36">File</div>,
-    cell: ({ row }) => (
-      <div className="text-left text-blue-500">
-        <Link
-          href={
-            includeContactFiles
-              ? `/teams/${teamId}/crm/files/${row.original.id}`
-              : `/api/files/${row.original?.id}`
-          }
-        >
-          {row.original?.name || row.original?.url || "N/A"}
-        </Link>
-      </div>
-    ),
-  },
-  {
-    id: "associatedResource",
-    header: () => <div className="text-left w-64">Associated Resource</div>,
-    cell: ({ row }) => {
-      if (includeContactFiles && row.original.contact?.id) {
-        return (
-          <div className="text-left w-64">
-            <Link
-              className="text-blue-600 hover:underline"
-              href={`/teams/${row.original.contact.teamId}/crm/contacts/${row.original.contact.id}`}
-            >
-              Contact: {row.original.contact.name}
-            </Link>
-          </div>
-        );
-      }
+const chipLinkClass =
+  "inline-flex max-w-full rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden hover:[&>span]:border-input hover:[&>span]:bg-accent";
 
-      const resource = getAssociatedResource(
+/** Columns that open hidden; the Columns menu brings them back. */
+export const getFileColumnDefaults = (
+  scope: FileListScope,
+): Record<string, boolean> => ({
+  organization: scope === "funding",
+  updatedAt: false,
+  updatedBy: false,
+  lastDownloadedBy: false,
+});
+
+export const getFileColumns = ({
+  scope,
+  teamId,
+  organizationId,
+}: {
+  scope: FileListScope;
+  teamId: string;
+  organizationId: string;
+}): ColumnDef<FileRow, unknown>[] => [
+  {
+    id: "name",
+    accessorKey: "name",
+    meta: {
+      label: "File",
+      icon: FileIcon,
+      sortField: "name",
+      width: 320,
+      pinned: true,
+      alwaysVisible: true,
+    },
+    cell: ({ row }) => (
+      <RecordNameCell
+        kind="record"
+        icon={getFileKindIcon(row.original)}
+        name={getFileName(row.original)}
+        href={getFileHref(row.original, scope, teamId)}
+      />
+    ),
+  },
+  {
+    id: "type",
+    accessorKey: "type",
+    meta: { label: "Type", icon: Shapes, sortField: "type", width: 190 },
+    cell: ({ row }) => {
+      const label = getFileTypeLabel(row.original.type);
+      return label ? <RecordChip title={label}>{label}</RecordChip> : null;
+    },
+  },
+  {
+    id: "linkedTo",
+    meta: { label: "Belongs to", icon: Link2, width: 240 },
+    cell: ({ row }) => {
+      const linked = getLinkedRecord(
         row.original,
+        scope,
         teamId,
         organizationId,
       );
-      if (!resource) {
-        return <div className="text-left w-64">N/A</div>;
-      }
-
+      if (!linked) return null;
       return (
-        <div className="text-left w-64">
-          <Link className="text-blue-600 hover:underline" href={resource.href}>
-            {resource.label}
-          </Link>
-        </div>
+        <Link
+          href={linked.href}
+          title={`${linked.kind}: ${linked.label}`}
+          className={chipLinkClass}
+        >
+          <RecordChip
+            avatar={
+              linked.person ? { name: linked.label, kind: "person" } : undefined
+            }
+            icon={linked.icon}
+          >
+            {linked.label}
+          </RecordChip>
+        </Link>
       );
     },
   },
-  ...(includeContactFiles
-    ? []
-    : [
-        {
-          accessorKey: "organization",
-          header: () => <div className="text-left w-36">Organization</div>,
-          cell: ({ row }) => (
-            <div className="text-left">
-              {row.original?.organization?.name || "N/A"}
-            </div>
-          ),
-        } satisfies ColumnDef<File>,
-      ]),
   {
-    accessorKey: "type",
-    header: () => <div className="text-left w-36">Type</div>,
-    cell: ({ row }) => (
-      <div className="text-left">{row.original?.type || "N/A"}</div>
-    ),
+    id: "organization",
+    meta: { label: "Organization", icon: Building2, width: 220 },
+    cell: ({ row }) => {
+      const organization = row.original.organization;
+      const name = organization?.name?.trim();
+      if (!organization || !name) return null;
+      const chip = (
+        <RecordChip title={name} avatar={{ name, kind: "organization" }}>
+          {name}
+        </RecordChip>
+      );
+      if (scope === "org") return chip;
+      return (
+        <Link
+          href={`/teams/${teamId}/${scope}/organizations/${organization.id}`}
+          className={chipLinkClass}
+        >
+          {chip}
+        </Link>
+      );
+    },
   },
   {
+    id: "createdAt",
     accessorKey: "createdAt",
-    header: () => <div className="text-left w-36">Created At</div>,
-    cell: ({ row }) => (
-      <div className="text-left">
-        {row.original?.createdAt
-          ? new Date(row.original.createdAt).toLocaleString()
-          : "N/A"}
-      </div>
-    ),
+    meta: {
+      label: "Added",
+      icon: CalendarPlus,
+      sortField: "createdAt",
+      width: 130,
+    },
+    cell: ({ row }) => <DateCell value={row.original.createdAt} />,
   },
   {
+    id: "createdBy",
+    meta: { label: "Added by", icon: UserRound, width: 220 },
+    cell: ({ row }) => <TextCell value={row.original.createdBy?.email} />,
+  },
+  {
+    id: "updatedAt",
     accessorKey: "updatedAt",
-    header: () => <div className="text-left w-36">Updated At</div>,
-    cell: ({ row }) => (
-      <div className="text-left">
-        {row.original?.updatedAt
-          ? new Date(row.original.updatedAt).toLocaleString()
-          : "N/A"}
-      </div>
-    ),
+    meta: {
+      label: "Updated",
+      icon: CalendarClock,
+      sortField: "updatedAt",
+      width: 130,
+    },
+    cell: ({ row }) => <DateCell value={row.original.updatedAt} />,
   },
   {
-    accessorKey: "createdBy",
-    header: () => <div className="text-left w-36">Created By</div>,
-    cell: ({ row }) => (
-      <div className="text-left">{row.original?.createdBy?.email || "N/A"}</div>
-    ),
+    id: "updatedBy",
+    meta: { label: "Updated by", icon: UserRound, width: 220 },
+    cell: ({ row }) => <TextCell value={row.original.updatedBy?.email} />,
   },
   {
-    accessorKey: "updatedBy",
-    header: () => <div className="text-left w-36">Updated By</div>,
+    id: "lastDownloadedAt",
+    meta: { label: "Last download", icon: Download, width: 140 },
     cell: ({ row }) => (
-      <div className="text-left">{row.original?.updatedBy?.email || "N/A"}</div>
+      <DateCell value={row.original.downloadAudits?.[0]?.createdAt} />
     ),
   },
   {
     id: "lastDownloadedBy",
-    header: () => <div className="text-left w-40">Last Downloaded By</div>,
+    meta: { label: "Last downloaded by", icon: UserRound, width: 220 },
     cell: ({ row }) => (
-      <div className="text-left">
-        {row.original.downloadAudits?.[0]?.user?.email || "Never"}
-      </div>
-    ),
-  },
-  {
-    id: "lastDownloadedAt",
-    header: () => <div className="text-left w-44">Last Downloaded At</div>,
-    cell: ({ row }) => (
-      <div className="text-left">
-        {row.original.downloadAudits?.[0]?.createdAt
-          ? new Date(row.original.downloadAudits[0].createdAt).toLocaleString()
-          : "Never"}
-      </div>
+      <TextCell value={row.original.downloadAudits?.[0]?.user.email} />
     ),
   },
 ];
+
+export const renderFileCard = (
+  file: FileRow,
+  {
+    scope,
+    teamId,
+    organizationId,
+  }: { scope: FileListScope; teamId: string; organizationId: string },
+) => {
+  const name = getFileName(file);
+  const href = getFileHref(file, scope, teamId);
+  const typeLabel = getFileTypeLabel(file.type);
+  const linked = getLinkedRecord(file, scope, teamId, organizationId);
+  const className =
+    "block min-w-0 rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden";
+  const content = (
+    <div className="flex h-full min-w-0 flex-col gap-3 rounded-lg border bg-card p-4 text-card-foreground transition-colors hover:border-input hover:bg-accent/40">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <RecordIcon icon={getFileKindIcon(file)} className="size-8" />
+        <div className="min-w-0">
+          <p className="truncate font-medium" title={name}>
+            {name}
+          </p>
+          {linked ? (
+            <p className="truncate text-xs text-muted-foreground">
+              {linked.kind} · {linked.label}
+            </p>
+          ) : null}
+        </div>
+      </div>
+      <div className="mt-auto flex min-w-0 items-center justify-between gap-2 text-xs text-muted-foreground">
+        {typeLabel ? <RecordChip>{typeLabel}</RecordChip> : <span />}
+        <span className="shrink-0">{formatRecordDate(file.createdAt)}</span>
+      </div>
+    </div>
+  );
+
+  return href.startsWith("/api/") ? (
+    <a key={file.id} href={href} className={className}>
+      {content}
+    </a>
+  ) : (
+    <Link key={file.id} href={href} className={className}>
+      {content}
+    </Link>
+  );
+};

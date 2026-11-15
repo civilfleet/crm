@@ -98,30 +98,38 @@ const RegisteredAtCell = ({ createdAt }: { createdAt: string }) => (
   </span>
 );
 
-export const eventRegistrationColumns: ColumnDef<EventRegistrationRow>[] = [
+export const eventRegistrationColumns: ColumnDef<
+  EventRegistrationRow,
+  unknown
+>[] = [
   {
-    header: "Registrant",
-    accessorKey: "contactName",
+    id: "name",
+    meta: {
+      label: "Registrant",
+      sortField: "name",
+      width: 220,
+      alwaysVisible: true,
+    },
     cell: ({ row }) => <RegistrantCell registration={row.original} />,
   },
   {
-    header: "Email",
-    accessorKey: "email",
+    id: "email",
+    meta: { label: "Email", sortField: "email", width: 220 },
     cell: ({ row }) => <EmailCell email={row.original.email} />,
   },
   {
-    header: "Phone",
-    accessorKey: "phone",
+    id: "phone",
+    meta: { label: "Phone", width: 150 },
     cell: ({ row }) => <PhoneCell phone={row.original.phone} />,
   },
   {
-    header: "Registered",
-    accessorKey: "createdAt",
+    id: "createdAt",
+    meta: { label: "Registered", sortField: "createdAt", width: 180 },
     cell: ({ row }) => <RegisteredAtCell createdAt={row.original.createdAt} />,
   },
   {
-    header: "Notes",
-    accessorKey: "notes",
+    id: "notes",
+    meta: { label: "Notes", width: 240 },
     cell: ({ row }) => <NotesCell notes={row.original.notes} />,
   },
 ];

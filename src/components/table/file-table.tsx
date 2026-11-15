@@ -1,101 +1,182 @@
 "use client";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Download, Loader2, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import useSWR from "swr";
-import { z } from "zod";
-import { DataTable } from "@/components/data-table";
-import TableLoadingState from "@/components/loading/table-loading-state";
-import { getFileColumns } from "@/components/table/file-columns";
-import { useToast } from "@/hooks/use-toast";
-import type { File, FileDownloadAudit } from "@/types";
-import ButtonControl from "../helper/button-control";
-import FormInputControl from "../helper/form-input-control";
-import { Button } from "../ui/button";
-import { Form } from "../ui/form";
 
-const querySchema = z.object({
-  query: z.string(),
-});
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
-interface IFileTableProps {
-  teamId: string;
-  organizationId: string;
-  includeContactFiles?: boolean;
-}
+import { format } from "date-fns";
+import {
+  Download,
+  Files,
+  FolderOpen,
+  History,
+  Loader2,
+  Trash2,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
+import { EmptyState } from "@/components/design/empty-state";
+import {
+  NoMatchState,
+  optionFilter,
+  RecordListToolbar,
+} from "@/components/records/record-list-toolbar";
+import {
+  BulkActionButton,
+  RecordTable,
+} from "@/components/records/record-table";
+import {
+  RecordsHeader,
+  RecordsPage,
+} from "@/components/records/records-layout";
+import {
+  getSortFields,
+  type OptionFilterDefinition,
+  optionFilters,
+  recordListFetcher,
+  useRecordList,
+} from "@/components/records/use-record-list";
+import {
+  type FileListScope,
+  type FileRow,
+  getFileColumnDefaults,
+  getFileColumns,
+  getFileDownloadHref,
+  getFileHref,
+  getFileTypeLabel,
+  renderFileCard,
+} from "@/components/table/file-columns";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
+import type { FileDownloadAudit } from "@/types";
+
+// File types load with the list, so a saved type is kept as it is.
+const FILTER_MODEL = optionFilters(["type"]);
+
+// The same icons as the sidebar, so the page says which list it is.
+const SCOPE_ICONS = { crm: Files, funding: FolderOpen, org: FolderOpen };
+
+type FileTableProps = {
+  scope: FileListScope;
+  teamId?: string;
+  organizationId?: string;
+  initialPageSize: number;
+};
+
+const getFileRowId = (file: FileRow) => file.id;
 
 export default function FileTable({
-  teamId,
-  organizationId,
-  includeContactFiles = false,
-}: IFileTableProps) {
+  scope,
+  teamId = "",
+  organizationId = "",
+  initialPageSize,
+}: FileTableProps) {
   const { toast } = useToast();
+  const icon = SCOPE_ICONS[scope];
+  const includeContactFiles = scope === "crm";
   const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const [isDownloadingSelected, setIsDownloadingSelected] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  const form = useForm<z.infer<typeof querySchema>>({
-    resolver: zodResolver(querySchema),
-    defaultValues: { query: "" },
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const columns = useMemo(
+    () => getFileColumns({ scope, teamId, organizationId }),
+    [scope, teamId, organizationId],
+  );
+  const list = useRecordList({
+    viewKey:
+      scope === "org"
+        ? `files:org:${organizationId}`
+        : `files:${scope}:team:${teamId}`,
+    columnDefaults: getFileColumnDefaults(scope),
+    initialPageSize,
+    sortFields: getSortFields(columns),
+    views: ["table", "cards"],
+    filters: FILTER_MODEL,
   });
+  const typeFilter = list.getFilterValues("type");
 
-  const query = form.watch("query");
-  const filesParams = new URLSearchParams({
-    teamId,
-    organizationId,
-    query,
-  });
+  const scopeParams = useMemo(() => {
+    const params = new URLSearchParams({ teamId, organizationId });
+    if (includeContactFiles) params.set("includeContactFiles", "true");
+    return params;
+  }, [teamId, organizationId, includeContactFiles]);
 
-  if (includeContactFiles) {
-    filesParams.set("includeContactFiles", "true");
-  }
+  const listParams = list.getSearchParams(Object.fromEntries(scopeParams));
+  if (typeFilter.length) listParams.set("types", typeFilter.join(","));
 
   const { data, error, isLoading, isValidating, mutate } = useSWR(
-    `/api/files?${filesParams.toString()}`,
-    fetcher,
+    `/api/files?${listParams.toString()}`,
+    recordListFetcher,
+    { keepPreviousData: true },
   );
-  const { data: auditData } = useSWR(
-    `/api/files/audit?teamId=${teamId}&organizationId=${organizationId}`,
-    fetcher,
+  const { data: auditData, isLoading: isAuditLoading } = useSWR(
+    isHistoryOpen ? `/api/files/audit?${scopeParams.toString()}` : null,
+    recordListFetcher,
   );
-  const loading = isLoading || !data;
+  const files: FileRow[] = Array.isArray(data?.data) ? data.data : [];
+  const total = Number(data?.total ?? 0);
+  const audits: FileDownloadAudit[] = auditData?.data ?? [];
 
-  if (error) {
+  // Every type in this list, plus any a saved filter still asks for.
+  const filterDefinitions = useMemo<OptionFilterDefinition[]>(() => {
+    const types: Array<{ type: string }> = data?.types ?? [];
+    const values = Array.from(
+      new Set([...types.map((item) => item.type), ...typeFilter]),
+    );
+    return [
+      {
+        key: "type",
+        label: "Type",
+        options: values
+          .map((value) => ({ value, label: getFileTypeLabel(value) }))
+          .sort((a, b) => a.label.localeCompare(b.label)),
+      },
+    ];
+  }, [data?.types, typeFilter]);
+
+  useEffect(() => {
+    if (!error) return;
     toast({
-      title: "Error",
-      description: "Error fetching funding requests",
+      title: "Unable to load files",
+      description: "The file list could not be fetched. Please try again.",
       variant: "destructive",
     });
-  }
+  }, [error, toast]);
 
-  async function onSubmit(values: z.infer<typeof querySchema>) {
-    form.setValue("query", values.query);
-  }
+  const handleDownload = async (selectedFiles?: FileRow[]) => {
+    const isSelection = Boolean(selectedFiles?.length);
+    if (isSelection) {
+      setIsDownloadingSelected(true);
+    } else {
+      setIsDownloadingAll(true);
+    }
 
-  async function downloadFiles(selectedFiles?: File[]) {
     try {
-      if (selectedFiles?.length) {
-        setIsDownloadingSelected(true);
-      } else {
-        setIsDownloadingAll(true);
-      }
-
-      const params = new URLSearchParams({
-        teamId,
-        organizationId,
-        query,
-      });
-      if (includeContactFiles) {
-        params.set("includeContactFiles", "true");
-      }
+      const params = new URLSearchParams(scopeParams);
+      params.set("query", list.query);
+      if (typeFilter.length) params.set("types", typeFilter.join(","));
       if (selectedFiles?.length) {
         params.set("ids", selectedFiles.map((file) => file.id).join(","));
       }
       const response = await fetch(`/api/files/bulk?${params.toString()}`);
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error || "Failed to prepare download");
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result.error || "Failed to prepare download");
       }
       const contentDisposition =
         response.headers.get("content-disposition") || "";
@@ -113,36 +194,26 @@ export default function FileTable({
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-    } catch (error) {
+    } catch (downloadError) {
       toast({
-        title: "Error",
+        title: "Unable to download files",
         description:
-          error instanceof Error ? error.message : "Failed to download files",
+          downloadError instanceof Error
+            ? downloadError.message
+            : "Failed to download files",
         variant: "destructive",
       });
     } finally {
       setIsDownloadingAll(false);
       setIsDownloadingSelected(false);
     }
-  }
+  };
 
-  async function deleteFiles(
-    selectedFiles: File[],
-    clearSelection?: () => void,
-  ) {
-    if (selectedFiles.length === 0) {
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Delete ${selectedFiles.length} file${
-        selectedFiles.length === 1 ? "" : "s"
-      }? This action cannot be undone.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
+  const handleDelete = async (
+    selectedFiles: FileRow[],
+    clearSelection: () => void,
+  ) => {
+    if (selectedFiles.length === 0) return;
 
     setIsDeleting(true);
     try {
@@ -169,166 +240,196 @@ export default function FileTable({
         } removed.`,
       });
 
-      clearSelection?.();
+      clearSelection();
       await mutate();
-    } catch (error) {
+    } catch (deleteError) {
       toast({
         title: "Unable to delete files",
         description:
-          error instanceof Error
-            ? error.message
+          deleteError instanceof Error
+            ? deleteError.message
             : "An unexpected error occurred.",
         variant: "destructive",
       });
     } finally {
       setIsDeleting(false);
     }
-  }
+  };
+
+  const emptyState = list.isSearching ? (
+    <NoMatchState noun="files" onClear={list.handleClearAll} />
+  ) : (
+    <EmptyState
+      size="page"
+      icon={icon}
+      title="No files yet"
+      description={
+        scope === "crm"
+          ? "Files added to people, organizations and funding requests show up here."
+          : "Files added to organizations, funding requests and agreements show up here."
+      }
+    />
+  );
 
   return (
-    <div className="flex flex-col gap-3 px-4 py-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="flex w-full max-w-lg items-center"
+    <RecordsPage grid>
+      <RecordsHeader
+        icon={icon}
+        title="Files"
+        count={isLoading ? undefined : total}
+        action={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isLoading || isDownloadingAll || total === 0}
+            onClick={() => handleDownload()}
           >
-            <div className="flex-1">
-              <FormInputControl
-                form={form}
-                name="query"
-                placeholder="Search..."
-              />
-            </div>
+            {isDownloadingAll ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <Download />
+            )}
+            {isDownloadingAll
+              ? "Preparing…"
+              : list.isSearching
+                ? "Download these"
+                : "Download all"}
+          </Button>
+        }
+        menu={
+          <DropdownMenuItem onSelect={() => setIsHistoryOpen(true)}>
+            <History /> Download history
+          </DropdownMenuItem>
+        }
+      />
 
-            <ButtonControl type="submit" label="Submit" className="mx-2" />
-          </form>
-        </Form>
-        <ButtonControl
-          type="button"
-          label={isDownloadingAll ? "Preparing..." : "Download All"}
-          disabled={loading || isDownloadingAll || !data?.data?.length}
-          onClick={() => downloadFiles()}
-        />
-      </div>
-      <div className="relative flex min-h-40 flex-col overflow-hidden rounded-lg border bg-card">
-        {isValidating && !loading ? (
-          <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 text-xs text-muted-foreground">
-            Refreshing...
-          </p>
-        ) : null}
-        {loading ? (
-          <TableLoadingState />
-        ) : (
-          <DataTable
-            columns={getFileColumns(
-              teamId,
-              organizationId,
-              includeContactFiles,
-              (file) => deleteFiles([file]),
+      <RecordListToolbar
+        list={list}
+        columns={columns}
+        filters={filterDefinitions.map(optionFilter)}
+        searchLabel="Search files"
+        isRefreshing={isValidating && !isLoading}
+      />
+
+      <RecordTable
+        columns={columns}
+        data={files}
+        getRowId={getFileRowId}
+        getRowHref={(file) => getFileHref(file, scope, teamId)}
+        isLoading={isLoading}
+        emptyState={emptyState}
+        noun={{ one: "file", other: "files" }}
+        sort={list.sort}
+        onSortChange={list.setSort}
+        columnVisibility={list.columnVisibility.visibility}
+        view={list.view}
+        renderCards={(rows) =>
+          rows.map((file) =>
+            renderFileCard(file, { scope, teamId, organizationId }),
+          )
+        }
+        pagination={{ ...list.pagination, total }}
+        selectable
+        renderBulkActions={({ selectedRows, clearSelection }) => (
+          <>
+            {selectedRows.length === 1 ? (
+              <BulkActionButton asChild>
+                <a href={getFileDownloadHref(selectedRows[0])}>
+                  <Download /> Download
+                </a>
+              </BulkActionButton>
+            ) : (
+              <BulkActionButton
+                disabled={isDownloadingSelected || isDeleting}
+                onClick={() => handleDownload(selectedRows)}
+              >
+                {isDownloadingSelected ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <Download />
+                )}
+                Download ZIP
+              </BulkActionButton>
             )}
-            data={data?.data}
-            selectable
-            renderBatchActions={({ selectedRows, clearSelection }) => (
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm text-muted-foreground">
-                  {selectedRows.length} selected
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    disabled={
-                      isDownloadingSelected ||
-                      isDeleting ||
-                      selectedRows.length === 0
-                    }
-                    onClick={() => downloadFiles(selectedRows)}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <BulkActionButton tone="destructive" disabled={isDeleting}>
+                  {isDeleting ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <Trash2 />
+                  )}
+                  Delete
+                </BulkActionButton>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    Delete {selectedRows.length}{" "}
+                    {selectedRows.length === 1 ? "file" : "files"}?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    They are removed from the records they belong to. This
+                    cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={() => handleDelete(selectedRows, clearSelection)}
                   >
-                    {isDownloadingSelected ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Preparing...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="mr-2 h-4 w-4" />
-                        Download ZIP
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    disabled={isDeleting || selectedRows.length === 0}
-                    onClick={() => deleteFiles(selectedRows, clearSelection)}
-                  >
-                    {isDeleting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      <>
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete selected
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={
-                      isDeleting ||
-                      isDownloadingSelected ||
-                      selectedRows.length === 0
-                    }
-                    onClick={clearSelection}
-                  >
-                    Clear
-                  </Button>
-                </div>
-              </div>
-            )}
-          />
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </>
         )}
-      </div>
-      <div className="rounded-md border my-2 p-3">
-        <h3 className="text-sm font-semibold mb-2">Recent Downloads</h3>
-        <div className="space-y-2">
-          {((auditData?.data as FileDownloadAudit[] | undefined) ?? [])
-            .length === 0 ? (
-            <p className="text-sm text-muted-foreground">No downloads yet.</p>
+      />
+
+      <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Download history</DialogTitle>
+            <DialogDescription>
+              The last 20 downloads from this list.
+            </DialogDescription>
+          </DialogHeader>
+          {isAuditLoading ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              Loading…
+            </p>
+          ) : audits.length === 0 ? (
+            <EmptyState icon={History} title="No downloads yet" />
           ) : (
-            ((auditData?.data as FileDownloadAudit[] | undefined) ?? []).map(
-              (item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between text-sm border-b pb-1"
+            <ul className="max-h-[60vh] divide-y overflow-y-auto rounded-lg border">
+              {audits.map((audit) => (
+                <li
+                  key={audit.id}
+                  className="flex items-start justify-between gap-4 px-3 py-2 text-sm"
                 >
-                  <div>
-                    <p className="font-medium">
-                      {item.type === "BULK"
-                        ? `Bulk download (${item.fileCount} files)`
-                        : `File download: ${item.file?.name || item.file?.url || "Unknown file"}`}
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">
+                      {audit.type === "BULK"
+                        ? `${audit.fileCount} files as ZIP`
+                        : audit.file?.name || audit.file?.url || "A file"}
                     </p>
-                    <p className="text-muted-foreground">
-                      by {item.user.email}
-                      {item.query ? ` | query: "${item.query}"` : ""}
+                    <p className="truncate text-xs text-muted-foreground">
+                      {audit.user.email}
+                      {audit.query ? ` · search “${audit.query}”` : ""}
                     </p>
                   </div>
-                  <div className="text-muted-foreground">
-                    {new Date(item.createdAt).toLocaleString()}
-                  </div>
-                </div>
-              ),
-            )
+                  <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                    {format(new Date(audit.createdAt), "d MMM yyyy, HH:mm")}
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
-      </div>
-    </div>
+        </DialogContent>
+      </Dialog>
+    </RecordsPage>
   );
 }

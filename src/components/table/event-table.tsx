@@ -1,20 +1,40 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Mail, Plus, Send } from "lucide-react";
+import { Calendar, Loader2, Mail, Plus, Send, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
 import useSWR from "swr";
-import { z } from "zod";
-import { DataTable } from "@/components/data-table";
+import { EmptyState } from "@/components/design/empty-state";
 import { InternalCopyFields } from "@/components/emails/internal-copy-fields";
-import ButtonControl from "@/components/helper/button-control";
-import FormInputControl from "@/components/helper/form-input-control";
-import TableLoadingState from "@/components/loading/table-loading-state";
+import EventCalendar from "@/components/events/event-calendar";
 import {
+  type ListFilter,
+  type ListFilterKind,
+  listFilterDefinitions,
+  listFilterModel,
+} from "@/components/records/list-filters";
+import {
+  NoMatchState,
+  RecordListToolbar,
+} from "@/components/records/record-list-toolbar";
+import {
+  BulkActionButton,
+  RecordTable,
+} from "@/components/records/record-table";
+import {
+  RecordsHeader,
+  RecordsPage,
+} from "@/components/records/records-layout";
+import {
+  getSortFields,
+  recordListFetcher,
+  useRecordList,
+} from "@/components/records/use-record-list";
+import {
+  EVENT_COLUMN_DEFAULTS,
   type EventRow,
   eventColumns,
+  eventHref,
   renderEventCard,
 } from "@/components/table/event-columns";
 import { Button } from "@/components/ui/button";
@@ -26,7 +46,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -45,6 +64,9 @@ import { useToast } from "@/hooks/use-toast";
 
 interface EventTableProps {
   teamId: string;
+  initialPageSize: number;
+  /** More actions in the header, e.g. the link to the public events page. */
+  headerActions?: React.ReactNode;
 }
 
 type SenderLabelMode = "default" | "user";
@@ -55,17 +77,29 @@ const parseEmailList = (value: string) =>
     .map((email) => email.trim())
     .filter(Boolean);
 
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+const getEventRowId = (event: EventRow) => event.id;
 
-const querySchema = z.object({
-  query: z.string(),
-  eventTypeId: z.string().optional(),
-  state: z.string().optional(),
-  from: z.string().optional(),
-  to: z.string().optional(),
-});
+// The types load from the server; the state and dates are free.
+const STATIC_FILTERS: ListFilterKind[] = [
+  { key: "state", label: "State", type: "text", placeholder: "e.g. Bayern" },
+  { key: "startDate", label: "Start date", type: "dateRange" },
+];
+const FILTER_MODEL = listFilterModel([
+  {
+    key: "type",
+    label: "Type",
+    type: "options",
+    options: [],
+    dynamicOptions: true,
+  },
+  ...STATIC_FILTERS,
+]);
 
-export default function EventTable({ teamId }: EventTableProps) {
+export default function EventTable({
+  teamId,
+  initialPageSize,
+  headerActions,
+}: EventTableProps) {
   const { toast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
@@ -79,85 +113,61 @@ export default function EventTable({ teamId }: EventTableProps) {
   const [emailSenderLabelMode, setEmailSenderLabelMode] =
     useState<SenderLabelMode>("default");
 
-  const form = useForm<z.infer<typeof querySchema>>({
-    resolver: zodResolver(querySchema),
-    defaultValues: {
-      query: "",
-      eventTypeId: "all",
-      state: "",
-      from: "",
-      to: "",
-    },
+  const list = useRecordList<ListFilter, "table" | "cards" | "calendar">({
+    viewKey: `events:team:${teamId}`,
+    columnDefaults: EVENT_COLUMN_DEFAULTS,
+    initialPageSize,
+    sortFields: getSortFields(eventColumns),
+    views: ["table", "cards", "calendar"],
+    filters: FILTER_MODEL,
   });
 
-  const query = form.watch("query");
-  const eventTypeId = form.watch("eventTypeId");
-  const stateFilter = form.watch("state");
-  const fromDate = form.watch("from");
-  const toDate = form.watch("to");
+  const { data: eventTypesData } = useSWR<{
+    data?: Array<{ id: string; name: string }>;
+  }>(`/api/event-types?teamId=${teamId}`, recordListFetcher);
+  const filterDefinitions = useMemo(
+    () =>
+      listFilterDefinitions([
+        {
+          key: "type",
+          label: "Type",
+          type: "options",
+          options: (eventTypesData?.data ?? []).map((type) => ({
+            value: type.id,
+            label: type.name,
+          })),
+        },
+        ...STATIC_FILTERS,
+      ]),
+    [eventTypesData?.data],
+  );
+
+  const params = list.getSearchParams({ teamId });
+  const typeFilter = list.getFilterValues("type");
+  if (typeFilter.length) params.set("eventTypeIds", typeFilter.join(","));
+  const stateFilter = list.getFilter("state") as ListFilter | undefined;
+  if (stateFilter?.text?.trim()) params.set("state", stateFilter.text.trim());
+  const dateFilter = list.getFilter("startDate") as ListFilter | undefined;
+  if (dateFilter?.from) params.set("from", dateFilter.from);
+  if (dateFilter?.to) params.set("to", dateFilter.to);
+
+  const isCalendar = list.view === "calendar";
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
+    isCalendar ? null : `/api/events?${params.toString()}`,
+    recordListFetcher,
+    { keepPreviousData: true },
+  );
+  const events: EventRow[] = Array.isArray(data?.data) ? data.data : [];
+  const total = Number(data?.total ?? 0);
 
   useEffect(() => {
-    form.register("eventTypeId");
-  }, [form]);
-
-  const { data: eventTypesData } = useSWR(
-    `/api/event-types?teamId=${teamId}`,
-    fetcher,
-  );
-  const eventTypes = eventTypesData?.data || [];
-
-  const filtersQuery = useMemo(() => {
-    const params = new URLSearchParams();
-    if (eventTypeId && eventTypeId !== "all") {
-      params.set("eventTypeId", eventTypeId);
-    }
-    if (stateFilter?.trim()) {
-      params.set("state", stateFilter.trim());
-    }
-    if (fromDate) {
-      params.set("from", fromDate);
-    }
-    if (toDate) {
-      params.set("to", toDate);
-    }
-    const stringified = params.toString();
-    return stringified ? `&${stringified}` : "";
-  }, [eventTypeId, stateFilter, fromDate, toDate]);
-
-  const { data, error, isLoading, isValidating, mutate } = useSWR(
-    `/api/events?teamId=${teamId}&query=${encodeURIComponent(query)}${filtersQuery}`,
-    fetcher,
-  );
-
-  const events = useMemo<EventRow[]>(() => {
-    if (!data?.data) {
-      return [];
-    }
-
-    return data.data as EventRow[];
-  }, [data]);
-
-  if (error) {
+    if (!error) return;
     toast({
       title: "Unable to load events",
       description: "An unexpected error occurred while fetching events.",
       variant: "destructive",
     });
-  }
-
-  const handleSubmit = (values: z.infer<typeof querySchema>) => {
-    form.setValue("query", values.query);
-  };
-
-  const handleResetFilters = () => {
-    form.reset({
-      query: "",
-      eventTypeId: "all",
-      state: "",
-      from: "",
-      to: "",
-    });
-  };
+  }, [error, toast]);
 
   const handleDeleteSelected = async (
     selectedRows: EventRow[],
@@ -293,174 +303,112 @@ export default function EventTable({ teamId }: EventTableProps) {
     }
   };
 
+  const newEventHref = `/teams/${teamId}/crm/events/create`;
+
   return (
-    <div className="flex flex-col gap-4">
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(handleSubmit)}
-          className="flex flex-wrap items-end gap-3"
-        >
-          <FormInputControl
-            form={form}
-            name="query"
-            placeholder="Search events"
-          />
-          <FormInputControl form={form} name="state" placeholder="State" />
-          <FormInputControl
-            form={form}
-            name="from"
-            placeholder="From"
-            type="date"
-          />
-          <FormInputControl
-            form={form}
-            name="to"
-            placeholder="To"
-            type="date"
-          />
-          <div className="min-w-[200px]">
-            <Select
-              onValueChange={(value) => form.setValue("eventTypeId", value)}
-              value={form.getValues("eventTypeId") || "all"}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Event type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All types</SelectItem>
-                {eventTypes.map((type: { id: string; name: string }) => (
-                  <SelectItem key={type.id} value={type.id}>
-                    {type.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <ButtonControl type="submit" label="Search" />
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={handleResetFilters}
-          >
-            Reset
-          </Button>
-        </form>
-      </Form>
-
-      <div className="relative flex min-h-40 flex-col overflow-hidden rounded-lg border bg-card">
-        {isValidating && !isLoading ? (
-          <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 -translate-x-1/2 text-xs text-muted-foreground">
-            Refreshing...
-          </p>
-        ) : null}
-        {isLoading ? (
-          <TableLoadingState />
-        ) : (
-          <DataTable
-            columns={eventColumns}
-            data={events}
-            renderCard={renderEventCard}
-            initialView="table"
-            toolbar={
-              <Link
-                href={`/teams/${teamId}/crm/events/create`}
-                aria-label="Add event"
-              >
-                <Button
-                  type="button"
-                  size="sm"
-                  className="hidden gap-2 px-3 sm:inline-flex"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Add event</span>
-                </Button>
+    <RecordsPage grid>
+      <RecordsHeader
+        icon={Calendar}
+        title="Events"
+        count={isLoading || isCalendar ? undefined : total}
+        action={
+          <>
+            {headerActions}
+            <Button asChild variant="action" size="sm">
+              <Link href={newEventHref}>
+                <Plus /> Add event
               </Link>
-            }
-            selectable
-            renderBatchActions={({ selectedRows, clearSelection }) => (
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-sm text-muted-foreground">
-                  {selectedRows.length} selected
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={
-                      isDeleting || isSendingEmail || selectedRows.length === 0
-                    }
-                    onClick={() => openEmailDialog(selectedRows)}
-                  >
-                    <Mail className="mr-2 h-4 w-4" />
-                    Send email
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="sm"
-                    disabled={isDeleting}
-                    onClick={() =>
-                      handleDeleteSelected(selectedRows, clearSelection)
-                    }
-                  >
-                    {isDeleting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Deleting...
-                      </>
-                    ) : (
-                      "Delete selected"
-                    )}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled={isDeleting || selectedRows.length === 0}
-                    onClick={clearSelection}
-                  >
-                    Clear
-                  </Button>
-                </div>
-                <EventEmailDialog
-                  open={isEmailDialogOpen}
-                  events={emailEvents}
-                  subject={emailSubject}
-                  body={emailBody}
-                  bcc={emailBcc}
-                  internalCopyMode={emailInternalCopyMode}
-                  senderLabelMode={emailSenderLabelMode}
-                  isSending={isSendingEmail}
-                  onOpenChange={setIsEmailDialogOpen}
-                  onSubjectChange={setEmailSubject}
-                  onBodyChange={setEmailBody}
-                  onBccChange={setEmailBcc}
-                  onInternalCopyModeChange={setEmailInternalCopyMode}
-                  onSenderLabelModeChange={setEmailSenderLabelMode}
-                  onSend={() => handleSendEmail(clearSelection)}
-                />
-              </div>
-            )}
-          />
-        )}
-      </div>
+            </Button>
+          </>
+        }
+      />
 
-      <Link
-        href={`/teams/${teamId}/crm/events/create`}
-        aria-label="Add event"
-        className="fixed bottom-5 right-5 z-40 sm:hidden"
-      >
-        <Button
-          type="button"
-          size="icon"
-          className="h-12 w-12 rounded-full shadow-lg"
-        >
-          <Plus className="h-5 w-5" />
-          <span className="sr-only">Add event</span>
-        </Button>
-      </Link>
-    </div>
+      <RecordListToolbar
+        list={list}
+        columns={eventColumns}
+        filters={isCalendar ? [] : filterDefinitions}
+        searchLabel="Search events"
+        isRefreshing={isValidating && !isLoading}
+      />
+
+      {isCalendar ? (
+        <div className="min-h-0 flex-1 overflow-auto p-4">
+          <EventCalendar teamId={teamId} />
+        </div>
+      ) : (
+        <RecordTable
+          columns={eventColumns}
+          data={events}
+          getRowId={getEventRowId}
+          getRowHref={eventHref}
+          isLoading={isLoading}
+          emptyState={
+            list.isSearching ? (
+              <NoMatchState noun="events" onClear={list.handleClearAll} />
+            ) : (
+              <EmptyState
+                size="page"
+                icon={Calendar}
+                title="No events yet"
+                description="Plan an event and track who takes part."
+                action={
+                  <Button asChild variant="action">
+                    <Link href={newEventHref}>
+                      <Plus /> Add event
+                    </Link>
+                  </Button>
+                }
+              />
+            )
+          }
+          noun={{ one: "event", other: "events" }}
+          sort={list.sort}
+          onSortChange={list.setSort}
+          columnVisibility={list.columnVisibility.visibility}
+          view={list.view === "cards" ? "cards" : "table"}
+          renderCards={(rows) => rows.map(renderEventCard)}
+          pagination={{ ...list.pagination, total }}
+          selectable
+          renderBulkActions={({ selectedRows, clearSelection }) => (
+            <>
+              <BulkActionButton
+                disabled={isDeleting || isSendingEmail}
+                onClick={() => openEmailDialog(selectedRows)}
+              >
+                <Mail /> Send email
+              </BulkActionButton>
+              <BulkActionButton
+                tone="destructive"
+                disabled={isDeleting}
+                onClick={() =>
+                  handleDeleteSelected(selectedRows, clearSelection)
+                }
+              >
+                {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                Delete
+              </BulkActionButton>
+              <EventEmailDialog
+                open={isEmailDialogOpen}
+                events={emailEvents}
+                subject={emailSubject}
+                body={emailBody}
+                bcc={emailBcc}
+                internalCopyMode={emailInternalCopyMode}
+                senderLabelMode={emailSenderLabelMode}
+                isSending={isSendingEmail}
+                onOpenChange={setIsEmailDialogOpen}
+                onSubjectChange={setEmailSubject}
+                onBodyChange={setEmailBody}
+                onBccChange={setEmailBcc}
+                onInternalCopyModeChange={setEmailInternalCopyMode}
+                onSenderLabelModeChange={setEmailSenderLabelMode}
+                onSend={() => handleSendEmail(clearSelection)}
+              />
+            </>
+          )}
+        />
+      )}
+    </RecordsPage>
   );
 }
 

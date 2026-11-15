@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as listRequest from "@/lib/list-request";
 import { loadModule } from "./helpers/load-module";
 
 type UsersRoute = {
@@ -47,6 +48,7 @@ test("users route forwards field and group filters with pagination", async () =>
   let getUsersArguments: unknown[] | undefined;
   const route = loadModule<UsersRoute>("src/app/api/users/route.ts", {
     "next/server": { NextResponse: { json: Response.json } },
+    "@/lib/list-request": listRequest,
     "@/constants/app": {},
     "@/lib/api-guard": {
       handleApiError: () => null,

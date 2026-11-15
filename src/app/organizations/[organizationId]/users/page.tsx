@@ -1,15 +1,9 @@
-import { BookUser } from "lucide-react";
 import { cookies } from "next/headers";
-import Link from "next/link";
-import {
-  RecordsHeader,
-  RecordsPage,
-} from "@/components/records/records-layout";
 import UserTable from "@/components/table/user-table";
-import { Button } from "@/components/ui/button";
 import { verifyOrganizationAccess } from "@/lib/api-guard";
 import {
   parseTablePageSize,
+  RECORDS_PAGE_SIZE,
   TABLE_PAGE_SIZE_COOKIE,
 } from "@/lib/table-page-size";
 
@@ -26,31 +20,16 @@ export default async function Organization({ params }: PageProps) {
   ]);
   const initialPageSize = parseTablePageSize(
     cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+    RECORDS_PAGE_SIZE,
   );
   const access = await verifyOrganizationAccess(organizationId);
   const canManageUsers = access.isGlobalAdmin || access.isTeamAdmin;
 
   return (
-    <RecordsPage>
-      <RecordsHeader
-        icon={BookUser}
-        title="Users"
-        action={
-          canManageUsers ? (
-            <Button asChild size="sm">
-              <Link href={`/organizations/${organizationId}/users/create`}>
-                New user
-              </Link>
-            </Button>
-          ) : null
-        }
-      />
-      <UserTable
-        teamId=""
-        organizationId={organizationId}
-        canManageUsers={canManageUsers}
-        initialPageSize={initialPageSize}
-      />
-    </RecordsPage>
+    <UserTable
+      organizationId={organizationId}
+      canManageUsers={canManageUsers}
+      initialPageSize={initialPageSize}
+    />
   );
 }

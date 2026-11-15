@@ -1,9 +1,13 @@
 import { Prisma } from "@prisma/client";
 import { normalizeCountryCode } from "@/lib/countries";
 import { normalizePostalCode } from "@/lib/geo";
+import type { RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import { generateSlug } from "@/lib/slug";
-import { primaryContactEmailSelect } from "@/services/contact-emails";
+import {
+  getPrimaryEmail,
+  primaryContactEmailSelect,
+} from "@/services/contact-emails";
 import { resolveIntakeContact } from "@/services/contact-intake";
 import { ContactEmailKind } from "@/types";
 
@@ -205,6 +209,8 @@ const mapEvent = (event: EventWithContacts): EventType => ({
 });
 type EventFilters = {
   eventTypeId?: string;
+  /** Any of these types (the list's Type filter). */
+  eventTypeIds?: string[];
   from?: string;
   to?: string;
   state?: string;
@@ -247,15 +253,57 @@ type PublicEventListItem = {
   };
 };
 
-export const getTeamEvents = async (
+/** Columns the Events list can be ordered by (see lib/list-request). */
+export const EVENT_SORT_FIELDS = [
+  "title",
+  "startDate",
+  "endDate",
+  "location",
+  "registrationCount",
+  "createdAt",
+] as const;
+export type EventSortField = (typeof EVENT_SORT_FIELDS)[number];
+
+const teamEventInclude = {
+  eventType: true,
+  contacts: {
+    where: { contact: { deletedAt: null } },
+    include: {
+      contact: {
+        include: {
+          emails: true,
+        },
+      },
+      roles: {
+        include: {
+          eventRole: true,
+        },
+      },
+    },
+  },
+  lists: {
+    include: {
+      list: true,
+    },
+  },
+  _count: {
+    select: {
+      registrations: true,
+    },
+  },
+} satisfies Prisma.EventInclude;
+
+const buildTeamEventsWhere = (
   teamId: string,
-  query?: string,
-  filters: EventFilters = {},
-) => {
+  query: string | undefined,
+  filters: EventFilters,
+): Prisma.EventWhereInput => {
   const where: Prisma.EventWhereInput = {
     teamId,
   };
-  if (filters.eventTypeId) {
+  if (filters.eventTypeIds?.length) {
+    where.eventTypeId = { in: filters.eventTypeIds };
+  } else if (filters.eventTypeId) {
     where.eventTypeId = filters.eventTypeId;
   }
 
@@ -304,41 +352,65 @@ export const getTeamEvents = async (
       },
     ];
   }
+  return where;
+};
+
+export const getTeamEvents = async (
+  teamId: string,
+  query?: string,
+  filters: EventFilters = {},
+) => {
   const events = await prisma.event.findMany({
-    where,
-    include: {
-      eventType: true,
-      contacts: {
-        where: { contact: { deletedAt: null } },
-        include: {
-          contact: {
-            include: {
-              emails: true,
-            },
-          },
-          roles: {
-            include: {
-              eventRole: true,
-            },
-          },
-        },
-      },
-      lists: {
-        include: {
-          list: true,
-        },
-      },
-      _count: {
-        select: {
-          registrations: true,
-        },
-      },
-    },
+    where: buildTeamEventsWhere(teamId, query, filters),
+    include: teamEventInclude,
     orderBy: {
       startDate: "desc",
     },
   });
   return events.map(mapEvent);
+};
+
+const eventOrderBy = (
+  sort: RecordSort<EventSortField>,
+): Prisma.EventOrderByWithRelationInput[] => {
+  const { field, direction } = sort;
+  // The id keeps rows with equal values in one order across pages.
+  const tieBreaker: Prisma.EventOrderByWithRelationInput = { id: "asc" };
+  switch (field) {
+    case "registrationCount":
+      return [{ registrations: { _count: direction } }, tieBreaker];
+    case "endDate":
+      return [{ endDate: { sort: direction, nulls: "last" } }, tieBreaker];
+    case "location":
+      return [{ location: { sort: direction, nulls: "last" } }, tieBreaker];
+    default:
+      return [{ [field]: direction }, tieBreaker];
+  }
+};
+
+/** One page of a team's events, for the Events list. */
+export const getTeamEventsPage = async (
+  teamId: string,
+  query: string | undefined,
+  filters: EventFilters,
+  pagination: {
+    page: number;
+    pageSize: number;
+    sort: RecordSort<EventSortField>;
+  },
+) => {
+  const where = buildTeamEventsWhere(teamId, query, filters);
+  const [events, total] = await Promise.all([
+    prisma.event.findMany({
+      where,
+      include: teamEventInclude,
+      orderBy: eventOrderBy(pagination.sort),
+      skip: (pagination.page - 1) * pagination.pageSize,
+      take: pagination.pageSize,
+    }),
+    prisma.event.count({ where }),
+  ]);
+  return { data: events.map(mapEvent), total };
 };
 export const getEventById = async (eventId: string, teamId: string) => {
   const event = await prisma.event.findFirst({
@@ -1085,6 +1157,91 @@ export const createEventRegistration = async (
   });
 };
 // Get registrations for an event
+/** Columns an event's registrations can be ordered by. */
+export const EVENT_REGISTRATION_SORT_FIELDS = [
+  "name",
+  "email",
+  "createdAt",
+] as const;
+export type EventRegistrationSortField =
+  (typeof EVENT_REGISTRATION_SORT_FIELDS)[number];
+
+/** A registration as the registrations list shows it. */
+const toRegistrationRow = (registration: {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  notes: string | null;
+  createdAt: Date;
+  contact: Parameters<typeof getPrimaryEmail>[0] & {
+    id: string;
+    name: string | null;
+    phone: string | null;
+  };
+}) => ({
+  id: registration.id,
+  name: registration.name,
+  email: registration.email,
+  phone: registration.phone ?? undefined,
+  notes: registration.notes ?? undefined,
+  createdAt: registration.createdAt.toISOString(),
+  contactId: registration.contact.id,
+  contactName: registration.contact.name ?? registration.name,
+  contactEmail: getPrimaryEmail(registration.contact) ?? undefined,
+  contactPhone: registration.contact.phone ?? undefined,
+});
+
+/** One page of an event's registrations, searched by name, email or phone. */
+export const getEventRegistrationsPage = async (
+  eventId: string,
+  teamId: string,
+  query: string,
+  pagination: {
+    page: number;
+    pageSize: number;
+    sort: RecordSort<EventRegistrationSortField>;
+  },
+) => {
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, teamId },
+    select: { id: true },
+  });
+  if (!event) {
+    throw new Error("Event not found");
+  }
+  const search = query.trim();
+  const where: Prisma.EventRegistrationWhereInput = {
+    eventId,
+    ...(search
+      ? {
+          OR: [
+            { name: { contains: search, mode: "insensitive" } },
+            { email: { contains: search, mode: "insensitive" } },
+            { phone: { contains: search, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+  const [registrations, total] = await Promise.all([
+    prisma.eventRegistration.findMany({
+      where,
+      // The id keeps rows with equal values in one order across pages.
+      orderBy: [
+        { [pagination.sort.field]: pagination.sort.direction },
+        { id: "asc" },
+      ],
+      skip: (pagination.page - 1) * pagination.pageSize,
+      take: pagination.pageSize,
+      include: {
+        contact: { include: { emails: primaryContactEmailSelect } },
+      },
+    }),
+    prisma.eventRegistration.count({ where }),
+  ]);
+  return { data: registrations.map(toRegistrationRow), total };
+};
+
 export const getEventRegistrations = async (
   eventId: string,
   teamId: string,

@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { stringifyCsv } from "@/lib/csv";
+import type { RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import {
   getPrimaryEmail,
@@ -219,6 +220,62 @@ const getTeamContactLists = async (
   );
 
   return results;
+};
+
+/** Columns the Lists list can be ordered by (see lib/list-request). */
+export const CONTACT_LIST_SORT_FIELDS = [
+  "name",
+  "contactCount",
+  "updatedAt",
+  "createdAt",
+] as const;
+export type ContactListSortField = (typeof CONTACT_LIST_SORT_FIELDS)[number];
+
+/**
+ * One page of a team's lists, with their people (for e-mail and copy). A
+ * smart list's size is only known once its filters have run, so search,
+ * sorting and paging happen after that; a team has tens of lists, not
+ * thousands.
+ */
+const getTeamContactListsPage = async (
+  teamId: string,
+  userId: string | undefined,
+  roles: Roles[],
+  {
+    query = "",
+    types = [],
+  }: { query?: string; types?: ContactListType[] },
+  pagination: {
+    page: number;
+    pageSize: number;
+    sort: RecordSort<ContactListSortField>;
+  },
+) => {
+  const search = query.trim().toLowerCase();
+  const lists = (await getTeamContactLists(teamId, userId, roles)).filter(
+    (list) =>
+      (!types.length || types.includes(list.type as ContactListType)) &&
+      (!search ||
+        list.name.toLowerCase().includes(search) ||
+        (list.description ?? "").toLowerCase().includes(search)),
+  );
+  const { field, direction } = pagination.sort;
+  const factor = direction === "asc" ? 1 : -1;
+  const sorted = [...lists].sort((a, b) => {
+    const order =
+      field === "name"
+        ? a.name.localeCompare(b.name)
+        : field === "contactCount"
+          ? a.contactCount - b.contactCount
+          : new Date(a[field]).getTime() - new Date(b[field]).getTime();
+    // The id keeps lists with equal values in one order across pages.
+    return factor * order || a.id.localeCompare(b.id);
+  });
+  const start = (pagination.page - 1) * pagination.pageSize;
+  return {
+    data: sorted.slice(start, start + pagination.pageSize),
+    total: sorted.length,
+  };
 };
 
 const getContactListById = async (
@@ -613,6 +670,7 @@ export {
   exportContactList,
   getContactListById,
   getTeamContactLists,
+  getTeamContactListsPage,
   removeContactsFromList,
   updateContactList,
 };

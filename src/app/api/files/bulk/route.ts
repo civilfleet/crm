@@ -47,17 +47,21 @@ const getScopedFiles = async ({
   organizationId,
   includeContactFiles,
   searchQuery,
+  types = [],
   ids,
 }: {
   teamId: string;
   organizationId: string;
   includeContactFiles: boolean;
   searchQuery: string;
+  /** The list's type filter: "Download all" takes what the list shows. */
+  types?: string[];
   ids?: string[];
 }) => {
   const files = await getFiles(
     { teamId, organizationId, includeContactFiles },
     searchQuery,
+    { types },
   );
 
   if (!ids?.length) {
@@ -100,6 +104,10 @@ export async function GET(req: Request) {
     const searchQuery = searchParams.get("query") || "";
     const includeContactFiles =
       searchParams.get("includeContactFiles") === "true";
+    const types = (searchParams.get("types") || "")
+      .split(",")
+      .map((type) => type.trim())
+      .filter(Boolean);
     const selectedIds = (searchParams.get("ids") || "")
       .split(",")
       .map((id) => id.trim())
@@ -126,6 +134,7 @@ export async function GET(req: Request) {
       organizationId,
       includeContactFiles,
       searchQuery,
+      types,
       ids: selectedIds,
     });
     if (!files.length) {

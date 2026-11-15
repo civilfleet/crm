@@ -1,28 +1,28 @@
-import { Calendar } from "lucide-react";
-import EventsView from "@/components/events/events-view";
+import { cookies } from "next/headers";
 import PublicEventsLinkButton from "@/components/events/public-events-link-button";
+import EventTable from "@/components/table/event-table";
 import {
-  RecordsHeader,
-  RecordsPage,
-} from "@/components/records/records-layout";
+  parseTablePageSize,
+  RECORDS_PAGE_SIZE,
+  TABLE_PAGE_SIZE_COOKIE,
+} from "@/lib/table-page-size";
 
 interface EventsPageProps {
   params: Promise<{ teamId: string }>;
 }
 
 export default async function EventsPage({ params }: EventsPageProps) {
-  const { teamId } = await params;
+  const [{ teamId }, cookieStore] = await Promise.all([params, cookies()]);
+  const initialPageSize = parseTablePageSize(
+    cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
+    RECORDS_PAGE_SIZE,
+  );
 
   return (
-    <RecordsPage>
-      <RecordsHeader
-        icon={Calendar}
-        title="Events"
-        action={<PublicEventsLinkButton teamId={teamId} />}
-      />
-      <div className="px-4 py-3">
-        <EventsView teamId={teamId} />
-      </div>
-    </RecordsPage>
+    <EventTable
+      teamId={teamId}
+      initialPageSize={initialPageSize}
+      headerActions={<PublicEventsLinkButton teamId={teamId} />}
+    />
   );
 }

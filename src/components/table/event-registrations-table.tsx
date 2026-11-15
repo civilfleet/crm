@@ -1,8 +1,19 @@
 "use client";
 
 import { Loader2, Mail, Send } from "lucide-react";
-import { useState } from "react";
-import { DataTable } from "@/components/data-table";
+import { useEffect, useState } from "react";
+import useSWR from "swr";
+import { RecordListToolbar } from "@/components/records/record-list-toolbar";
+import {
+  BulkActionButton,
+  RecordTable,
+} from "@/components/records/record-table";
+import { RecordsPage } from "@/components/records/records-layout";
+import {
+  getSortFields,
+  recordListFetcher,
+  useRecordList,
+} from "@/components/records/use-record-list";
 import {
   type EventRegistrationRow,
   eventRegistrationColumns,
@@ -31,16 +42,46 @@ import { useToast } from "@/hooks/use-toast";
 
 interface EventRegistrationsTableProps {
   teamId: string;
-  registrations: EventRegistrationRow[];
+  eventId: string;
 }
+
+const getRegistrationRowId = (registration: EventRegistrationRow) =>
+  registration.id;
 
 type SenderLabelMode = "default" | "user";
 
 export default function EventRegistrationsTable({
   teamId,
-  registrations,
+  eventId,
 }: EventRegistrationsTableProps) {
   const { toast } = useToast();
+  // Inside the event page: no saved view of its own.
+  const list = useRecordList({
+    viewKey: null,
+    columnDefaults: {},
+    initialPageSize: 10,
+    sortFields: getSortFields(eventRegistrationColumns),
+    views: ["table", "cards"],
+  });
+  const params = list.getSearchParams({ teamId });
+  const { data, error, isLoading, isValidating } = useSWR(
+    `/api/events/${eventId}/registrations?${params.toString()}`,
+    recordListFetcher,
+    { keepPreviousData: true },
+  );
+  const registrations: EventRegistrationRow[] = Array.isArray(data?.data)
+    ? data.data
+    : [];
+  const total = Number(data?.total ?? 0);
+
+  useEffect(() => {
+    if (!error) return;
+    toast({
+      title: "Unable to load registrations",
+      description: "The registrations could not be fetched. Please try again.",
+      variant: "destructive",
+    });
+  }, [error, toast]);
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [emailRecipients, setEmailRecipients] = useState<
@@ -140,54 +181,59 @@ export default function EventRegistrationsTable({
   };
 
   return (
-    <DataTable
-      columns={eventRegistrationColumns}
-      data={registrations}
-      renderCard={renderEventRegistrationCard}
-      initialView="table"
-      selectable
-      renderBatchActions={({ selectedRows, clearSelection }) => (
-        <div className="flex w-full flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-3 py-2">
-          <div className="text-sm text-muted-foreground">
-            {selectedRows.length} registrant
-            {selectedRows.length === 1 ? "" : "s"} selected
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => openEmailDialog(selectedRows)}
-              disabled={selectedRows.length === 0}
-            >
-              <Mail className="mr-2 h-4 w-4" />
-              Send email
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
+    <RecordsPage fill={false}>
+      <RecordListToolbar
+        list={list}
+        columns={eventRegistrationColumns}
+        searchLabel="Search registrations"
+        isRefreshing={isValidating && !isLoading}
+      />
+      <RecordTable
+        className="max-h-[32rem]"
+        columns={eventRegistrationColumns}
+        data={registrations}
+        getRowId={getRegistrationRowId}
+        isLoading={isLoading}
+        emptyState={
+          <p className="p-6 text-center text-sm text-muted-foreground">
+            {list.isSearching
+              ? "No registrations match."
+              : "No one has registered yet."}
+          </p>
+        }
+        noun={{ one: "registration", other: "registrations" }}
+        sort={list.sort}
+        onSortChange={list.setSort}
+        columnVisibility={list.columnVisibility.visibility}
+        view={list.view === "cards" ? "cards" : "table"}
+        renderCards={(rows) => rows.map(renderEventRegistrationCard)}
+        pagination={{ ...list.pagination, total }}
+        selectable
+        renderBulkActions={({ selectedRows, clearSelection }) => (
+          <>
+            <BulkActionButton
               disabled={isSendingEmail}
-              onClick={clearSelection}
+              onClick={() => openEmailDialog(selectedRows)}
             >
-              Clear
-            </Button>
-          </div>
-          <EventRegistrantsEmailDialog
-            open={isEmailDialogOpen}
-            recipients={emailRecipients}
-            subject={emailSubject}
-            body={emailBody}
-            senderLabelMode={emailSenderLabelMode}
-            isSending={isSendingEmail}
-            onOpenChange={setIsEmailDialogOpen}
-            onSubjectChange={setEmailSubject}
-            onBodyChange={setEmailBody}
-            onSenderLabelModeChange={setEmailSenderLabelMode}
-            onSend={() => handleSendEmail(clearSelection)}
-          />
-        </div>
-      )}
-    />
+              <Mail /> Send email
+            </BulkActionButton>
+            <EventRegistrantsEmailDialog
+              open={isEmailDialogOpen}
+              recipients={emailRecipients}
+              subject={emailSubject}
+              body={emailBody}
+              senderLabelMode={emailSenderLabelMode}
+              isSending={isSendingEmail}
+              onOpenChange={setIsEmailDialogOpen}
+              onSubjectChange={setEmailSubject}
+              onBodyChange={setEmailBody}
+              onSenderLabelModeChange={setEmailSenderLabelMode}
+              onSend={() => handleSendEmail(clearSelection)}
+            />
+          </>
+        )}
+      />
+    </RecordsPage>
   );
 }
 
