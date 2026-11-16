@@ -214,7 +214,10 @@ These are instructions only; implementation and local tests do not deploy.
    `seawatch.forms.submissions.failed.v1`. For the public counter, `crm` may
    publish `seawatch.forms.counts.v1.>` and `api` may publish
    `$JS.API.STREAM.MSG.GET.SEAWATCH_FORM_COUNTS` (reading the last count).
-   No other secret changes.
+   No other secret changes. Once Argo applies it, the `config-reloader`
+   sidecar of the `jetstream` StatefulSet reloads NATS within about a minute
+   (Kubernetes refreshes the mounted Secret, the sidecar sends SIGHUP); no
+   restart, and connected clients stay connected.
 2. **CRM database.** Deploy the migration with the normal CRM release
    (`prisma migrate deploy`; see `PRISMA_MIGRATION_RECONCILIATION.md` first if
    production history has not yet been reconciled).

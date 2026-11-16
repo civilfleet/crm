@@ -41,6 +41,9 @@ spec:
       labels: { app.kubernetes.io/name: seawatch-jetstream }
     spec:
       automountServiceAccountToken: false
+      # The config reloader signals the NATS process, so they share one
+      # process namespace (same user, no extra capabilities).
+      shareProcessNamespace: true
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -50,7 +53,7 @@ spec:
       containers:
         - name: nats
           image: nats:2.12.1-alpine@sha256:b3f2bd84176ae7bd0afa9c48a00f06d7d0818ff4aaee898e4172e0b8340e5816
-          args: ["--config", "/etc/nats/nats.conf"]
+          args: ["--config", "/etc/nats/nats.conf", "--pid", "/var/run/nats/nats.pid"]
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -63,15 +66,39 @@ spec:
             - { name: data, mountPath: /data }
             - { name: config, mountPath: /etc/nats, readOnly: true }
             - { name: auth, mountPath: /etc/nats/auth, readOnly: true }
+            - { name: pid, mountPath: /var/run/nats }
           resources:
             requests: { cpu: 100m, memory: 128Mi }
             limits: { cpu: "1", memory: 512Mi }
           startupProbe: { httpGet: { path: /healthz, port: monitoring }, failureThreshold: 30, periodSeconds: 5 }
           readinessProbe: { httpGet: { path: "/healthz?js-enabled-only=true", port: monitoring }, periodSeconds: 10 }
           livenessProbe: { httpGet: { path: /healthz, port: monitoring }, periodSeconds: 20 }
+        # Reloads NATS (SIGHUP) when the config or the authorization Secret
+        # changes, so a resealed seawatch-nats-auth applies without a restart.
+        - name: config-reloader
+          image: natsio/nats-server-config-reloader:0.16.0@sha256:261b6a3b041fa7a54cd9eb974177b07326c4fed0856155c4970cc9a7e54edc53
+          args:
+            - -pid
+            - /var/run/nats/nats.pid
+            - -config
+            - /etc/nats/nats.conf
+            - -config
+            - /etc/nats/auth/authorization.conf
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: config, mountPath: /etc/nats, readOnly: true }
+            - { name: auth, mountPath: /etc/nats/auth, readOnly: true }
+            - { name: pid, mountPath: /var/run/nats }
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { cpu: 100m, memory: 64Mi }
       volumes:
         - { name: config, configMap: { name: jetstream-config } }
         - { name: auth, secret: { secretName: seawatch-nats-auth } }
+        - { name: pid, emptyDir: {} }
   volumeClaimTemplates:
     - metadata: { name: data }
       spec:
