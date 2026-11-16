@@ -165,7 +165,7 @@ export const getTransactionColumns = ({
   },
   {
     id: "receipt",
-    meta: { label: "Receipt", icon: Receipt, width: 160 },
+    meta: { sortField: "receipt", label: "Receipt", icon: Receipt, width: 160 },
     cell: ({ row }) => (
       <ReceiptCell transaction={row.original} onUpload={onUploadReceipt} />
     ),

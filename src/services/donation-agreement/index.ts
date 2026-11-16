@@ -161,6 +161,7 @@ export const DONATION_AGREEMENT_SORT_FIELDS = [
   "fundingRequest",
   "organization",
   "amountAgreed",
+  "createdBy",
   "createdAt",
 ] as const;
 export type DonationAgreementSortField =
@@ -186,6 +187,8 @@ const donationAgreementOrderBy = ({
       return {
         fundingRequest: { amountAgreed: { sort: direction, nulls: "last" } },
       };
+    case "createdBy":
+      return { createdBy: { name: { sort: direction, nulls: "last" } } };
     default:
       return { createdAt: direction };
   }

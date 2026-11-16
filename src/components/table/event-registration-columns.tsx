@@ -119,7 +119,7 @@ export const eventRegistrationColumns: ColumnDef<
   },
   {
     id: "phone",
-    meta: { label: "Phone", width: 150 },
+    meta: { sortField: "phone", label: "Phone", width: 150 },
     cell: ({ row }) => <PhoneCell phone={row.original.phone} />,
   },
   {
@@ -129,7 +129,7 @@ export const eventRegistrationColumns: ColumnDef<
   },
   {
     id: "notes",
-    meta: { label: "Notes", width: 240 },
+    meta: { sortField: "notes", label: "Notes", width: 240 },
     cell: ({ row }) => <NotesCell notes={row.original.notes} />,
   },
 ];

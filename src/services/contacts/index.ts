@@ -1093,6 +1093,11 @@ const mapContact = (contact: ContactWithAttributes): ContactType => ({
 /** Columns the Contacts list can be ordered by (see lib/list-request). */
 export const CONTACT_SORT_FIELDS = [
   "name",
+  "email",
+  "phone",
+  "signal",
+  "website",
+  "address",
   "city",
   "createdAt",
   "updatedAt",
@@ -1104,10 +1109,27 @@ const contactOrderBy = (
 ): Prisma.ContactOrderByWithRelationInput[] => {
   // The id keeps rows with equal values in one order across pages.
   if (!sort) return [{ createdAt: "desc" }, { id: "asc" }];
-  if (sort.field === "city") {
-    return [{ city: { sort: sort.direction, nulls: "last" } }, { id: "asc" }];
+  const { field, direction } = sort;
+  switch (field) {
+    case "name":
+    case "createdAt":
+    case "updatedAt":
+      return [{ [field]: direction }, { id: "asc" }];
+    // A copy of the primary address, kept by a trigger (see the migration
+    // 20261116120000_contact_primary_email_sort).
+    case "email":
+      return [{ primaryEmail: { sort: direction, nulls: "last" } }, { id: "asc" }];
+    case "phone":
+      return [{ phone: { sort: direction, nulls: "last" } }, { id: "asc" }];
+    case "signal":
+      return [{ signal: { sort: direction, nulls: "last" } }, { id: "asc" }];
+    case "website":
+      return [{ website: { sort: direction, nulls: "last" } }, { id: "asc" }];
+    case "address":
+      return [{ address: { sort: direction, nulls: "last" } }, { id: "asc" }];
+    default:
+      return [{ city: { sort: direction, nulls: "last" } }, { id: "asc" }];
   }
-  return [{ [sort.field]: sort.direction }, { id: "asc" }];
 };
 
 async function getTeamContacts(

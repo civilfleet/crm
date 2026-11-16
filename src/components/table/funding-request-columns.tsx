@@ -155,7 +155,12 @@ export const getFundingRequestColumns = ({
   },
   {
     id: "submittedBy",
-    meta: { label: "Submitted by", icon: CircleUserRound, width: 220 },
+    meta: {
+      sortField: "submittedBy",
+      label: "Submitted by",
+      icon: CircleUserRound,
+      width: 220,
+    },
     cell: ({ row }) => {
       const person = row.original.submittedBy;
       return <TextCell value={person?.name || person?.email} />;

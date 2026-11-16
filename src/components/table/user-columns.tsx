@@ -177,7 +177,7 @@ export const getUserColumns = ({
   {
     id: "phone",
     accessorKey: "phone",
-    meta: { label: "Phone", icon: Phone, width: 160 },
+    meta: { sortField: "phone", label: "Phone", icon: Phone, width: 160 },
     cell: ({ row }) => <TextCell value={row.original.phone} />,
   },
   {
@@ -201,7 +201,12 @@ export const getUserColumns = ({
   {
     id: "updatedAt",
     accessorKey: "updatedAt",
-    meta: { label: "Updated", icon: CalendarClock, width: 130 },
+    meta: {
+      sortField: "updatedAt",
+      label: "Updated",
+      icon: CalendarClock,
+      width: 130,
+    },
     cell: ({ row }) => <DateCell value={row.original.updatedAt} />,
   },
 ];

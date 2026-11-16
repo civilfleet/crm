@@ -583,6 +583,9 @@ model Contact {
   latitude          Decimal?            @db.Decimal(9, 6)
   longitude         Decimal?            @db.Decimal(9, 6)
   phone             String?              @db.VarChar(255)
+  /// The primary e-mail address, for sorting. Kept in step with ContactEmail
+  /// by a database trigger (contact_primary_email_sync); never write it.
+  primaryEmail      String?             @db.VarChar(255)
   signal            String?              @db.VarChar(255)
   website           String?             @db.VarChar(255)
   notes             String?             @db.Text
@@ -616,6 +619,7 @@ model Contact {
   @@index([teamId, createdAt, id], map: "Contact_active_createdAt_idx", where: raw("(\"deletedAt\" IS NULL)"))
   @@index([teamId, updatedAt, id], map: "Contact_active_updatedAt_idx", where: raw("(\"deletedAt\" IS NULL)"))
   @@index([teamId, name, id], map: "Contact_active_name_idx", where: raw("(\"deletedAt\" IS NULL)"))
+  @@index([teamId, primaryEmail, id], map: "Contact_active_primaryEmail_idx", where: raw("(\"deletedAt\" IS NULL)"))
   @@index([tags], type: Gin)
 }
 

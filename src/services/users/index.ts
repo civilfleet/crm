@@ -331,8 +331,10 @@ export const USER_SORT_FIELDS = [
   "email",
   "city",
   "country",
+  "phone",
   "lastLoginAt",
   "createdAt",
+  "updatedAt",
 ] as const;
 export type UserSortField = (typeof USER_SORT_FIELDS)[number];
 
@@ -340,6 +342,7 @@ const NULLABLE_USER_SORT_FIELDS = new Set<UserSortField>([
   "name",
   "city",
   "country",
+  "phone",
   "lastLoginAt",
 ]);
 

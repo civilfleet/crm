@@ -182,22 +182,22 @@ export const contactColumns: ColumnDef<ContactRow, unknown>[] = [
   },
   {
     accessorKey: "email",
-    meta: { label: "Email", width: 220 },
+    meta: { sortField: "email", label: "Email", width: 220 },
     cell: ({ row }) => <ContactEmailCell contact={row.original} />,
   },
   {
     accessorKey: "phone",
-    meta: { label: "Phone", width: 150 },
+    meta: { sortField: "phone", label: "Phone", width: 150 },
     cell: ({ row }) => <ContactTextCell value={row.original.phone} />,
   },
   {
     accessorKey: "signal",
-    meta: { label: "Signal", width: 140 },
+    meta: { sortField: "signal", label: "Signal", width: 140 },
     cell: ({ row }) => <ContactTextCell value={row.original.signal} />,
   },
   {
     accessorKey: "website",
-    meta: { label: "Website", width: 180 },
+    meta: { sortField: "website", label: "Website", width: 180 },
     cell: ({ row }) => {
       const website = row.original.website;
       if (!website) {
@@ -223,7 +223,7 @@ export const contactColumns: ColumnDef<ContactRow, unknown>[] = [
   },
   {
     accessorKey: "address",
-    meta: { label: "Address", width: 220 },
+    meta: { sortField: "address", label: "Address", width: 220 },
     cell: ({ row }) => {
       const parts = [
         row.original.address,

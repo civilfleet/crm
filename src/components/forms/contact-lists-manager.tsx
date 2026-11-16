@@ -144,7 +144,13 @@ export default function ContactListsManager({
     viewKey: `lists:team:${teamId}`,
     columnDefaults: {},
     initialPageSize,
-    sortFields: ["name", "contactCount", "updatedAt", "createdAt"],
+    sortFields: [
+      "name",
+      "description",
+      "contactCount",
+      "updatedAt",
+      "createdAt",
+    ],
     views: ["table", "cards"],
     filters: FILTER_MODEL,
   });
@@ -496,7 +502,7 @@ export default function ContactListsManager({
       {
         id: "description",
         accessorKey: "description",
-        meta: { label: "Description", width: 360 },
+        meta: { label: "Description", sortField: "description", width: 360 },
         cell: ({ row }) =>
           row.original.description ? (
             <p className="max-w-[360px] truncate text-sm text-muted-foreground">

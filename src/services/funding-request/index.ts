@@ -435,6 +435,7 @@ export const FUNDING_REQUEST_SORT_FIELDS = [
   "amountAgreed",
   "remainingAmount",
   "expectedCompletionDate",
+  "submittedBy",
   "createdAt",
 ] as const;
 export type FundingRequestSortField =
@@ -449,6 +450,9 @@ const fundingRequestOrderBy = ({
   }
   if (field === "amountAgreed" || field === "remainingAmount") {
     return { [field]: { sort: direction, nulls: "last" } };
+  }
+  if (field === "submittedBy") {
+    return { submittedBy: { name: { sort: direction, nulls: "last" } } };
   }
   return { [field]: direction };
 };

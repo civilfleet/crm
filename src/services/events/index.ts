@@ -259,6 +259,10 @@ export const EVENT_SORT_FIELDS = [
   "startDate",
   "endDate",
   "location",
+  "type",
+  "state",
+  "expectedGuests",
+  "visibility",
   "registrationCount",
   "createdAt",
 ] as const;
@@ -383,6 +387,18 @@ const eventOrderBy = (
       return [{ endDate: { sort: direction, nulls: "last" } }, tieBreaker];
     case "location":
       return [{ location: { sort: direction, nulls: "last" } }, tieBreaker];
+    case "state":
+      return [{ state: { sort: direction, nulls: "last" } }, tieBreaker];
+    case "expectedGuests":
+      return [
+        { expectedGuests: { sort: direction, nulls: "last" } },
+        tieBreaker,
+      ];
+    case "type":
+      return [{ eventType: { name: direction } }, tieBreaker];
+    // Ascending: private first, then public.
+    case "visibility":
+      return [{ isPublic: direction }, tieBreaker];
     default:
       return [{ [field]: direction }, tieBreaker];
   }
@@ -1161,6 +1177,8 @@ export const createEventRegistration = async (
 export const EVENT_REGISTRATION_SORT_FIELDS = [
   "name",
   "email",
+  "phone",
+  "notes",
   "createdAt",
 ] as const;
 export type EventRegistrationSortField =
@@ -1228,7 +1246,14 @@ export const getEventRegistrationsPage = async (
       where,
       // The id keeps rows with equal values in one order across pages.
       orderBy: [
-        { [pagination.sort.field]: pagination.sort.direction },
+        pagination.sort.field === "phone" || pagination.sort.field === "notes"
+          ? {
+              [pagination.sort.field]: {
+                sort: pagination.sort.direction,
+                nulls: "last",
+              },
+            }
+          : { [pagination.sort.field]: pagination.sort.direction },
         { id: "asc" },
       ],
       skip: (pagination.page - 1) * pagination.pageSize,

@@ -225,6 +225,7 @@ const getTeamContactLists = async (
 /** Columns the Lists list can be ordered by (see lib/list-request). */
 export const CONTACT_LIST_SORT_FIELDS = [
   "name",
+  "description",
   "contactCount",
   "updatedAt",
   "createdAt",
@@ -241,10 +242,7 @@ const getTeamContactListsPage = async (
   teamId: string,
   userId: string | undefined,
   roles: Roles[],
-  {
-    query = "",
-    types = [],
-  }: { query?: string; types?: ContactListType[] },
+  { query = "", types = [] }: { query?: string; types?: ContactListType[] },
   pagination: {
     page: number;
     pageSize: number;
@@ -265,9 +263,13 @@ const getTeamContactListsPage = async (
     const order =
       field === "name"
         ? a.name.localeCompare(b.name)
-        : field === "contactCount"
-          ? a.contactCount - b.contactCount
-          : new Date(a[field]).getTime() - new Date(b[field]).getTime();
+        : field === "description"
+          ? // Lists without a description come last either way.
+            (a.description ? 0 : 1) - (b.description ? 0 : 1) ||
+            factor * (a.description ?? "").localeCompare(b.description ?? "")
+          : field === "contactCount"
+            ? a.contactCount - b.contactCount
+            : new Date(a[field]).getTime() - new Date(b[field]).getTime();
     // The id keeps lists with equal values in one order across pages.
     return factor * order || a.id.localeCompare(b.id);
   });

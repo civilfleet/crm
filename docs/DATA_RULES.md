@@ -150,6 +150,12 @@ Tests: `tests/db/contacts-edit.test.ts`.
 The code checks this before saving, and the database enforces it as well, so
 two saves at the same moment cannot both win (see below).
 
+Each contact also keeps a copy of its primary address in `Contact.primaryEmail`,
+only so the list can sort by e-mail (a database cannot order contacts by a row
+in another table). A database trigger (`contact_primary_email_sync`, migration
+`20261116120000_contact_primary_email_sort`) updates it on every change to
+`ContactEmail`, whichever code makes it. Never write `primaryEmail` yourself.
+
 ### Merging contacts
 
 `mergeContacts` keeps one contact (the target) and removes the others (the
@@ -196,6 +202,11 @@ agreements and the admin teams list) is searched, filtered, sorted and paged
 - Every page goes through the same access checks and team or organization
   scope as the full list did. An event's registrations come from
   `GET /api/events/:id/registrations`, scoped to the event's team.
+- A column sorts when it holds one value per row (a field, or one linked
+  record such as a team or an owner). Columns that combine several values
+  (groups, tags, attributes, people, roles, signatures) or are worked out
+  from other records (sign-in method, last download, payout) do not sort.
+  `tests/db/sorting.test.ts` runs every allowed sort of every list.
 - "Download all" on Files zips every file the filtered list shows (search and
   type filter), not only the page on screen.
 - Contact lists are counted, sorted and paged after their filters run (a smart
@@ -233,6 +244,7 @@ also enforced by Postgres:
 | A contact has at most one primary address | partial unique index `ContactEmail_primary_contact_key` |
 | A change proposal is resolved at most once | partial unique index `ContactChangeLog_proposal_resolution_key` |
 | A signer cannot be deleted | foreign key `DonationAgreementSignature_userId_fkey` (`ON DELETE RESTRICT`) |
+| A contact's `primaryEmail` copy matches its primary address | trigger `contact_primary_email_sync` on `ContactEmail` |
 | One signature per signer and agreement | primary key of `DonationAgreementSignature` |
 
 All of them are declared in `prisma/schema.prisma` (the partial indexes need

@@ -114,7 +114,12 @@ export const getTeamColumns = (): ColumnDef<TeamRow, unknown>[] => [
   },
   {
     id: "owner",
-    meta: { label: "Owner", icon: CircleUserRound, width: 200 },
+    meta: {
+      sortField: "owner",
+      label: "Owner",
+      icon: CircleUserRound,
+      width: 200,
+    },
     cell: ({ row }) => {
       const owner = row.original.owner;
       const name = owner?.name?.trim() || owner?.email;
@@ -127,12 +132,17 @@ export const getTeamColumns = (): ColumnDef<TeamRow, unknown>[] => [
   },
   {
     id: "users",
-    meta: { label: "Users", icon: Users, width: 100 },
+    meta: { sortField: "users", label: "Users", icon: Users, width: 100 },
     cell: ({ row }) => <CountCell value={row.original._count?.users} />,
   },
   {
     id: "organizations",
-    meta: { label: "Organizations", icon: Building2, width: 130 },
+    meta: {
+      sortField: "organizations",
+      label: "Organizations",
+      icon: Building2,
+      width: 130,
+    },
     cell: ({ row }) => <CountCell value={row.original._count?.organizations} />,
   },
   {
@@ -143,7 +153,12 @@ export const getTeamColumns = (): ColumnDef<TeamRow, unknown>[] => [
   {
     id: "loginDomain",
     accessorKey: "loginDomain",
-    meta: { label: "Login domain", icon: Globe, width: 180 },
+    meta: {
+      sortField: "loginDomain",
+      label: "Login domain",
+      icon: Globe,
+      width: 180,
+    },
     cell: ({ row }) => <TextCell value={row.original.loginDomain} />,
   },
   {
@@ -156,13 +171,13 @@ export const getTeamColumns = (): ColumnDef<TeamRow, unknown>[] => [
   {
     id: "website",
     accessorKey: "website",
-    meta: { label: "Website", icon: Link2, width: 180 },
+    meta: { sortField: "website", label: "Website", icon: Link2, width: 180 },
     cell: ({ row }) => <LinkCell url={row.original.website} />,
   },
   {
     id: "phone",
     accessorKey: "phone",
-    meta: { label: "Phone", icon: Phone, width: 160 },
+    meta: { sortField: "phone", label: "Phone", icon: Phone, width: 160 },
     cell: ({ row }) => <TextCell value={row.original.phone} />,
   },
   {

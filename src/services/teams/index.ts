@@ -1,5 +1,5 @@
-import { normalizeLoginDomain } from "@/lib/auth-routing";
 import type { Prisma } from "@prisma/client";
+import { normalizeLoginDomain } from "@/lib/auth-routing";
 import type { RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import { ensureDefaultGroup } from "@/services/groups";
@@ -212,7 +212,18 @@ const getTeamOwner = async (teamId: string) => {
   return team.owner ?? null;
 };
 
-export const TEAM_SORT_FIELDS = ["name", "email", "city", "createdAt"] as const;
+export const TEAM_SORT_FIELDS = [
+  "name",
+  "email",
+  "city",
+  "phone",
+  "website",
+  "loginDomain",
+  "owner",
+  "users",
+  "organizations",
+  "createdAt",
+] as const;
 export type TeamSortField = (typeof TEAM_SORT_FIELDS)[number];
 
 /** One page of every team, for the admin Teams list. */
@@ -246,10 +257,20 @@ const getTeamsPage = async ({
       modules.length ? { modules: { hasSome: modules } } : {},
     ],
   };
-  const orderBy: Prisma.TeamsOrderByWithRelationInput[] =
-    sort.field === "city"
-      ? [{ city: { sort: sort.direction, nulls: "last" } }, { id: "asc" }]
-      : [{ [sort.field]: sort.direction }, { id: "asc" }];
+  const { field, direction } = sort;
+  // Empty values last; the id keeps equal values in one order across pages.
+  const first: Prisma.TeamsOrderByWithRelationInput =
+    field === "owner"
+      ? { owner: { name: { sort: direction, nulls: "last" } } }
+      : field === "users" || field === "organizations"
+        ? { [field]: { _count: direction } }
+        : field === "name" || field === "email" || field === "createdAt"
+          ? { [field]: direction }
+          : { [field]: { sort: direction, nulls: "last" } };
+  const orderBy: Prisma.TeamsOrderByWithRelationInput[] = [
+    first,
+    { id: "asc" },
+  ];
 
   const [data, total] = await Promise.all([
     prisma.teams.findMany({
@@ -282,10 +303,10 @@ const getTeamsPage = async ({
 };
 
 export {
-  getTeamsPage,
   createTeam,
   ensureTeamOwner,
   getTeamOwner,
   getTeamsByRoles,
+  getTeamsPage,
   transferTeamOwnership,
 };

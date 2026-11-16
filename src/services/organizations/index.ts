@@ -1,7 +1,7 @@
 import { type Prisma, Roles } from "@prisma/client";
 import { auth } from "@/auth";
-import logger from "@/lib/logger";
 import type { RecordSort } from "@/lib/list-request";
+import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import {
   getPrimaryEmail,
@@ -541,6 +541,14 @@ export const ORGANIZATION_SORT_FIELDS = [
   "email",
   "city",
   "country",
+  "phone",
+  "website",
+  "taxID",
+  "isFilledByOrg",
+  "team",
+  "type",
+  "contactPerson",
+  "bankName",
   "createdAt",
 ] as const;
 export type OrganizationSortField = (typeof ORGANIZATION_SORT_FIELDS)[number];
@@ -550,10 +558,35 @@ const organizationOrderBy = (
 ): Prisma.OrganizationOrderByWithRelationInput[] => {
   // The id keeps rows with equal values in one order across pages.
   if (!sort) return [{ createdAt: "desc" }, { id: "asc" }];
-  if (sort.field === "email" || sort.field === "createdAt") {
-    return [{ [sort.field]: sort.direction }, { id: "asc" }];
+  const { field, direction } = sort;
+  const tieBreaker: Prisma.OrganizationOrderByWithRelationInput = { id: "asc" };
+  switch (field) {
+    case "email":
+    case "createdAt":
+    case "isFilledByOrg":
+      return [{ [field]: direction }, tieBreaker];
+    // Linked records by their name; organizations without one come last.
+    case "team":
+      return [{ team: { name: direction } }, tieBreaker];
+    case "type":
+      return [{ orgType: { name: direction } }, tieBreaker];
+    case "contactPerson":
+      return [{ contactPerson: { name: direction } }, tieBreaker];
+    case "bankName":
+      return [{ bankDetails: { bankName: direction } }, tieBreaker];
+    case "name":
+      return [{ name: { sort: direction, nulls: "last" } }, tieBreaker];
+    case "city":
+      return [{ city: { sort: direction, nulls: "last" } }, tieBreaker];
+    case "country":
+      return [{ country: { sort: direction, nulls: "last" } }, tieBreaker];
+    case "phone":
+      return [{ phone: { sort: direction, nulls: "last" } }, tieBreaker];
+    case "website":
+      return [{ website: { sort: direction, nulls: "last" } }, tieBreaker];
+    default:
+      return [{ taxID: { sort: direction, nulls: "last" } }, tieBreaker];
   }
-  return [{ [sort.field]: { sort: sort.direction, nulls: "last" } }, { id: "asc" }];
 };
 
 const getOrganizations = async (

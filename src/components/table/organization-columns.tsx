@@ -145,7 +145,7 @@ export const columns = (
   },
   {
     accessorKey: "team.name",
-    meta: { label: "Team", width: 160 },
+    meta: { sortField: "team", label: "Team", width: 160 },
     cell: ({ row }) => {
       return (
         <div className="text-left font-medium">
@@ -156,7 +156,7 @@ export const columns = (
   },
   {
     accessorKey: "orgType.name",
-    meta: { label: "Type", width: 150 },
+    meta: { sortField: "type", label: "Type", width: 150 },
     cell: ({ row }) => {
       const type = row.original.orgType;
       if (!type) {
@@ -185,7 +185,7 @@ export const columns = (
   },
   {
     accessorKey: "contactPerson",
-    meta: { label: "Contact person", width: 180 },
+    meta: { sortField: "contactPerson", label: "Contact person", width: 180 },
     cell: ({ row }) => {
       const contact = row.original.contactPerson;
       if (!contact) {
@@ -200,7 +200,7 @@ export const columns = (
   },
   {
     accessorKey: "phone",
-    meta: { label: "Phone", width: 150 },
+    meta: { sortField: "phone", label: "Phone", width: 150 },
     cell: ({ row }) => {
       return (
         <div className="text-left font-medium">
@@ -211,7 +211,11 @@ export const columns = (
   },
   {
     accessorKey: "isFilledByOrg",
-    meta: { label: "Registration Type", width: 170 },
+    meta: {
+      sortField: "isFilledByOrg",
+      label: "Registration Type",
+      width: 170,
+    },
     cell: ({ row }) => {
       const isFilledByOrg = row.getValue("isFilledByOrg");
       return (
@@ -236,7 +240,7 @@ export const columns = (
   },
   {
     accessorKey: "website",
-    meta: { label: "Website", width: 200 },
+    meta: { sortField: "website", label: "Website", width: 200 },
     cell: ({ row }) => {
       const website = row.getValue("website") as string;
       const websiteUrl =
@@ -262,7 +266,7 @@ export const columns = (
   },
   {
     accessorKey: "taxID",
-    meta: { label: "Tax ID", width: 140 },
+    meta: { sortField: "taxID", label: "Tax ID", width: 140 },
     cell: ({ row }) => {
       return (
         <div className="text-left font-medium">
@@ -273,7 +277,7 @@ export const columns = (
   },
   {
     accessorKey: "bankDetails.bankName",
-    meta: { label: "Bank Name", width: 160 },
+    meta: { sortField: "bankName", label: "Bank Name", width: 160 },
     cell: ({ row }) => {
       return (
         <div className="text-left font-medium">

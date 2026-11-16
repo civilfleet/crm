@@ -175,7 +175,12 @@ export const getDonationAgreementColumns = ({
   },
   {
     id: "createdBy",
-    meta: { label: "Created by", icon: CircleUserRound, width: 220 },
+    meta: {
+      sortField: "createdBy",
+      label: "Created by",
+      icon: CircleUserRound,
+      width: 220,
+    },
     cell: ({ row }) => {
       const person = row.original.createdBy;
       return <TextCell value={person?.name || person?.email} />;

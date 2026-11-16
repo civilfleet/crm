@@ -35,6 +35,9 @@ type FileListFilters = {
 export const FILE_SORT_FIELDS = [
   "name",
   "type",
+  "organization",
+  "createdBy",
+  "updatedBy",
   "createdAt",
   "updatedAt",
 ] as const;
@@ -216,6 +219,16 @@ const getFileOrderBy = (
       { url: sort.direction },
       tieBreaker,
     ];
+  }
+  // The people show by e-mail; files of no organization come last.
+  if (sort.field === "organization") {
+    return [
+      { organization: { name: { sort: sort.direction, nulls: "last" } } },
+      tieBreaker,
+    ];
+  }
+  if (sort.field === "createdBy" || sort.field === "updatedBy") {
+    return [{ [sort.field]: { email: sort.direction } }, tieBreaker];
   }
   return [{ [sort.field]: sort.direction }, tieBreaker];
 };
@@ -598,14 +611,14 @@ const getFileDownloadAudits = async ({
 };
 
 export {
-  getFilesPage,
-  canUserAccessFile,
   canUserAccessContactScope,
+  canUserAccessFile,
   canUserAccessTeamOrOrgScope,
   getFileById,
   getFileByIdWithRelations,
   getFileDetails,
   getFileDownloadAudits,
   getFiles,
+  getFilesPage,
   recordFileDownloadAudit,
 };

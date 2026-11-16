@@ -17,6 +17,7 @@ export const TRANSACTION_SORT_FIELDS = [
   "amount",
   "totalAmount",
   "remainingAmount",
+  "receipt",
   "createdAt",
 ] as const;
 export type TransactionSortField = (typeof TRANSACTION_SORT_FIELDS)[number];
@@ -44,6 +45,10 @@ const transactionOrderBy = ({
   }
   if (field === "organization") {
     return { organization: { name: direction } };
+  }
+  // By when the receipt was uploaded; transactions without one come last.
+  if (field === "receipt") {
+    return { file: { createdAt: direction } };
   }
   return { [field]: direction };
 };

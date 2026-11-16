@@ -159,7 +159,7 @@ export const eventColumns: ColumnDef<EventRow, unknown>[] = [
   },
   {
     id: "type",
-    meta: { label: "Type", icon: Shapes, width: 170 },
+    meta: { sortField: "type", label: "Type", icon: Shapes, width: 170 },
     cell: ({ row }) => <EventTypeChip type={row.original.eventType} />,
   },
   {
@@ -190,7 +190,7 @@ export const eventColumns: ColumnDef<EventRow, unknown>[] = [
   {
     id: "state",
     accessorKey: "state",
-    meta: { label: "State", icon: MapPin, width: 150 },
+    meta: { sortField: "state", label: "State", icon: MapPin, width: 150 },
     cell: ({ row }) => <TextCell value={row.original.state} />,
   },
   {
@@ -205,7 +205,12 @@ export const eventColumns: ColumnDef<EventRow, unknown>[] = [
   },
   {
     id: "expectedGuests",
-    meta: { label: "Expected guests", icon: Users, width: 150 },
+    meta: {
+      sortField: "expectedGuests",
+      label: "Expected guests",
+      icon: Users,
+      width: 150,
+    },
     cell: ({ row }) => <CountCell value={row.original.expectedGuests} />,
   },
   {
@@ -236,7 +241,12 @@ export const eventColumns: ColumnDef<EventRow, unknown>[] = [
   },
   {
     id: "visibility",
-    meta: { label: "Visibility", icon: Eye, width: 120 },
+    meta: {
+      sortField: "visibility",
+      label: "Visibility",
+      icon: Eye,
+      width: 120,
+    },
     // Private is the normal case and stays blank; public is worth marking.
     cell: ({ row }) =>
       row.original.isPublic ? (

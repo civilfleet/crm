@@ -274,7 +274,12 @@ export const getFileColumns = ({
   },
   {
     id: "organization",
-    meta: { label: "Organization", icon: Building2, width: 220 },
+    meta: {
+      sortField: "organization",
+      label: "Organization",
+      icon: Building2,
+      width: 220,
+    },
     cell: ({ row }) => {
       const organization = row.original.organization;
       const name = organization?.name?.trim();
@@ -308,7 +313,12 @@ export const getFileColumns = ({
   },
   {
     id: "createdBy",
-    meta: { label: "Added by", icon: UserRound, width: 220 },
+    meta: {
+      sortField: "createdBy",
+      label: "Added by",
+      icon: UserRound,
+      width: 220,
+    },
     cell: ({ row }) => <TextCell value={row.original.createdBy?.email} />,
   },
   {
@@ -324,7 +334,12 @@ export const getFileColumns = ({
   },
   {
     id: "updatedBy",
-    meta: { label: "Updated by", icon: UserRound, width: 220 },
+    meta: {
+      sortField: "updatedBy",
+      label: "Updated by",
+      icon: UserRound,
+      width: 220,
+    },
     cell: ({ row }) => <TextCell value={row.original.updatedBy?.email} />,
   },
   {
