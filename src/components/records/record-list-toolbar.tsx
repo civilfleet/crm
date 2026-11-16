@@ -42,7 +42,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { RecordSort } from "@/lib/list-request";
+import { MAX_SORTS, type RecordSort } from "@/lib/list-request";
 
 /** One kind of filter as the toolbar shows it: in the Filter menu and as a chip. */
 export type FilterDefinition<F extends RecordFilter> = {
@@ -112,35 +112,52 @@ type SortChipProps = {
   onClear: () => void;
 };
 
-const SortArrow = ({ direction }: { direction: RecordSort<string>["direction"] }) =>
+const SortArrow = ({
+  direction,
+}: {
+  direction: RecordSort<string>["direction"];
+}) =>
   direction === "asc" ? (
     <ArrowUp aria-label="ascending" className="size-3.5 shrink-0" />
   ) : (
     <ArrowDown aria-label="descending" className="size-3.5 shrink-0" />
   );
 
-/** "Sorted by ↑ Name, then ↓ City ×", while a sort is set. */
+/**
+ * "Sorted by ↑ Name, then ↓ City ×", while a sort is set, and a hint that
+ * Shift-click adds another column while there is room for one.
+ */
 export const SortChip = ({ sorts, getLabel, onClear }: SortChipProps) => {
   if (sorts.length === 0) return null;
   return (
-    <span className="inline-flex h-7 max-w-full items-center gap-1 rounded-md border bg-card pr-0.5 pl-2 text-xs">
-      <span className="shrink-0">Sorted by</span>
-      {sorts.map((sort, index) => (
-        <span key={sort.field} className="inline-flex min-w-0 items-center gap-0.5">
-          {index > 0 ? <span className="pr-0.5">, then</span> : null}
-          <SortArrow direction={sort.direction} />
-          <span className="truncate">{getLabel(sort.field)}</span>
+    <>
+      <span className="inline-flex h-7 max-w-full items-center gap-1 rounded-md border bg-card pr-0.5 pl-2 text-xs">
+        <span className="shrink-0">Sorted by</span>
+        {sorts.map((sort, index) => (
+          <span
+            key={sort.field}
+            className="inline-flex min-w-0 items-center gap-0.5"
+          >
+            {index > 0 ? <span className="pr-0.5">, then</span> : null}
+            <SortArrow direction={sort.direction} />
+            <span className="truncate">{getLabel(sort.field)}</span>
+          </span>
+        ))}
+        <button
+          type="button"
+          aria-label={sorts.length > 1 ? "Clear sorting" : "Clear sort"}
+          onClick={onClear}
+          className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
+        >
+          <X className="size-3.5" />
+        </button>
+      </span>
+      {sorts.length < MAX_SORTS ? (
+        <span className="hidden text-xs text-muted-foreground sm:inline">
+          Shift-click a column to sort by it too
         </span>
-      ))}
-      <button
-        type="button"
-        aria-label={sorts.length > 1 ? "Clear sorting" : "Clear sort"}
-        onClick={onClear}
-        className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
-      >
-        <X className="size-3.5" />
-      </button>
-    </span>
+      ) : null}
+    </>
   );
 };
 
