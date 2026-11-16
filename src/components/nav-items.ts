@@ -3,6 +3,7 @@ import {
   BookUser,
   Building2,
   Calendar,
+  ClipboardList,
   FilePenLine,
   Files,
   FolderOpen,
@@ -132,6 +133,12 @@ const navItems: {
       title: "Lists",
       url: "crm/lists",
       icon: List,
+      module: "CRM",
+    },
+    {
+      title: "Forms",
+      url: "crm/forms",
+      icon: ClipboardList,
       module: "CRM",
     },
     {

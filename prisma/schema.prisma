@@ -261,6 +261,7 @@ model Teams {
   events       Event[]
   formSubmissions FormSubmission[]
   contactConsents ContactConsent[]
+  formSettings FormSetting[]
   eventRoles   EventRole[]
   eventTypes   EventType[]
   groups       Group[]
@@ -1398,6 +1399,22 @@ model ContactConsent {
 
   @@index([contactId, purpose, recordedAt])
   @@index([teamId, purpose])
+}
+
+// How the team uses one website form (by its form id); made on first change.
+model FormSetting {
+  id          String   @id @default(uuid())
+  teamId      String
+  team        Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  formId      String   @db.VarChar(64)
+  // Publish the number of people who sent it, for a counter on the website.
+  publicCount Boolean  @default(false)
+  // The number the website counts toward, if any.
+  goal        Int?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+  @@unique([teamId, formId])
 }
 
 // Website form submission accepted through the public API bridge.

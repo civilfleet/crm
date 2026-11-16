@@ -16,6 +16,14 @@ import {
   registrationPayload,
 } from "../src/lib/public-events/registration";
 import {
+  FORM_COUNT_CACHE_SECONDS,
+  FORM_COUNT_PATH,
+  FORM_COUNT_STREAM,
+  FORM_COUNT_SUBJECT_PREFIX,
+  formCountSubject,
+  formCountValue,
+} from "../src/lib/public-forms/counts";
+import {
   FORM_RATE_LIMIT_STREAM,
   FORM_RATE_LIMIT_SUBJECT_PREFIX,
   FORM_SUBMISSION_FAILURE_STREAM,
@@ -130,6 +138,18 @@ async function main() {
         max_age: 0,
       },
       {
+        // One subject per form; only its latest count is kept.
+        name: FORM_COUNT_STREAM,
+        subjects: [`${FORM_COUNT_SUBJECT_PREFIX}.>`],
+        retention: RetentionPolicy.Limits,
+        discard: DiscardPolicy.Old,
+        storage: StorageType.File,
+        max_msgs_per_subject: 1,
+        max_msg_size: 1024,
+        max_bytes: 64 * 1024 ** 2,
+        max_age: 0,
+      },
+      {
         name: FORM_RATE_LIMIT_STREAM,
         subjects: [`${FORM_RATE_LIMIT_SUBJECT_PREFIX}.*`],
         retention: RetentionPolicy.Limits,
@@ -167,6 +187,38 @@ async function main() {
       "PUBLIC_EVENTS_ORIGINS must explicitly list allowed frontend origins.",
     );
   let stopping = false;
+  // Public form counts, cached per form so a busy page reads NATS at most
+  // once a minute; unknown forms are cached too, and the cache is bounded.
+  const countCache = new Map<
+    string,
+    { expires: number; status: number; body: unknown }
+  >();
+  const readFormCount = async (subject: string) => {
+    const cached = countCache.get(subject);
+    if (cached && cached.expires > Date.now()) return cached;
+    const message = await manager.streams.getMessage(FORM_COUNT_STREAM, {
+      last_by_subj: subject,
+    });
+    const value = message
+      ? formCountValue.safeParse(
+          JSON.parse(new TextDecoder().decode(message.data)),
+        )
+      : undefined;
+    const entry =
+      value?.success && value.data.public
+        ? {
+            status: 200,
+            body: { count: value.data.count, goal: value.data.goal },
+          }
+        : { status: 404, body: { error: "No public count" } };
+    if (countCache.size >= 1000) countCache.clear();
+    const stored = {
+      ...entry,
+      expires: Date.now() + FORM_COUNT_CACHE_SECONDS * 1000,
+    };
+    countCache.set(subject, stored);
+    return stored;
+  };
   const server = createServer(async (req, res) => {
     const origin = req.headers.origin;
     if (origin && origins.has(origin)) {
@@ -191,6 +243,43 @@ async function main() {
         respond(200, { status: "ready" });
       } catch {
         respond(503, { status: "unavailable" });
+      }
+      return;
+    }
+    const url = new URL(req.url ?? "/", "http://bridge.invalid");
+    if (url.pathname === FORM_COUNT_PATH) {
+      if (origin && !origins.has(origin)) {
+        respond(403, { error: "Origin not allowed" });
+        return;
+      }
+      if (req.method === "OPTIONS") {
+        res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+      if (req.method !== "GET") {
+        res.setHeader("Allow", "GET, OPTIONS");
+        respond(405, { error: "Method not allowed" });
+        return;
+      }
+      const teamId = z.uuid().safeParse(url.searchParams.get("team"));
+      const subject = teamId.success
+        ? formCountSubject(teamId.data, url.searchParams.get("form") ?? "")
+        : null;
+      if (!subject) {
+        respond(400, { error: "A team UUID and a form id are required" });
+        return;
+      }
+      try {
+        const count = await readFormCount(subject);
+        res.setHeader(
+          "Cache-Control",
+          `public, max-age=${FORM_COUNT_CACHE_SECONDS}`,
+        );
+        respond(count.status, count.body);
+      } catch {
+        respond(503, { error: "Form counts unavailable" });
       }
       return;
     }

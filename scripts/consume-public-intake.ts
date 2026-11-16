@@ -4,14 +4,21 @@ import { connect, wsconnect } from "@nats-io/transport-node";
 import prisma from "../src/lib/prisma";
 import { consumerErrorCodes } from "../src/lib/public-events/consumer-errors";
 import {
+  FORM_COUNT_INTERVAL_MS,
+  publishFormCounts,
+} from "../src/lib/public-forms/counts";
+import {
   type IntakeJetStream,
   type IntakeManager,
   runIntakePipelines,
 } from "../src/lib/public-intake/consumer";
 import { intakePipelines } from "../src/lib/public-intake/pipelines";
+import { getFormCountRows } from "../src/services/forms";
 
 // Public intake consumer: event registrations and website form submissions on
 // one NATS connection (user crm). See src/lib/public-intake/consumer.ts.
+// The same connection publishes the public form counters
+// (src/lib/public-forms/counts.ts), so the CRM never takes requests itself.
 let phase = "configuration";
 
 async function main() {
@@ -48,6 +55,28 @@ async function main() {
   };
   process.once("SIGTERM", stop);
   process.once("SIGINT", stop);
+
+  // Public form counters: publish what changed, every half minute. A failed
+  // round is retried on the next; the bridge keeps serving the last count.
+  const published = new Map<string, string>();
+  let isPublishing = false;
+  const publishCounts = async () => {
+    if (isPublishing || stopping) return;
+    isPublishing = true;
+    try {
+      await publishFormCounts(js, await getFormCountRows(), published);
+    } catch (error) {
+      console.error(
+        "Form counts not published; retrying on the next round.",
+        JSON.stringify({ errors: consumerErrorCodes(error) }),
+      );
+    } finally {
+      isPublishing = false;
+    }
+  };
+  void publishCounts();
+  const countTimer = setInterval(publishCounts, FORM_COUNT_INTERVAL_MS);
+  callbacks.push(() => clearInterval(countTimer));
 
   phase = "pipelines";
   try {

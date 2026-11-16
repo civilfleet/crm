@@ -154,6 +154,40 @@ actions are not part of this change.
 
 Migration: `prisma/migrations/20261112120000_public_form_submissions`.
 
+## Forms page and public counter
+
+**Forms page** (CRM → Forms, `src/services/forms`): one row per form id the
+team received, named by its newest title, with submissions, people (unique
+contacts) and the last received date. A form's page lists its submissions
+with one column per question, linking to each contact. Like every contact
+list, it shows only submissions of contacts the user may see (group
+visibility), trashed contacts included.
+
+**Public counter.** The website can show how many people sent a form,
+without the CRM taking requests from the internet:
+
+```
+CRM intake consumer ──every 30 s, if changed──▶ NATS stream SEAWATCH_FORM_COUNTS
+  (same outgoing connection, user crm)           subject seawatch.forms.counts.v1.<teamId>.<formId>
+                                                 (only the last message per subject kept)
+browser ──GET /v1/forms/count?team=&form=──▶ bridge ──last message──┘
+```
+
+- A form's page has the switch "Show the number on the website" and an
+  optional goal (`FormSetting`). Only forms the team received can be set.
+- The number is the form's unique contacts, all of them: it is public,
+  the people are not.
+- The consumer publishes `{"public":true,"count":N,"goal":G|null}`, or
+  `{"public":false}` when switched off, only when the value changed
+  (`src/lib/public-forms/counts.ts`).
+- The bridge answers `200 {"count","goal"}` with
+  `Cache-Control: public, max-age=60`, `404` when the form has no public
+  count, `400` for a bad team UUID or form id (letters, digits, `-`, `_`,
+  at most 64), `503` when NATS is unreachable. It caches each answer for 60 s
+  (at most 1000 forms). Same CORS allowlist; GET and OPTIONS only.
+- If the CRM is down the bridge keeps serving the last count; new
+  submissions wait in their stream and the count catches up.
+
 ## Enabling a team
 
 Teams are opted out by default. After the migration is deployed:
@@ -177,7 +211,10 @@ These are instructions only; implementation and local tests do not deploy.
    `seawatch.ratelimit.forms.*`; `crm` gets STREAM.INFO / CONSUMER.INFO /
    CONSUMER.CREATE / DURABLE.CREATE / MSG.NEXT for
    `SEAWATCH_FORM_SUBMISSIONS` + `crm-form-submissions-v1`, and may publish
-   `seawatch.forms.submissions.failed.v1`. No other secret changes.
+   `seawatch.forms.submissions.failed.v1`. For the public counter, `crm` may
+   publish `seawatch.forms.counts.v1.>` and `api` may publish
+   `$JS.API.STREAM.MSG.GET.SEAWATCH_FORM_COUNTS` (reading the last count).
+   No other secret changes.
 2. **CRM database.** Deploy the migration with the normal CRM release
    (`prisma migrate deploy`; see `PRISMA_MIGRATION_RECONCILIATION.md` first if
    production history has not yet been reconciled).
@@ -185,8 +222,8 @@ These are instructions only; implementation and local tests do not deploy.
    to `main` (the image also bundles `src/lib/public-forms/submission.ts`; it
    can be run by hand too) and records the digest; let Argo sync
    `seawatch-api`. The `initialize-event-streams` sync hook runs
-   `--initialize`, which now also creates the three form streams (existing
-   streams are left untouched).
+   `--initialize`, which now also creates the three form streams and
+   `SEAWATCH_FORM_COUNTS` (existing streams are left untouched).
 4. **CRM consumer.** No new service: the existing `event-registrations`
    service (infrastructure CRM role) runs `scripts/consume-event-registrations.ts`,
    which now starts the shared intake consumer, so the CRM release deploys it.

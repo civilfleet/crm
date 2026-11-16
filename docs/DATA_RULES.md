@@ -176,6 +176,13 @@ merge loses a row (`tests/db/contacts-merge.test.ts`).
 A merge is all or nothing, and every contact in it must be visible to the
 person merging.
 
+### Website forms
+
+The Forms page lists a form's submissions only for contacts the user may
+see; its counts follow the same rule. The public counter is the one
+exception: it counts every person who sent the form, because it publishes a
+number and no one's data (`src/services/forms`, `tests/db/forms.test.ts`).
+
 ### Consent
 
 What a person agreed to beyond a single form, for example to receive updates

@@ -5,6 +5,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import test from "node:test";
 import * as publicEvents from "../src/lib/public-events/registration";
+import * as publicCounts from "../src/lib/public-forms/counts";
 import * as publicForms from "../src/lib/public-forms/submission";
 import { loadModule } from "./helpers/load-module";
 
@@ -54,6 +55,9 @@ async function startBridge(
   });
   const publishes: Publish[] = [];
   const failures = new Map<string, string>();
+  // Last message per subject of the form counts stream.
+  const counts = new Map<string, string>();
+  const countReads: string[] = [];
   let capture: (handler: Handler) => void = () => {};
   const started = new Promise<Handler>((resolve) => {
     capture = resolve;
@@ -63,6 +67,7 @@ async function startBridge(
     "dotenv/config": {},
     "../src/lib/public-events/registration": publicEvents,
     "../src/lib/public-forms/submission": publicForms,
+    "../src/lib/public-forms/counts": publicCounts,
     "node:http": {
       createServer: (handler: Handler) => {
         capture(handler);
@@ -98,6 +103,18 @@ async function startBridge(
           },
           add: async (stream: Record<string, unknown>) => {
             options.streams?.push(stream);
+          },
+          getMessage: async (
+            stream: string,
+            query: { last_by_subj: string },
+          ) => {
+            assert.equal(stream, "SEAWATCH_FORM_COUNTS");
+            countReads.push(query.last_by_subj);
+            const data = counts.get(query.last_by_subj);
+            if (data === "fail") throw new Error("broker down");
+            return data === undefined
+              ? null
+              : { data: new TextEncoder().encode(data) };
           },
         },
       }),
@@ -144,7 +161,7 @@ async function startBridge(
     } as unknown as ServerResponse);
     return { status, headers, body };
   };
-  return { send, publishes, failures };
+  return { send, publishes, failures, counts, countReads };
 }
 
 test("forms route queues a valid submission on its own subject and rate-limit budget", async (t) => {
@@ -242,6 +259,98 @@ test("forms route status codes: preflight, 400, 405, 413, 415, 429, 503", async 
   assert.equal((await bridge.send({ url: `${url}?x=1`, body })).status, 404);
 });
 
+const TEAM = "a10957f3-9d42-4b67-b31c-8bed001777ff";
+const countUrl = (form = "petition-1", team = TEAM) =>
+  `/v1/forms/count?team=${team}&form=${form}`;
+
+test("count route serves a public count with its goal, cached", async (t) => {
+  const bridge = await startBridge(t);
+  const subject = `seawatch.forms.counts.v1.${TEAM}.petition-1`;
+  bridge.counts.set(
+    subject,
+    JSON.stringify({ public: true, count: 2341, goal: 5000 }),
+  );
+
+  const first = await bridge.send({ url: countUrl(), method: "GET" });
+  assert.equal(first.status, 200);
+  assert.deepEqual(JSON.parse(first.body), { count: 2341, goal: 5000 });
+  assert.equal(first.headers.get("cache-control"), "public, max-age=60");
+  assert.equal(first.headers.get("access-control-allow-origin"), ORIGIN);
+
+  // A newer count is served once the cached one expires, not before.
+  bridge.counts.set(
+    subject,
+    JSON.stringify({ public: true, count: 2342, goal: 5000 }),
+  );
+  const second = await bridge.send({ url: countUrl(), method: "GET" });
+  assert.equal(JSON.parse(second.body).count, 2341);
+  assert.equal(bridge.countReads.length, 1);
+  // Counting needs no publish: nothing is queued or rate-limited.
+  assert.equal(bridge.publishes.length, 0);
+});
+
+test("count route: 404 when not public or unknown, 400, 405, 503", async (t) => {
+  const bridge = await startBridge(t);
+  bridge.counts.set(
+    `seawatch.forms.counts.v1.${TEAM}.hidden`,
+    JSON.stringify({ public: false }),
+  );
+  bridge.counts.set(`seawatch.forms.counts.v1.${TEAM}.broken`, "fail");
+  const get = (url: string) => bridge.send({ url, method: "GET" });
+
+  assert.equal((await get(countUrl("hidden"))).status, 404);
+  assert.equal((await get(countUrl("never-sent"))).status, 404);
+  assert.equal((await get(countUrl("a.b"))).status, 400);
+  assert.equal((await get(countUrl("x", "not-a-uuid"))).status, 400);
+  assert.equal((await get("/v1/forms/count")).status, 400);
+  assert.equal((await get(countUrl("broken"))).status, 503);
+  const post = await bridge.send({ url: countUrl(), method: "POST" });
+  assert.equal(post.status, 405);
+  assert.equal(post.headers.get("allow"), "GET, OPTIONS");
+  const preflight = await bridge.send({ url: countUrl(), method: "OPTIONS" });
+  assert.equal(preflight.status, 204);
+  assert.equal(
+    preflight.headers.get("access-control-allow-methods"),
+    "GET, OPTIONS",
+  );
+});
+
+test("the CRM publishes counts only when they change", async () => {
+  const sent: Array<{ subject: string; data: string }> = [];
+  const js = {
+    publish: async (subject: string, data: string) => {
+      sent.push({ subject, data });
+    },
+  };
+  const published = new Map<string, string>();
+  const row = {
+    teamId: TEAM,
+    formId: "petition-1",
+    publicCount: true,
+    goal: 5000,
+    count: 12,
+  };
+  const odd = { ...row, formId: "has.dot", count: 3 };
+
+  assert.equal(
+    await publicCounts.publishFormCounts(js, [row, odd], published),
+    1,
+  );
+  assert.deepEqual(sent, [
+    {
+      subject: `seawatch.forms.counts.v1.${TEAM}.petition-1`,
+      data: JSON.stringify({ public: true, count: 12, goal: 5000 }),
+    },
+  ]);
+  assert.equal(await publicCounts.publishFormCounts(js, [row], published), 0);
+  await publicCounts.publishFormCounts(
+    js,
+    [{ ...row, publicCount: false }],
+    published,
+  );
+  assert.equal(sent.at(-1)?.data, JSON.stringify({ public: false }));
+});
+
 test("events route is unaffected by the forms route", async (t) => {
   const bridge = await startBridge(t);
   const url = "/v1/events/registrations";
@@ -316,12 +425,13 @@ test("--initialize creates the form streams per contract", async (t) => {
     "dotenv/config": {},
     "../src/lib/public-events/registration": publicEvents,
     "../src/lib/public-forms/submission": publicForms,
+    "../src/lib/public-forms/counts": publicCounts,
     "node:http": { createServer: () => ({ listen: () => {} }) },
     "@nats-io/transport-node": {
       connect: async () => ({ drain: async () => resolveDone() }),
     },
     "@nats-io/jetstream": {
-      DiscardPolicy: { New: "new" },
+      DiscardPolicy: { New: "new", Old: "old" },
       RetentionPolicy: { Workqueue: "workqueue", Limits: "limits" },
       StorageType: { File: "file" },
       jetstream: () => ({}),
@@ -360,6 +470,10 @@ test("--initialize creates the form streams per contract", async (t) => {
   );
   const rate = byName.get("SEAWATCH_FORM_RATE_LIMIT");
   assert.deepEqual(rate?.subjects, ["seawatch.ratelimit.forms.*"]);
+  const counts = byName.get("SEAWATCH_FORM_COUNTS");
+  assert.deepEqual(counts?.subjects, ["seawatch.forms.counts.v1.>"]);
+  assert.equal(counts?.max_msgs_per_subject, 1);
+  assert.equal(counts?.discard, "old");
   assert.equal(rate?.max_msgs_per_subject, 10);
   assert.equal(rate?.discard_new_per_subject, true);
   assert.equal(rate?.max_age, 60 * 60 * 1e9);
@@ -375,6 +489,7 @@ test("NATS authorization example grants the form subjects and consumer", async (
   for (const subject of [
     "seawatch.forms.submissions.v1",
     "seawatch.ratelimit.forms.*",
+    "$JS.API.STREAM.MSG.GET.SEAWATCH_FORM_COUNTS",
   ])
     assert.ok(api.includes(`"${subject}"`), subject);
   for (const subject of [
@@ -383,6 +498,7 @@ test("NATS authorization example grants the form subjects and consumer", async (
     "$JS.API.CONSUMER.DURABLE.CREATE.SEAWATCH_FORM_SUBMISSIONS.crm-form-submissions-v1",
     "$JS.API.CONSUMER.MSG.NEXT.SEAWATCH_FORM_SUBMISSIONS.crm-form-submissions-v1",
     "seawatch.forms.submissions.failed.v1",
+    "seawatch.forms.counts.v1.>",
   ])
     assert.ok(crm.includes(`"${subject}"`), subject);
   assert.ok(!api.includes("seawatch.forms.submissions.failed.v1"));

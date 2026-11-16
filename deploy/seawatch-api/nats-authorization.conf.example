@@ -12,7 +12,8 @@ authorization {
         "seawatch.events.registrations.v1",
         "seawatch.ratelimit.events.*",
         "seawatch.forms.submissions.v1",
-        "seawatch.ratelimit.forms.*"
+        "seawatch.ratelimit.forms.*",
+        "$JS.API.STREAM.MSG.GET.SEAWATCH_FORM_COUNTS"
       ],
       subscribe: ["_INBOX.api.>"]
     } },
@@ -31,7 +32,8 @@ authorization {
         "$JS.API.CONSUMER.MSG.NEXT.SEAWATCH_FORM_SUBMISSIONS.crm-form-submissions-v1",
         "$JS.ACK.>",
         "seawatch.events.registrations.failed.v1",
-        "seawatch.forms.submissions.failed.v1"
+        "seawatch.forms.submissions.failed.v1",
+        "seawatch.forms.counts.v1.>"
       ],
       subscribe: ["_INBOX.crm.>"]
     } }
