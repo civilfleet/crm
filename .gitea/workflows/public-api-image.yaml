@@ -1,6 +1,22 @@
 name: Public API image
+# Builds on every push to main that changes what the image contains, and by
+# hand. The deploy commit below only touches deploy/, so it never triggers
+# itself; a run that falls behind main leaves the digest to the newer run.
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - scripts/public-api.ts
+      - src/lib/public-events/**
+      - src/lib/public-forms/**
+      - Dockerfile
+      - package.json
+      - yarn.lock
+      - .gitea/workflows/public-api-image.yaml
+concurrency:
+  group: public-api-image
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: docker-build

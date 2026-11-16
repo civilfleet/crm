@@ -176,8 +176,9 @@ These are instructions only; implementation and local tests do not deploy.
 2. **CRM database.** Deploy the migration with the normal CRM release
    (`prisma migrate deploy`; see `PRISMA_MIGRATION_RECONCILIATION.md` first if
    production history has not yet been reconciled).
-3. **Bridge image.** Run the **Public API image** workflow on `main` (the image
-   now also bundles `src/lib/public-forms/submission.ts`) and let Argo sync
+3. **Bridge image.** The **Public API image** workflow builds it on the push
+   to `main` (the image also bundles `src/lib/public-forms/submission.ts`; it
+   can be run by hand too) and records the digest; let Argo sync
    `seawatch-api`. The `initialize-event-streams` sync hook runs
    `--initialize`, which now also creates the three form streams (existing
    streams are left untouched).

@@ -39,13 +39,16 @@ These are instructions only; implementation and local tests do not deploy.
    git push origin main
    ```
 
-2. In Gitea repository **IT-Department/crm**, run the manual **Public API image**
-   workflow (`.gitea/workflows/public-api-image.yaml`) on `main`. Wait for it to
-   pass and commit the new digest to `deploy/seawatch-api/kubernetes/api.yaml`.
-   Keep `main` stable while it runs: its stale-build guard skips digest recording
-   if another commit reaches `main`. Check that the digest commit was created;
-   a completed build alone does not prove the image was selected for deployment.
-   The ordinary CRM image workflow does not rebuild or deploy this bridge.
+2. The **Public API image** workflow (`.gitea/workflows/public-api-image.yaml`)
+   runs on every push to `main` that changes the bridge or its shared contracts
+   (`scripts/public-api.ts`, `src/lib/public-events/**`,
+   `src/lib/public-forms/**`, `Dockerfile`, `package.json`, `yarn.lock`); it can
+   also be run by hand in Gitea (**IT-Department/crm** → Actions). Wait for it
+   to pass and commit the new digest to `deploy/seawatch-api/kubernetes/api.yaml`.
+   A run that falls behind `main` skips recording its digest and leaves it to
+   the newer run. Check that the digest commit was created; a completed build
+   alone does not prove the image was selected for deployment. The ordinary CRM
+   image workflow does not rebuild or deploy this bridge.
 
 3. Argo Application `seawatch-api` tracks `main` at
    `deploy/seawatch-api/kubernetes` with automated sync. Allow it to reconcile,
