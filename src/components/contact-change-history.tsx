@@ -48,15 +48,15 @@ const getActionIcon = (action: ChangeAction) => {
 const getActionColor = (action: ChangeAction) => {
   switch (action) {
     case ChangeAction.CREATED:
-      return "bg-green-100 text-green-800 border-green-200";
+      return "bg-success/10 text-success-strong border-success/25";
     case ChangeAction.UPDATED:
-      return "bg-blue-100 text-blue-800 border-blue-200";
+      return "bg-info/10 text-info-strong border-info/25";
     case ChangeAction.DELETED:
-      return "bg-red-100 text-red-800 border-red-200";
+      return "bg-destructive/10 text-destructive-strong border-destructive/25";
     case ChangeAction.PROPOSED:
-      return "bg-amber-100 text-amber-800 border-amber-200";
+      return "bg-warning/10 text-warning-strong border-warning/25";
     default:
-      return "bg-gray-100 text-gray-800 border-gray-200";
+      return "bg-muted text-foreground border-border";
   }
 };
 
@@ -86,16 +86,16 @@ const getProposalStatus = (
   if (!resolution)
     return {
       label: "Pending review",
-      className: "bg-amber-50 text-amber-800 border-amber-200",
+      className: "bg-warning/10 text-warning-strong border-warning/25",
     };
   return resolution.action === ChangeAction.PROPOSAL_REJECTED
     ? {
         label: "Rejected",
-        className: "bg-gray-100 text-gray-700 border-gray-200",
+        className: "bg-muted text-foreground border-border",
       }
     : {
         label: "Applied",
-        className: "bg-green-50 text-green-800 border-green-200",
+        className: "bg-success/10 text-success-strong border-success/25",
       };
 };
 
@@ -248,21 +248,21 @@ export default function ContactChangeHistory({
                       {log.action === ChangeAction.UPDATED && log.fieldName && (
                         <div className="space-y-1 text-sm">
                           {log.oldValue && (
-                            <div className="p-2 rounded bg-red-50 border border-red-200">
-                              <span className="text-xs font-medium text-red-800">
+                            <div className="p-2 rounded bg-destructive/10 border border-destructive/25">
+                              <span className="text-xs font-medium text-destructive-strong">
                                 Old:
                               </span>
-                              <pre className="text-xs text-red-700 mt-1 whitespace-pre-wrap">
+                              <pre className="text-xs text-destructive mt-1 whitespace-pre-wrap">
                                 {formatValue(log.oldValue)}
                               </pre>
                             </div>
                           )}
                           {log.newValue && (
-                            <div className="p-2 rounded bg-green-50 border border-green-200">
-                              <span className="text-xs font-medium text-green-800">
+                            <div className="p-2 rounded bg-success/10 border border-success/25">
+                              <span className="text-xs font-medium text-success-strong">
                                 New:
                               </span>
-                              <pre className="text-xs text-green-700 mt-1 whitespace-pre-wrap">
+                              <pre className="text-xs text-success mt-1 whitespace-pre-wrap">
                                 {formatValue(log.newValue)}
                               </pre>
                             </div>
@@ -285,11 +285,11 @@ export default function ContactChangeHistory({
                                 {formatValue(log.oldValue)}
                               </pre>
                             </div>
-                            <div className="p-2 rounded bg-amber-50 border border-amber-200">
-                              <span className="text-xs font-medium text-amber-800">
+                            <div className="p-2 rounded bg-warning/10 border border-warning/25">
+                              <span className="text-xs font-medium text-warning-strong">
                                 Proposed:
                               </span>
-                              <pre className="text-xs text-amber-800 mt-1 whitespace-pre-wrap">
+                              <pre className="text-xs text-warning-strong mt-1 whitespace-pre-wrap">
                                 {formatValue(log.newValue)}
                               </pre>
                             </div>

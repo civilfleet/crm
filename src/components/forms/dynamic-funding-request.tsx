@@ -353,7 +353,9 @@ export default function DynamicFundingRequest({
           <FormItem>
             <FormLabel>
               {field.label}
-              {field.isRequired && <span className="text-red-500 ml-1">*</span>}
+              {field.isRequired && (
+                <span className="text-destructive ml-1">*</span>
+              )}
             </FormLabel>
             <FormControl>
               {(() => {

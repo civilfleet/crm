@@ -149,12 +149,14 @@ const FileUpload = ({
 
       {loading && (
         <div className="absolute right-3 top-1/2 -translate-y-1/2">
-          <Loader className="text-gray-950" />
+          <Loader className="text-foreground" />
         </div>
       )}
 
-      {error && <p className="text-red-500 text-xs ">{error}</p>}
-      {uploadError && <p className="text-red-500 text-xs ">{uploadError}</p>}
+      {error && <p className="text-destructive text-xs ">{error}</p>}
+      {uploadError && (
+        <p className="text-destructive text-xs ">{uploadError}</p>
+      )}
     </div>
   );
 };

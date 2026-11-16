@@ -709,7 +709,7 @@ export default async function ContactDetailPage({
                       href={`/api/files/${file.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="break-all text-sm text-blue-600 hover:underline"
+                      className="break-all text-sm text-info hover:underline"
                     >
                       View File
                     </a>

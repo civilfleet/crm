@@ -3,6 +3,7 @@
 import { ChevronsUpDown, LogOut, UserRound } from "lucide-react";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
+import { ThemeMenuControl } from "@/components/theme-menu-control";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -79,6 +80,7 @@ export function NavUser({
                 My profile
               </Link>
             </DropdownMenuItem>
+            <ThemeMenuControl />
             <DropdownMenuItem
               onClick={() => {
                 signOut({ redirectTo: "/" });

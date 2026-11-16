@@ -82,7 +82,9 @@ export default function FundingRequestPostData({
       <CardContent className="space-y-2">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="">
-            <Label className="text-sm text-gray-500 my-2">{description}</Label>
+            <Label className="text-sm text-muted-foreground my-2">
+              {description}
+            </Label>
 
             <FileUpload
               placeholder="Upload file"

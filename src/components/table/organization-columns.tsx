@@ -247,7 +247,7 @@ export const columns = (
         website && !website.startsWith("http") ? `https://${website}` : website;
 
       return (
-        <div className="text-left text-blue-500">
+        <div className="text-left text-info">
           {website ? (
             <Link
               href={websiteUrl}

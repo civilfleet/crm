@@ -125,18 +125,18 @@ const CreateEmailTemplate = ({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-muted p-6">
       <div className="mx-auto max-w-4xl">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-3xl font-bold text-foreground">
             Create Email Templates
           </h1>
-          <p className="mt-1 text-gray-500">
+          <p className="mt-1 text-muted-foreground">
             Design your new email template with full HTML support
           </p>
         </div>
 
-        <div className="rounded-lg border bg-white p-6 shadow-xs">
+        <div className="rounded-lg border bg-card p-6 shadow-xs">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -214,14 +214,14 @@ const CreateEmailTemplate = ({
                     <FormControl>
                       <div className="flex flex-col gap-2" ref={editorRef}>
                         <div className="flex items-center">
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-muted-foreground">
                             Please use{" "}
-                            <code className="font-bold bg-gray-100 px-1 py-0.5 rounded">{`{{ variableName }}`}</code>{" "}
+                            <code className="font-bold bg-muted px-1 py-0.5 rounded">{`{{ variableName }}`}</code>{" "}
                             to insert variables
                           </p>
                           <button
                             type="button"
-                            className="ml-2 px-2 py-1 bg-blue-100 text-blue-600 rounded-md text-sm flex items-center"
+                            className="ml-2 px-2 py-1 bg-info/10 text-info rounded-md text-sm flex items-center"
                             onClick={showTooltip}
                           >
                             <span>Show Variables</span>
@@ -230,7 +230,7 @@ const CreateEmailTemplate = ({
 
                         {tooltipVisible && (
                           <div
-                            className="absolute bg-white border border-gray-200 rounded-md shadow-lg p-3 z-10"
+                            className="absolute bg-card border border-border rounded-md shadow-lg p-3 z-10"
                             style={{
                               top: `${tooltipPosition.top}px`,
                               left: `${tooltipPosition.left}px`,
@@ -247,13 +247,13 @@ const CreateEmailTemplate = ({
                                 >
                                   <button
                                     type="button"
-                                    className="text-left hover:bg-gray-100 px-2 py-1 rounded-md text-sm flex items-center"
+                                    className="text-left hover:bg-muted px-2 py-1 rounded-md text-sm flex items-center"
                                     onClick={() =>
                                       insertVariable(variable.name)
                                     }
                                   >
                                     <code className="font-bold">{`{{ ${variable.name} }}`}</code>
-                                    <span className="ml-2 text-xs text-gray-500">
+                                    <span className="ml-2 text-xs text-muted-foreground">
                                       {variable.description}
                                     </span>
                                   </button>
@@ -263,7 +263,7 @@ const CreateEmailTemplate = ({
                             <div className="pt-2 border-t mt-2 flex justify-end">
                               <button
                                 type="button"
-                                className="text-xs text-gray-500 hover:text-gray-700"
+                                className="text-xs text-muted-foreground hover:text-foreground"
                                 onClick={() => setTooltipVisible(false)}
                               >
                                 Close

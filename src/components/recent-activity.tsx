@@ -94,7 +94,7 @@ export default function RecentActivity({
           <CardTitle>{title}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center text-red-500 py-8">
+          <div className="text-center text-destructive py-8">
             Error loading recent activity
           </div>
         </CardContent>
@@ -127,7 +127,7 @@ export default function RecentActivity({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-gray-900 truncate">
+                      <p className="text-sm font-medium text-foreground truncate">
                         {activity.title}
                       </p>
                       <Badge
@@ -140,10 +140,10 @@ export default function RecentActivity({
                         {activity.action}
                       </Badge>
                     </div>
-                    <p className="text-sm text-gray-500 truncate">
+                    <p className="text-sm text-muted-foreground truncate">
                       {activity.description}
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <p className="text-xs text-muted-foreground mt-1">
                       {formatDistanceToNow(new Date(activity.timestamp), {
                         addSuffix: true,
                       })}

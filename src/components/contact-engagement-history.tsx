@@ -128,15 +128,15 @@ const getSourceLabel = (source: EngagementSource, externalSource?: string) => {
 const getTodoStatusColor = (status?: TodoStatus) => {
   switch (status) {
     case TodoStatus.PENDING:
-      return "bg-gray-100 text-gray-800 border-gray-200";
+      return "bg-muted text-foreground border-border";
     case TodoStatus.IN_PROGRESS:
-      return "bg-blue-100 text-blue-800 border-blue-200";
+      return "bg-info/10 text-info-strong border-info/25";
     case TodoStatus.COMPLETED:
-      return "bg-green-100 text-green-800 border-green-200";
+      return "bg-success/10 text-success-strong border-success/25";
     case TodoStatus.CANCELLED:
-      return "bg-red-100 text-red-800 border-red-200";
+      return "bg-destructive/10 text-destructive-strong border-destructive/25";
     default:
-      return "bg-gray-100 text-gray-800 border-gray-200";
+      return "bg-muted text-foreground border-border";
   }
 };
 
@@ -242,7 +242,7 @@ const getPreviewText = (message?: string, maxLength = 140) => {
 
 function SafeEmailHtmlFrame({ html }: { html: string }) {
   return (
-    <div className="rounded-lg border shadow-sm bg-white">
+    <div className="rounded-lg border shadow-sm bg-card">
       <iframe
         title="Inbound email HTML body"
         sandbox="allow-same-origin"
@@ -518,10 +518,10 @@ function EngagementRow({
             <div
               className={`rounded-full p-2 ${
                 engagement.todoStatus === TodoStatus.COMPLETED
-                  ? "bg-green-100"
+                  ? "bg-success/10"
                   : engagement.todoStatus === TodoStatus.IN_PROGRESS
-                    ? "bg-blue-100"
-                    : "bg-amber-100"
+                    ? "bg-info/10"
+                    : "bg-warning/10"
               }`}
             >
               {(() => {
@@ -530,35 +530,35 @@ function EngagementRow({
                   <Icon
                     className={`h-4 w-4 ${
                       engagement.todoStatus === TodoStatus.COMPLETED
-                        ? "text-green-600"
+                        ? "text-success"
                         : engagement.todoStatus === TodoStatus.IN_PROGRESS
-                          ? "text-blue-600"
-                          : "text-amber-600"
+                          ? "text-info"
+                          : "text-warning"
                     }`}
                   />
                 );
               })()}
             </div>
           ) : engagement.source === EngagementSource.NOTE ? (
-            <div className="rounded-full p-2 bg-emerald-100">
-              <StickyNote className="h-4 w-4 text-emerald-600" />
+            <div className="rounded-full p-2 bg-success/10">
+              <StickyNote className="h-4 w-4 text-success" />
             </div>
           ) : engagement.source === EngagementSource.FORM ? (
-            <div className="rounded-full p-2 bg-violet-100">
-              <ClipboardList className="h-4 w-4 text-violet-600" />
+            <div className="rounded-full p-2 bg-info/10">
+              <ClipboardList className="h-4 w-4 text-info" />
             </div>
           ) : (
             <div
               className={`rounded-full p-2 ${
                 engagement.direction === EngagementDirection.OUTBOUND
-                  ? "bg-blue-100"
-                  : "bg-green-100"
+                  ? "bg-info/10"
+                  : "bg-success/10"
               }`}
             >
               {engagement.direction === EngagementDirection.OUTBOUND ? (
-                <ArrowUpRight className="h-4 w-4 text-blue-600" />
+                <ArrowUpRight className="h-4 w-4 text-info" />
               ) : (
-                <ArrowDownLeft className="h-4 w-4 text-green-600" />
+                <ArrowDownLeft className="h-4 w-4 text-success" />
               )}
             </div>
           )}
@@ -572,7 +572,7 @@ function EngagementRow({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 uppercase tracking-wide">
+                  <span className="rounded-full border border-info/25 bg-info/10 px-2.5 py-1 text-[11px] font-semibold text-info uppercase tracking-wide">
                     {getSourceLabel(
                       engagement.source,
                       engagement.externalSource,
@@ -743,7 +743,7 @@ function EngagementRow({
             ) : null}
           </div>
         ) : engagement.source === EngagementSource.NOTE ? (
-          <div className="rounded-lg border bg-emerald-50/40 px-4 py-4 space-y-2">
+          <div className="rounded-lg border bg-success/5 px-4 py-4 space-y-2">
             <h4 className="text-sm font-semibold">
               {engagement.subject || "Internal note"}
             </h4>
@@ -759,7 +759,7 @@ function EngagementRow({
           </div>
         ) : renderAsInboundHtml ? (
           <div className="space-y-3">
-            <div className="rounded-lg border shadow-sm bg-white">
+            <div className="rounded-lg border shadow-sm bg-card">
               <div className="px-4 py-3 space-y-1">
                 <h4 className="text-sm font-semibold">
                   Subject: {engagement.subject || "Email"}
@@ -798,7 +798,7 @@ function EngagementRow({
                 ?.value ?? undefined;
             return (
               <div className="space-y-3">
-                <div className="rounded-lg border shadow-sm bg-white">
+                <div className="rounded-lg border shadow-sm bg-card">
                   <div className="px-4 py-3 space-y-1">
                     <h4 className="text-sm font-semibold">
                       Subject: {engagement.subject || "Email"}
@@ -814,7 +814,7 @@ function EngagementRow({
                         <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
                           Event
                         </span>
-                        <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 border border-blue-100">
+                        <span className="rounded-full bg-info/10 px-2.5 py-1 text-[11px] font-medium text-info border border-info/25">
                           {metric}
                         </span>
                       </div>
@@ -1166,7 +1166,7 @@ export default function ContactEngagementHistory({
               if (item.type === "single") {
                 return (
                   <div key={item.engagement.id}>
-                    <div className="rounded-xl border bg-white shadow-sm p-4">
+                    <div className="rounded-xl border bg-card shadow-sm p-4">
                       <EngagementRow
                         engagement={item.engagement}
                         showConnector={false}
@@ -1200,7 +1200,7 @@ export default function ContactEngagementHistory({
               return (
                 <div
                   key={`thread-${item.ticketId}`}
-                  className="rounded-xl border bg-white shadow-sm"
+                  className="rounded-xl border bg-card shadow-sm"
                 >
                   <div className="flex flex-col gap-3 border-b bg-muted/10 px-4 py-3 transition-colors hover:bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
                     <button
@@ -1210,7 +1210,7 @@ export default function ContactEngagementHistory({
                     >
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 uppercase tracking-wide">
+                          <span className="rounded-full border border-info/25 bg-info/10 px-2.5 py-1 text-[11px] font-semibold text-info uppercase tracking-wide">
                             Thread ({item.engagements.length} messages)
                           </span>
                           <span className="text-xs text-muted-foreground">
@@ -1257,7 +1257,7 @@ export default function ContactEngagementHistory({
                       {item.engagements.map((engagement, idx) => (
                         <div
                           key={engagement.id}
-                          className="rounded-lg border bg-white shadow-sm px-4 py-3"
+                          className="rounded-lg border bg-card shadow-sm px-4 py-3"
                         >
                           <EngagementRow
                             engagement={engagement}
@@ -1325,7 +1325,7 @@ export default function ContactEngagementHistory({
                       item.inboundEmail?.id ===
                       replyTarget.inboundEmailMessageId,
                   )?.inboundEmail?.fromEmail ? (
-                  <p className="text-xs text-amber-700">
+                  <p className="text-xs text-warning">
                     This reply will use the sender-provided Reply-To address,
                     which differs from From.
                   </p>

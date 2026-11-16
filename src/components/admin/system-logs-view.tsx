@@ -67,15 +67,16 @@ const formatDateTime = (value: string) =>
 const levelConfig = {
   INFO: {
     icon: Info,
-    className: "border-blue-200 bg-blue-50 text-blue-900",
+    className: "border-info/25 bg-info/10 text-info-strong",
   },
   WARN: {
     icon: AlertTriangle,
-    className: "border-amber-200 bg-amber-50 text-amber-950",
+    className: "border-warning/25 bg-warning/10 text-warning-strong",
   },
   ERROR: {
     icon: Bug,
-    className: "border-red-200 bg-red-50 text-red-900",
+    className:
+      "border-destructive/25 bg-destructive/10 text-destructive-strong",
   },
 };
 
@@ -187,7 +188,7 @@ export default function SystemLogsView({ teamId }: SystemLogsViewProps) {
           {error ? (
             <div
               role="alert"
-              className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-900"
+              className="rounded-md border border-destructive/25 bg-destructive/10 p-4 text-sm text-destructive-strong"
             >
               {(error as Error).message}
             </div>

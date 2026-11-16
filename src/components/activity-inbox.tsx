@@ -823,7 +823,7 @@ export default function ActivityInbox({ teamId }: { teamId: string }) {
             {selected?.inboundEmail?.replyToEmail &&
             selected.inboundEmail.replyToEmail !==
               selected.inboundEmail.fromEmail ? (
-              <p className="text-xs text-amber-700">
+              <p className="text-xs text-warning">
                 This reply will use the sender-provided Reply-To address, which
                 differs from From.
               </p>

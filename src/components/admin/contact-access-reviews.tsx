@@ -191,16 +191,14 @@ export default function ContactAccessReviews({
               {pendingReviews.map((review) => (
                 <div
                   key={review.id}
-                  className="rounded-md border border-amber-200 bg-amber-50/50 p-4"
+                  className="rounded-md border border-warning/25 bg-warning/10 p-4"
                 >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <ReviewSummary review={review} />
                     <div className="flex flex-wrap gap-2">
                       <Button
                         size="sm"
-                        onClick={() =>
-                          runAccessReviewAction(review, "approve")
-                        }
+                        onClick={() => runAccessReviewAction(review, "approve")}
                         disabled={busyReviewId !== null}
                       >
                         {busyReviewId === `approve:${review.id}` ? (
@@ -255,7 +253,7 @@ export default function ContactAccessReviews({
               {approvedReviews.map((review) => (
                 <div
                   key={review.id}
-                  className="rounded-md border border-emerald-200 bg-emerald-50/50 p-4"
+                  className="rounded-md border border-success/25 bg-success/10 p-4"
                 >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <ReviewSummary review={review} approved />
@@ -294,9 +292,9 @@ function ReviewSummary({
     <div className="min-w-0 space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         {approved ? (
-          <ShieldCheck className="h-4 w-4 text-emerald-700" />
+          <ShieldCheck className="h-4 w-4 text-success" />
         ) : (
-          <ShieldAlert className="h-4 w-4 text-amber-700" />
+          <ShieldAlert className="h-4 w-4 text-warning" />
         )}
         <p className="font-medium">
           {approved

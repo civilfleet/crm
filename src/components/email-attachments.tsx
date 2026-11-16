@@ -188,7 +188,7 @@ export function EmailAttachmentLinks({
             key={attachment.id}
             className="flex items-center gap-2 text-muted-foreground"
           >
-            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <AlertTriangle className="h-4 w-4 text-warning" />
             {attachment.fileName} was blocked by policy.
           </p>
         ),

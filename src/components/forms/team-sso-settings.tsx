@@ -440,7 +440,7 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
             </p>
           </div>
           {!isDomainVerified && isOidc && (
-            <p className="text-xs text-amber-600">
+            <p className="text-xs text-warning">
               OIDC sign-in remains inactive until the login domain is verified.
             </p>
           )}
@@ -505,7 +505,7 @@ export default function TeamSsoSettings({ teamId }: { teamId: string }) {
             check verification.
           </p>
           {domainVerifiedAt && (
-            <p className="text-xs text-emerald-700">
+            <p className="text-xs text-success">
               Verified at {new Date(domainVerifiedAt).toLocaleString()}
             </p>
           )}

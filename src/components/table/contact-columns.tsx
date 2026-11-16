@@ -206,7 +206,7 @@ export const contactColumns: ColumnDef<ContactRow, unknown>[] = [
       return (
         <a
           href={website}
-          className="block max-w-[260px] truncate text-blue-600 hover:underline"
+          className="block max-w-[260px] truncate text-info hover:underline"
           title={website}
           target="_blank"
           rel="noreferrer"

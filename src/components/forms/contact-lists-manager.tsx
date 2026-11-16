@@ -527,7 +527,7 @@ export default function ContactListsManager({
                 title="Copy contacts"
               >
                 {copiedListId === list.id ? (
-                  <Check className="h-4 w-4 text-green-600" />
+                  <Check className="h-4 w-4 text-success" />
                 ) : (
                   <Copy className="h-4 w-4" />
                 )}
@@ -610,7 +610,7 @@ export default function ContactListsManager({
           aria-label="Copy contacts"
         >
           {copiedListId === list.id ? (
-            <Check className="h-4 w-4 text-green-600" />
+            <Check className="h-4 w-4 text-success" />
           ) : (
             <Copy className="h-4 w-4" />
           )}

@@ -387,7 +387,7 @@ export default function OrganizationTable({
                       : `https://${org.website}`
                   }
                   target="_blank"
-                  className="text-blue-600 hover:underline"
+                  className="text-info hover:underline"
                 >
                   {org.website}
                 </Link>

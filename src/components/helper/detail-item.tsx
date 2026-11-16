@@ -14,12 +14,14 @@ function DetailItem({
 }) {
   return (
     <div className={`${className}`}>
-      <dt className="text-sm font-medium text-gray-500 mb-1">{label}</dt>
-      <dd className="text-gray-800">
+      <dt className="text-sm font-medium text-muted-foreground mb-1">
+        {label}
+      </dt>
+      <dd className="text-foreground">
         {type === "link" ? (
           <Link
             href={value as string}
-            className="text-blue-600 hover:text-blue-800 font-medium underline hover:no-underline"
+            className="text-info hover:text-info-strong font-medium underline hover:no-underline"
             target="_blank"
             rel="noopener noreferrer"
           >

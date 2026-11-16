@@ -105,7 +105,7 @@ export default function FundingRequestDetailsForm({
                     placeholder="Amount to Offer"
                     type="number"
                     form={form}
-                    className="bg-white"
+                    className="bg-card"
                   />
                   <Button
                     type="submit"
@@ -122,7 +122,7 @@ export default function FundingRequestDetailsForm({
           // add button for uploading the donation agreement.
         )}
       {showReceiptForm && (
-        <div className="mt-6 p-4 border rounded-lg bg-blue-50">
+        <div className="mt-6 p-4 border rounded-lg bg-info/10">
           <FundingRequestPostData
             title="Upload Receipt"
             description="Please upload the receipt to confirm the funds transfer. This is required within 7 days of the transfer."

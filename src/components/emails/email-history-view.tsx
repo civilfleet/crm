@@ -40,16 +40,16 @@ type EmailHistoryViewProps = {
 };
 
 const statusClasses: Record<string, string> = {
-  SENT: "bg-emerald-100 text-emerald-900 border-emerald-200",
-  PARTIAL: "bg-amber-100 text-amber-900 border-amber-200",
-  FAILED: "bg-red-100 text-red-900 border-red-200",
-  SENDING: "bg-blue-100 text-blue-900 border-blue-200",
+  SENT: "bg-success/10 text-success-strong border-success/25",
+  PARTIAL: "bg-warning/10 text-warning-strong border-warning/25",
+  FAILED: "bg-destructive/10 text-destructive-strong border-destructive/25",
+  SENDING: "bg-info/10 text-info-strong border-info/25",
   SKIPPED: "bg-muted text-foreground border-border",
-  DELIVERED: "bg-emerald-100 text-emerald-900 border-emerald-200",
-  BOUNCED: "bg-red-100 text-red-900 border-red-200",
-  PENDING: "bg-blue-100 text-blue-900 border-blue-200",
-  DISPATCHING: "bg-blue-100 text-blue-900 border-blue-200",
-  UNKNOWN: "bg-amber-100 text-amber-900 border-amber-200",
+  DELIVERED: "bg-success/10 text-success-strong border-success/25",
+  BOUNCED: "bg-destructive/10 text-destructive-strong border-destructive/25",
+  PENDING: "bg-info/10 text-info-strong border-info/25",
+  DISPATCHING: "bg-info/10 text-info-strong border-info/25",
+  UNKNOWN: "bg-warning/10 text-warning-strong border-warning/25",
 };
 
 const formatDateTime = (value?: string) => {
@@ -410,7 +410,7 @@ const EmailBatchDetails = ({
         />
       </div>
       {batch.lastError ? (
-        <div className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-950">
+        <div className="mt-4 rounded-md border border-destructive/25 bg-destructive/10 p-3 text-sm text-destructive-strong">
           <p className="font-medium">Batch error</p>
           <p className="mt-1 whitespace-pre-wrap break-words">
             {batch.lastError}

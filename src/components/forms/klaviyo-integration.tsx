@@ -207,8 +207,8 @@ export default function KlaviyoIntegration({
       return {
         label: "Not configured",
         dotClass: "bg-amber-500",
-        panelClass: "border-amber-200 bg-amber-50",
-        badgeClass: "bg-amber-100 text-amber-900 border-amber-200",
+        panelClass: "border-warning/25 bg-warning/10",
+        badgeClass: "bg-warning/10 text-warning-strong border-warning/25",
         description: "Add your Klaviyo private key to enable syncing.",
         icon: AlertTriangle,
       };
@@ -227,8 +227,8 @@ export default function KlaviyoIntegration({
       return {
         label: "Connected",
         dotClass: "bg-emerald-500",
-        panelClass: "border-emerald-200 bg-emerald-50",
-        badgeClass: "bg-emerald-100 text-emerald-900 border-emerald-200",
+        panelClass: "border-success/25 bg-success/10",
+        badgeClass: "bg-success/10 text-success-strong border-success/25",
         description: "Ready to sync contacts and email engagement.",
         icon: CheckCircle2,
       };
@@ -236,8 +236,8 @@ export default function KlaviyoIntegration({
     return {
       label: "Configured",
       dotClass: "bg-blue-500",
-      panelClass: "border-blue-200 bg-blue-50",
-      badgeClass: "bg-blue-100 text-blue-900 border-blue-200",
+      panelClass: "border-info/25 bg-info/10",
+      badgeClass: "bg-info/10 text-info-strong border-info/25",
       description: "Saved settings, but connection not verified yet.",
       icon: PlugZap,
     };

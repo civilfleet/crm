@@ -208,7 +208,7 @@ export default function ScalewayEmailIntegration({
       return {
         label: "Not configured",
         dotClass: "bg-amber-500",
-        badgeClass: "bg-amber-100 text-amber-900 border-amber-200",
+        badgeClass: "bg-warning/10 text-warning-strong border-warning/25",
         description:
           "Add Scaleway credentials, project ID, and a verified sender address.",
         icon: AlertTriangle,
@@ -227,7 +227,7 @@ export default function ScalewayEmailIntegration({
       return {
         label: "Ready",
         dotClass: "bg-emerald-500",
-        badgeClass: "bg-emerald-100 text-emerald-900 border-emerald-200",
+        badgeClass: "bg-success/10 text-success-strong border-success/25",
         description: "Contacts can be emailed through Scaleway TEM.",
         icon: CheckCircle2,
       };
@@ -235,7 +235,7 @@ export default function ScalewayEmailIntegration({
     return {
       label: "Configured",
       dotClass: "bg-blue-500",
-      badgeClass: "bg-blue-100 text-blue-900 border-blue-200",
+      badgeClass: "bg-info/10 text-info-strong border-info/25",
       description: "Settings are saved.",
       icon: Mail,
     };

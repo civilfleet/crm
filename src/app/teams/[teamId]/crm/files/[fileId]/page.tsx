@@ -192,7 +192,7 @@ export default async function FileDetailPage({ params }: FileDetailPageProps) {
                   <p className="text-muted-foreground">Associated Resource</p>
                   {associatedResource ? (
                     <Link
-                      className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+                      className="inline-flex items-center gap-1 text-info hover:underline"
                       href={associatedResource.href}
                     >
                       {associatedResource.label}

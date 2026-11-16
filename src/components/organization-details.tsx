@@ -346,7 +346,7 @@ export default function OrganizationDetails({
 
                       <Link
                         href={`${process.env.NEXT_PUBLIC_BASE_URL}/api/files/${file.id}`}
-                        className="inline-flex items-center px-3 py-2 border rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary bg-white text-primary hover:bg-muted"
+                        className="inline-flex items-center px-3 py-2 border rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary bg-card text-primary hover:bg-muted"
                         tabIndex={0}
                         aria-label="Download file"
                       >

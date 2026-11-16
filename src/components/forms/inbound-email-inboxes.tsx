@@ -186,7 +186,8 @@ const getInboxStatus = (inbox: EmailInboxConfig) => {
   if (inbox.lastSyncError) {
     return {
       label: "Sync error",
-      className: "bg-red-100 text-red-900 border-red-200",
+      className:
+        "bg-destructive/10 text-destructive-strong border-destructive/25",
       icon: AlertCircle,
     };
   }
@@ -194,14 +195,14 @@ const getInboxStatus = (inbox: EmailInboxConfig) => {
   if (inbox.lastSyncedAt) {
     return {
       label: "Syncing",
-      className: "bg-emerald-100 text-emerald-900 border-emerald-200",
+      className: "bg-success/10 text-success-strong border-success/25",
       icon: CheckCircle2,
     };
   }
 
   return {
     label: "Ready",
-    className: "bg-blue-100 text-blue-900 border-blue-200",
+    className: "bg-info/10 text-info-strong border-info/25",
     icon: Inbox,
   };
 };

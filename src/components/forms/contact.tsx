@@ -1864,7 +1864,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="mt-6 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="mt-6 text-destructive hover:text-destructive hover:bg-destructive/10"
                               onClick={() => remove(index)}
                               aria-label="Remove attribute"
                             >
@@ -1968,7 +1968,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                                         href={field.value}
                                         target="_blank"
                                         rel="noopener"
-                                        className="text-blue-500 hover:underline break-all text-sm"
+                                        className="text-info hover:underline break-all text-sm"
                                       >
                                         {field.value}
                                       </a>
@@ -2013,7 +2013,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => removeFile(index)}
                         >
                           <Trash2 className="h-4 w-4" />

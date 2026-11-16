@@ -123,7 +123,7 @@ export function LoginForm({
       {error ? (
         <div
           id="login-error"
-          className="w-full break-words text-left text-sm text-red-600"
+          className="w-full break-words text-left text-sm text-destructive"
           role="alert"
         >
           {error}
@@ -180,7 +180,7 @@ export function LoginForm({
               </Button>
             </>
           ) : (
-            <div className="break-words text-sm font-medium text-green-600">
+            <div className="break-words text-sm font-medium text-success">
               Login link has been sent to your email!
             </div>
           )}

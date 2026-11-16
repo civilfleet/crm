@@ -43,14 +43,14 @@ export default function FundingRequestHeader({
     ].includes(currentStatus);
 
   const statusColors = {
-    Submitted: "bg-amber-50 border-amber-200",
-    Accepted: "bg-blue-50 border-blue-200",
-    WaitingForSignature: "bg-indigo-50 border-indigo-200",
-    Approved: "bg-emerald-50 border-emerald-200",
-    FundsDisbursing: "bg-violet-50 border-violet-200",
-    Completed: "bg-green-50 border-green-200",
-    Rejected: "bg-rose-50 border-rose-200",
-    default: "bg-gray-50 border-gray-200",
+    Submitted: "bg-warning/10 border-warning/25",
+    Accepted: "bg-info/10 border-info/25",
+    WaitingForSignature: "bg-info/10 border-info/25",
+    Approved: "bg-success/10 border-success/25",
+    FundsDisbursing: "bg-info/10 border-info/25",
+    Completed: "bg-success/10 border-success/25",
+    Rejected: "bg-destructive/10 border-destructive/25",
+    default: "bg-muted border-border",
   };
 
   const getStatusColor = () =>

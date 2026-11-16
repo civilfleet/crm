@@ -219,14 +219,14 @@ export default function CreateTransaction({
                   className={
                     remainingAmount < 0
                       ? "text-destructive font-bold"
-                      : "text-green-600 font-bold"
+                      : "text-success font-bold"
                   }
                 >
                   {formatCurrency(remainingAmount)}
                 </span>
                 <span className="font-medium">Status:</span>
                 <span>
-                  <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                  <span className="inline-flex items-center rounded-full bg-info/10 px-2 py-1 text-xs font-medium text-info-strong">
                     {selectedRequestData.status}
                   </span>
                 </span>
@@ -366,14 +366,14 @@ export default function CreateTransaction({
                   className={
                     remainingAmount < 0
                       ? "text-destructive font-bold"
-                      : "text-green-600 font-bold"
+                      : "text-success font-bold"
                   }
                 >
                   {formatCurrency(remainingAmount)}
                 </span>
                 <span className="font-medium">Status:</span>
                 <span>
-                  <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-1 text-xs font-medium text-blue-800">
+                  <span className="inline-flex items-center rounded-full bg-info/10 px-2 py-1 text-xs font-medium text-info-strong">
                     {selectedRequestData.status}
                   </span>
                 </span>

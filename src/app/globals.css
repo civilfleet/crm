@@ -60,6 +60,23 @@
   /* Behind organization logos, so dark logos stay legible. */
   --color-logo-tile: hsl(var(--logo-tile));
 
+  /*
+    Status colours, for both themes: a tinted background (bg-success/10), a
+    light border (border-success/25), the colour itself for icons and text on
+    a plain background (text-success), and a stronger one for text on the
+    tint (text-success-strong).
+  */
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-success-strong: hsl(var(--success-strong));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-warning-strong: hsl(var(--warning-strong));
+  --color-info: hsl(var(--info));
+  --color-info-foreground: hsl(var(--info-foreground));
+  --color-info-strong: hsl(var(--info-strong));
+  --color-destructive-strong: hsl(var(--destructive-strong));
+
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
@@ -128,6 +145,16 @@
     --interactive-foreground: 0 0% 100%;
     --field: 0 0% 100%;
     --logo-tile: 0 0% 100%;
+    --success: 156 73% 27%;
+    --success-foreground: 0 0% 100%;
+    --success-strong: 155 74% 21%;
+    --warning: 37 92% 29%;
+    --warning-foreground: 0 0% 100%;
+    --warning-strong: 38 91% 22%;
+    --info: 197 80% 36%;
+    --info-foreground: 0 0% 100%;
+    --info-strong: 196 86% 26%;
+    --destructive-strong: 0 88% 37%;
   }
   .dark {
     --background: 194 100% 8%;
@@ -170,6 +197,16 @@
     --interactive-foreground: 194 100% 8%;
     --field: 198 100% 12%;
     --logo-tile: 0 0% 100%;
+    --success: 153 56% 51%;
+    --success-foreground: 194 100% 8%;
+    --success-strong: 152 61% 69%;
+    --warning: 46 100% 62%;
+    --warning-foreground: 194 100% 8%;
+    --warning-strong: 47 100% 74%;
+    --info: 200 96% 54%;
+    --info-foreground: 194 100% 8%;
+    --info-strong: 201 97% 78%;
+    --destructive-strong: 0 100% 77%;
   }
 }
 

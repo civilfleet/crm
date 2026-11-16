@@ -15,12 +15,12 @@ function LongText({ content }: { content: string }) {
       <button
         type="button"
         onClick={handleCopy}
-        className="absolute top-2 right-2 p-1 rounded-md hover:bg-gray-100"
+        className="absolute top-2 right-2 p-1 rounded-md hover:bg-muted"
       >
-        <Clipboard className="w-5 h-5 text-gray-700" />
+        <Clipboard className="w-5 h-5 text-foreground" />
       </button>
       <p className="whitespace-pre-wrap">{content}</p>
-      {copied && <span className="text-green-500 text-sm">Copied!</span>}
+      {copied && <span className="text-success text-sm">Copied!</span>}
     </div>
   );
 }

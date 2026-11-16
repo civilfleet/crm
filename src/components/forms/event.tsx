@@ -1063,12 +1063,12 @@ export default function EventForm({
                   )}
 
                   {isPublicValue && normalizedSlug && (
-                    <div className="sm:col-span-2 rounded-md border border-green-200 bg-green-50 p-4">
+                    <div className="sm:col-span-2 rounded-md border border-success/25 bg-success/10 p-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex items-start gap-3">
                           <div className="flex-shrink-0">
                             <svg
-                              className="h-5 w-5 text-green-600"
+                              className="h-5 w-5 text-success"
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
@@ -1084,10 +1084,10 @@ export default function EventForm({
                             </svg>
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-medium text-green-900">
+                            <p className="text-sm font-medium text-success-strong">
                               Public Registration Link
                             </p>
-                            <p className="mt-1 break-all text-sm text-green-700">
+                            <p className="mt-1 break-all text-sm text-success">
                               {publicRegistrationUrl ||
                                 "Link will be available once the app knows your domain."}
                             </p>
@@ -1229,7 +1229,7 @@ export default function EventForm({
                                 )}
                               </div>
                               {isSelected && (
-                                <Check className="ml-auto h-4 w-4 text-green-600" />
+                                <Check className="ml-auto h-4 w-4 text-success" />
                               )}
                             </CommandItem>
                           );
@@ -1245,7 +1245,7 @@ export default function EventForm({
             </div>
 
             {availableRoles.length === 0 && (
-              <div className="rounded-md border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+              <div className="rounded-md border border-warning/25 bg-warning/10 p-3 text-sm text-warning-strong">
                 No event roles configured. Visit Settings to create event roles
                 like &quot;Partner&quot;, &quot;Musician&quot;, etc.
               </div>

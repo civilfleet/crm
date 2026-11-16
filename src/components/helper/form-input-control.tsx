@@ -49,13 +49,13 @@ export default function FormInputControl<TFieldValues extends FieldValues>({
                 autoComplete={autoComplete}
                 disabled={disabled}
                 className={cn(
-                  isFilled && "border-green-500 !bg-green-50",
+                  isFilled && "border-success/50 !bg-success/10",
                   className,
                 )}
                 {...field}
               />
               {isFilled && !form.formState.errors[name as string] && (
-                <CheckCircle2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-green-500" />
+                <CheckCircle2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-success" />
               )}
             </div>
           </FormControl>

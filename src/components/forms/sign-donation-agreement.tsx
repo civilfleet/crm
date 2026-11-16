@@ -269,7 +269,7 @@ export default function SignDonationAgreement({
                           {signature.user?.email}
                         </span>
                         {signature.signedAt && (
-                          <div className="flex items-center text-green-600">
+                          <div className="flex items-center text-success">
                             <CheckCircle className="w-4 h-4 mr-1" />
                             <span className="text-xs">
                               {new Date(signature.signedAt).toLocaleString()}
