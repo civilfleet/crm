@@ -3,6 +3,7 @@
 How funding requests and contacts change, what keeps their data consistent,
 and where each rule is enforced and tested. When you change one of these
 rules, change this page, the code and its test together.
+Known open points are in [FOLLOW_UPS.md](FOLLOW_UPS.md).
 
 - [Funding requests](#funding-requests)
   - [The status path](#the-status-path)

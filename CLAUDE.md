@@ -106,6 +106,7 @@ FundingRequest statuses:
 
 ### Data rules
 `docs/DATA_RULES.md` describes how funding requests and contacts may change (status path, payouts, agreements, contact visibility, edits, merge, e-mail uniqueness), where each rule lives and which test covers it. Keep it, the code and the tests in step.
+`docs/FOLLOW_UPS.md` lists known open points (with why and how); check it before working in those areas, and remove an entry once it is done.
 
 ### Testing
 Tests use Node's built-in test runner (`node:test`); there is no Jest/Vitest.
