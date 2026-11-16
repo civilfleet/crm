@@ -5,17 +5,12 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npm run lint"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "hooks": [
+            "command": "yarn typecheck",
+            "timeout": 300
+          },
           {
             "type": "command",
-            "command": "yarn typecheck"
+            "command": "npm run lint"
           }
         ]
       }
