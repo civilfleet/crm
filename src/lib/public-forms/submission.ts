@@ -27,6 +27,15 @@ export const FORM_ANSWER_TYPES = [
   "consent",
 ] as const;
 
+/**
+ * What a ticked consent question is for, beyond the form itself. A consent
+ * answer with a purpose becomes a ContactConsent record; one without stays
+ * an answer of this submission only. Add purposes here, in the website's
+ * shared forms contract, and in docs/DATA_RULES.md.
+ */
+export const CONSENT_PURPOSES = ["marketing"] as const;
+export type ConsentPurpose = (typeof CONSENT_PURPOSES)[number];
+
 export const MAX_FORM_ANSWERS = 100;
 export const MAX_FORM_ANSWER_TEXT = 10000;
 export const MAX_FORM_ANSWER_OPTIONS = 100;
@@ -69,8 +78,13 @@ export const formSubmissionAnswer = z
         z.array(z.string().max(500)).max(MAX_FORM_ANSWER_OPTIONS),
       ])
       .optional(),
+    purpose: z.enum(CONSENT_PURPOSES).optional(),
   })
-  .strict();
+  .strict()
+  .refine((answer) => !answer.purpose || answer.type === "consent", {
+    message: "Only consent answers have a purpose",
+    path: ["purpose"],
+  });
 
 export const formSubmissionPayload = z
   .object({

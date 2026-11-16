@@ -164,7 +164,7 @@ sources). Before removing them it moves **everything** that pointed at them
 onto the target: e-mail addresses (as chosen), groups, organizations, list
 memberships, files, engagements and tasks (with their assignee), inbox
 messages, e-mail recipients, event participation and roles, registrations,
-form submissions, attributes, social links, access reviews, the
+form submissions, consents, attributes, social links, access reviews, the
 organization contact-person link, and the history. Duplicates are kept once.
 
 Removing a source contact deletes whatever still points at it, so **every
@@ -176,12 +176,39 @@ merge loses a row (`tests/db/contacts-merge.test.ts`).
 A merge is all or nothing, and every contact in it must be visible to the
 person merging.
 
+### Consent
+
+What a person agreed to beyond a single form, for example to receive updates
+(purpose `marketing`), is kept in `ContactConsent`:
+
+- **Append-only.** Every grant or withdrawal is a new row with the purpose,
+  the words the person saw, the locale, the source (website form, by hand or
+  another system), the form and submission, and when. The latest row per
+  purpose is what holds now (`src/services/contact-consents`).
+- **From website forms**, a ticked consent question with a purpose becomes a
+  `GRANTED` row in the same transaction as the submission
+  (`src/services/form-submissions`). A consent question without a purpose,
+  such as agreeing to the processing of a petition signature, stays an answer
+  of that submission only.
+- **An unticked box never withdraws.** Signing again without the tick leaves
+  an earlier consent as it is; only an explicit unsubscribe or a change by
+  hand writes `WITHDRAWN`.
+- **The purposes are a fixed list**, `CONSENT_PURPOSES` in
+  `src/lib/public-forms/submission.ts`, mirrored in the website's shared forms
+  contract.
+- Merging contacts moves their consents, history included; deleting a contact
+  permanently deletes them.
+
+Tests: `tests/public-forms.test.ts` (contract, intake),
+`tests/db/form-consent.test.ts` (real intake, unticked box, team scope) and
+`tests/db/contacts-merge.test.ts`.
+
 ### Trash, restore and permanent delete
 
 - **Trash** sets `deletedAt`; the contact and everything linked to it stay.
 - **Restore** clears `deletedAt`.
 - **Permanent delete** removes the contact and, with it, its addresses,
-  history, engagements, form submissions, files and memberships. Messages and
+  history, engagements, form submissions, consents, files and memberships. Messages and
   e-mail recipients keep their record, without the contact link.
 
 All three act only on contacts the person can see.

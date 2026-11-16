@@ -17,6 +17,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import ContactChangeHistory from "@/components/contact-change-history";
+import ContactConsents from "@/components/contact-consents";
 import ContactEngagementHistory from "@/components/contact-engagement-history";
 import ContactResponsiveTabs from "@/components/contact-responsive-tabs";
 import DeleteContactButton from "@/components/forms/delete-contact-button";
@@ -32,6 +33,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getContactConsents } from "@/services/contact-consents";
 import {
   getAllowedContactSubmodules,
   getContactById,
@@ -211,7 +213,10 @@ export default async function ContactDetailPage({
     notFound();
   }
 
-  const allowedSubmodules = await getAllowedContactSubmodules(teamId, userId);
+  const [allowedSubmodules, consents] = await Promise.all([
+    getAllowedContactSubmodules(teamId, userId),
+    getContactConsents(id, teamId),
+  ]);
   const showSupervisionTab = allowedSubmodules.includes("SUPERVISION");
   const showShopTab = allowedSubmodules.includes("SHOP");
   const showEventsTab = true;
@@ -842,6 +847,7 @@ export default async function ContactDetailPage({
             </div>
 
             <div className="space-y-6 lg:col-span-4 lg:col-start-9">
+              <ContactConsents consents={consents} />
               <ContactChangeHistory contactId={id} />
             </div>
           </div>

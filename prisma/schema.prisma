@@ -260,6 +260,7 @@ model Teams {
   contactAccessReviews ContactAccessReview[]
   events       Event[]
   formSubmissions FormSubmission[]
+  contactConsents ContactConsent[]
   eventRoles   EventRole[]
   eventTypes   EventType[]
   groups       Group[]
@@ -600,6 +601,7 @@ model Contact {
   events            EventContact[]
   registrations     EventRegistration[]
   formSubmissions   FormSubmission[]
+  consents          ContactConsent[]
   engagements       ContactEngagement[]
   emailRecipients   EmailRecipient[]
   inboundEmailMessages InboundEmailMessage[]
@@ -1361,6 +1363,41 @@ model EventRegistration {
   @@index([eventId])
   @@index([email])
   @@index([contactId])
+}
+
+enum ConsentStatus {
+  GRANTED
+  WITHDRAWN
+}
+
+enum ConsentSource {
+  FORM      // a ticked consent question of a website form
+  MANUAL    // set by a team member
+  EXTERNAL  // reported by another system, e.g. an unsubscribe
+}
+
+// What a contact agreed to, append-only: the latest row per purpose is the
+// current state (docs/DATA_RULES.md, "Consent").
+model ContactConsent {
+  id           String        @id @default(uuid())
+  teamId       String
+  team         Teams         @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  purpose      String        @db.VarChar(64)
+  status       ConsentStatus
+  // The words the person agreed to, as shown to them.
+  wording      String?       @db.Text
+  locale       String?       @db.VarChar(10)
+  source       ConsentSource
+  submissionId String?       @db.Uuid
+  formId       String?       @db.VarChar(64)
+  recordedBy   String?       @db.VarChar(255)
+  recordedAt   DateTime      @db.Timestamptz(6)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+
+  @@index([contactId, purpose, recordedAt])
+  @@index([teamId, purpose])
 }
 
 // Website form submission accepted through the public API bridge.

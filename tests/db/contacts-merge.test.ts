@@ -219,6 +219,17 @@ const createMergeSetup = async () => {
       receivedAt: new Date(),
     },
   });
+  await db.contactConsent.create({
+    data: {
+      teamId: team.id,
+      contactId: source.id,
+      purpose: "marketing",
+      status: "GRANTED",
+      wording: "I want updates",
+      source: "FORM",
+      recordedAt: new Date(),
+    },
+  });
   await db.contactEngagement.create({
     data: {
       contactId: source.id,

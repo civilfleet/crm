@@ -83,6 +83,30 @@ export const createFormSubmission = async (input: FormSubmissionMessage) => {
       },
     });
 
+    // A ticked consent question with a purpose is recorded as that consent;
+    // an unticked one changes nothing (docs/DATA_RULES.md, "Consent").
+    const consents = submission.answers.filter(
+      (answer) =>
+        answer.type === "consent" && answer.purpose && answer.value === true,
+    );
+    if (consents.length) {
+      await tx.contactConsent.createMany({
+        data: consents.map((answer) => ({
+          teamId: team.id,
+          contactId: contact.id,
+          purpose: answer.purpose as string,
+          status: "GRANTED",
+          wording: answer.label,
+          locale: form.locale,
+          source: "FORM",
+          submissionId,
+          formId: form.id,
+          recordedBy: "Website form",
+          recordedAt: new Date(submission.submittedAt),
+        })),
+      });
+    }
+
     await tx.contactEngagement.create({
       data: {
         contactId: contact.id,

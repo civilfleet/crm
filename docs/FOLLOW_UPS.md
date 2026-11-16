@@ -13,6 +13,7 @@ done, remove it here and update `docs/DATA_RULES.md` if a rule changed.
 - [7. Data checks for imports and website intake](#7-data-checks-for-imports-and-website-intake)
 - [8. Test the distance filter](#8-test-the-distance-filter)
 - [9. Production checks](#9-production-checks)
+- [10. Send marketing consent to Klaviyo](#10-send-marketing-consent-to-klaviyo)
 
 ## 1. Protect `Contact.primaryEmail`
 
@@ -168,3 +169,19 @@ have not been run against production yet.
 - No agreement is stuck waiting with nobody left to sign.
 
 **Size.** Run the queries; follow-up work depends on what they find.
+
+## 10. Send marketing consent to Klaviyo
+
+**What.** Consents are recorded in the CRM (`ContactConsent`,
+`docs/DATA_RULES.md` "Consent"), but newsletters go out through Klaviyo, which
+does not see them yet. Unsubscribes in Klaviyo do not reach the CRM either.
+
+**How.**
+- An outbox: each `marketing` consent row gets a sync state; a job subscribes
+  `GRANTED` contacts to the Klaviyo list (with the consent time and wording)
+  and unsubscribes `WITHDRAWN` ones, retrying on failure.
+- A Klaviyo webhook or a periodic pull writes `WITHDRAWN` rows (source
+  `EXTERNAL`) for unsubscribes, so the CRM stays the record.
+- Decide which team's consents go to which Klaviyo list.
+
+**Size.** Medium; needs a Klaviyo API key in the CRM's secrets.

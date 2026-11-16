@@ -3706,6 +3706,12 @@ const mergeContacts = async (
       data: { contactId: input.targetContactId },
     });
 
+    // Consents are the person's, with their history; they move as they are.
+    await tx.contactConsent.updateMany({
+      where: { contactId: { in: sourceContactIds } },
+      data: { contactId: input.targetContactId },
+    });
+
     // A failed statement aborts a Postgres transaction, so look for the
     // target's matching review first instead of catching the conflict.
     const accessReviews = await tx.contactAccessReview.findMany({

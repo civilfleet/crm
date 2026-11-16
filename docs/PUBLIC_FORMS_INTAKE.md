@@ -44,7 +44,8 @@ browser ──POST /v1/forms/submissions──▶ seawatch-api (scripts/public-a
       "label": "1..500",
       "type": "text|textarea|email|number|date|single|multiple|consent",
       "value": "string ≤10000 | number | boolean | string[] (≤100 × ≤80)",
-      "display": "optional string ≤500 | string[] (≤100 × ≤500)"
+      "display": "optional string ≤500 | string[] (≤100 × ≤500)",
+      "purpose": "optional, consent answers only: marketing"
     }
   ]
 }
@@ -133,6 +134,10 @@ the other keeps processing. Per message, both pipelines have the same semantics:
   The engagement message notes "N contact changes pending review".
 - `FormSubmission` row (form id/title/revision, locale, page, answers JSON,
   submittedAt, receivedAt).
+- One `ContactConsent` (`GRANTED`, source `FORM`) per ticked consent answer
+  with a `purpose`, holding the label as the wording, the locale, form,
+  submission and `submittedAt`. Unticked or purpose-less consent answers
+  record nothing beyond the answers; see `docs/DATA_RULES.md` ("Consent").
 - One `ContactEngagement`: direction `INBOUND`, source `FORM`, subject
   `Form: <title>`, message of `label: display/value` lines,
   `externalId = submissionId`, `externalSource = "website-form"`,

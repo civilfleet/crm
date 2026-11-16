@@ -186,6 +186,7 @@ function formHarness(options: { enabled?: boolean } = {}) {
     emails: [] as Row[],
     submissions: [] as Row[],
     engagements: [] as Row[],
+    consents: [] as Row[],
     changeLogs: [] as Row[],
     proposals: [] as Row[],
   };
@@ -257,6 +258,12 @@ function formHarness(options: { enabled?: boolean } = {}) {
       create: async ({ data }: { data: Row }) => {
         state.engagements.push(data);
         return data;
+      },
+    },
+    contactConsent: {
+      createMany: async ({ data }: { data: Row[] }) => {
+        state.consents.push(...data);
+        return { count: data.length };
       },
     },
   };
@@ -383,6 +390,66 @@ test("new contact is created with contact block and a FORM engagement in one tra
     message({ contact: { email: "anon@example.org" } }),
   );
   assert.equal(nameless.state().contacts[0].name, "anon@example.org");
+});
+
+test("a consent answer may carry a purpose; other answers may not", () => {
+  const payload = validPayload();
+  payload.answers.push({
+    id: "updates",
+    label: "I want updates",
+    type: "consent",
+    value: true,
+    purpose: "marketing",
+  } as (typeof payload.answers)[number]);
+  assert.equal(
+    formSubmissionPayload.parse(payload).answers.at(-1)?.purpose,
+    "marketing",
+  );
+
+  const unknown = structuredClone(payload) as Row & { answers: Row[] };
+  unknown.answers[unknown.answers.length - 1].purpose = "anything";
+  assert.equal(formSubmissionPayload.safeParse(unknown).success, false);
+
+  const onText = structuredClone(payload) as Row & { answers: Row[] };
+  onText.answers[0].purpose = "marketing";
+  assert.equal(formSubmissionPayload.safeParse(onText).success, false);
+});
+
+test("ticked consents with a purpose are recorded; others are not", async () => {
+  const harness = formHarness();
+  const answers = [
+    ...validPayload().answers,
+    {
+      id: "updates",
+      label: "Voglio ricevere aggiornamenti da Sea-Watch",
+      type: "consent",
+      value: true,
+      purpose: "marketing",
+    },
+    {
+      id: "later",
+      label: "Unticked",
+      type: "consent",
+      value: false,
+      purpose: "marketing",
+    },
+  ];
+  await harness.service.createFormSubmission(message({ answers }));
+  const state = harness.state();
+  // The privacy consent has no purpose and stays an answer only.
+  assert.equal(state.consents.length, 1);
+  const consent = state.consents[0];
+  assert.equal(consent.purpose, "marketing");
+  assert.equal(consent.status, "GRANTED");
+  assert.equal(consent.source, "FORM");
+  assert.equal(consent.wording, "Voglio ricevere aggiornamenti da Sea-Watch");
+  assert.equal(consent.contactId, state.contacts[0].id);
+  assert.equal(consent.submissionId, SUBMISSION_ID);
+  assert.equal(consent.locale, "de");
+  assert.equal(
+    (consent.recordedAt as Date).toISOString(),
+    "2026-11-12T10:00:00.000Z",
+  );
 });
 
 test("existing contact only gets empty fields filled, never overwritten", async () => {
