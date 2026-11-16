@@ -43,8 +43,6 @@ export const Switcher = <Value extends string>({
     <fieldset
       className={cn(
         "inline-flex shrink-0 items-center gap-0.5 rounded-lg border bg-muted p-0.5",
-        // Public pages in the website design: a strip of square buttons.
-        "website:gap-0 website:border-4 website:border-border website:bg-card website:p-0",
         className,
       )}
     >
@@ -59,9 +57,7 @@ export const Switcher = <Value extends string>({
             className={cn(
               "relative inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap text-muted-foreground transition-colors select-none hover:text-foreground has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
               size === "sm" ? "h-7 px-2 text-xs" : "h-8 px-3 text-sm",
-              "website:h-10 website:px-4 website:text-base website:font-bold website:text-foreground website:hover:bg-muted",
-              isSelected &&
-                "bg-card text-foreground shadow-xs website:bg-secondary website:text-secondary-foreground website:shadow-none website:hover:bg-secondary",
+              isSelected && "bg-card text-foreground shadow-xs",
             )}
           >
             <input

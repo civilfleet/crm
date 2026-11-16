@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ArrowLeft,
   Download,
   GitMerge,
   Loader2,
@@ -18,6 +17,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { EmptyState } from "@/components/design/empty-state";
+import { Switcher } from "@/components/design/switcher";
 import { InternalCopyFields } from "@/components/emails/internal-copy-fields";
 import { ContactExportDialog } from "@/components/forms/contact-export-dialog";
 import {
@@ -70,7 +70,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -695,11 +698,17 @@ export default function ContactTable({
 
   const createHref = `/teams/${teamId}/crm/contacts/create`;
 
+  // Switching between the contacts and the trash starts on the first page.
+  const handleShowTrash = (nextShowTrash: boolean) => {
+    setShowTrash(nextShowTrash);
+    list.pagination.onPageChange(1);
+  };
+
   return (
     <RecordsPage>
       <RecordsHeader
         icon={UsersIcon}
-        title={showTrash ? "Contacts in the trash" : "Contacts"}
+        title="Contacts"
         count={isLoading ? undefined : totalContacts}
         action={
           showTrash ? undefined : (
@@ -715,11 +724,9 @@ export default function ContactTable({
             <DropdownMenuItem onSelect={() => setIsImportDialogOpen(true)}>
               <Upload /> Import contacts
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => setShowTrash((current) => !current)}
-            >
-              {showTrash ? <ArrowLeft /> : <Trash2 />}
-              {showTrash ? "Back to contacts" : "Trash"}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => handleShowTrash(!showTrash)}>
+              <Trash2 /> {showTrash ? "Back to all contacts" : "Open trash"}
             </DropdownMenuItem>
           </>
         }
@@ -732,17 +739,16 @@ export default function ContactTable({
         searchLabel="Search contacts"
         isRefreshing={isValidating && !isLoading}
         start={
-          showTrash ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 gap-1.5"
-              onClick={() => setShowTrash(false)}
-            >
-              <ArrowLeft /> Contacts
-            </Button>
-          ) : undefined
+          <Switcher
+            label="Which contacts"
+            size="sm"
+            value={showTrash ? "trash" : "all"}
+            onValueChange={(value) => handleShowTrash(value === "trash")}
+            options={[
+              { value: "all", label: "All contacts" },
+              { value: "trash", label: "Trash", icon: Trash2 },
+            ]}
+          />
         }
       />
 
@@ -763,8 +769,8 @@ export default function ContactTable({
             <EmptyState
               size="page"
               icon={Trash2}
-              title="The trash is empty"
-              description="Contacts moved to the trash can be restored or deleted for good here."
+              title="Trash is empty"
+              description="Contacts you move to the trash stay here until you restore them or delete them for good."
             />
           ) : (
             <EmptyState
