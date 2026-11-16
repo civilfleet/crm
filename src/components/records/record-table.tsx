@@ -307,7 +307,9 @@ export const RecordTable = <TData,>({
                               : undefined
                           }
                           className={cn(
-                            "h-9 border-r border-b bg-card px-3 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground",
+                            "h-9 border-r border-b bg-card text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground",
+                            // A sortable header is one button, edge to edge.
+                            sortField && onSortChange ? "p-0" : "px-3",
                             meta?.pinned && "sticky z-30",
                             meta?.align === "right" && "text-right",
                           )}
@@ -317,8 +319,8 @@ export const RecordTable = <TData,>({
                               type="button"
                               onClick={() => handleSort(sortField)}
                               className={cn(
-                                "-mx-1 flex max-w-full items-center gap-1.5 rounded-sm px-1 py-0.5 transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden",
-                                meta?.align === "right" && "ml-auto",
+                                "flex h-9 w-full cursor-pointer items-center gap-1.5 px-3 transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden focus-visible:ring-inset",
+                                meta?.align === "right" && "justify-end",
                               )}
                             >
                               {content}
