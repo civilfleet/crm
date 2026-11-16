@@ -20,6 +20,17 @@ import {
   registrationPayload,
 } from "../src/lib/public-events/registration";
 import {
+  CAPTCHA_HEADER,
+  CAPTCHA_LIFETIME_MS,
+  CAPTCHA_USED_STREAM,
+  CAPTCHA_USED_SUBJECT,
+  checkFormCaptcha,
+  createFormChallenge,
+  FORM_CHALLENGE_PATH,
+  readCaptchaDifficulty,
+  readCaptchaMode,
+} from "../src/lib/public-forms/captcha";
+import {
   FORM_CONFIRMATION_FAILURE_SUBJECT,
   FORM_CONFIRMATION_PATH,
   FORM_CONFIRMATION_STREAM,
@@ -190,14 +201,38 @@ async function main() {
         retention: RetentionPolicy.Limits,
         discard: DiscardPolicy.New,
         storage: StorageType.File,
-        max_msgs_per_subject: 10,
+        // Per IP and hour. Offices, events and mobile networks share an IP;
+        // the captcha, not this limit, keeps scripts out.
+        max_msgs_per_subject: 30,
+        // Applied to the existing stream too (see below).
+        update: true,
         discard_new_per_subject: true,
         max_age: 60 * 60 * 1e9,
         max_bytes: 64 * 1024 ** 2,
       },
-    ]) {
+      {
+        // Each solved captcha counts once: its id is the message id, and a
+        // repeat within the window is reported as a duplicate.
+        name: CAPTCHA_USED_STREAM,
+        subjects: [CAPTCHA_USED_SUBJECT],
+        retention: RetentionPolicy.Limits,
+        discard: DiscardPolicy.Old,
+        storage: StorageType.File,
+        max_age: 2 * CAPTCHA_LIFETIME_MS * 1e6,
+        duplicate_window: 2 * CAPTCHA_LIFETIME_MS * 1e6,
+        max_msg_size: 64,
+        max_bytes: 8 * 1024 ** 2,
+      },
+    ] as Array<Record<string, unknown> & { name: string; update?: boolean }>) {
+      const { update, ...config } = stream;
       try {
         await manager.streams.info(stream.name);
+        // Limits that may change after creation are brought up to date.
+        if (update)
+          await manager.streams.update(
+            stream.name,
+            config as Parameters<typeof manager.streams.update>[1],
+          );
       } catch (error) {
         if (
           !(error instanceof Error) ||
@@ -205,7 +240,9 @@ async function main() {
           !["404", "10059"].includes(String(error.code))
         )
           throw error;
-        await manager.streams.add(stream);
+        await manager.streams.add(
+          config as Parameters<typeof manager.streams.add>[0],
+        );
       }
     }
     await nc.drain();
@@ -254,6 +291,14 @@ async function main() {
     countCache.set(subject, stored);
     return stored;
   };
+  // Form captcha (src/lib/public-forms/captcha.ts): off until the website
+  // sends it; the difficulty can be raised without a website change.
+  const captchaMode = readCaptchaMode(process.env.CAPTCHA_MODE);
+  const captchaKey = process.env.CAPTCHA_KEY;
+  const captchaDifficulty = readCaptchaDifficulty(process.env);
+  if (captchaMode !== "off" && !captchaKey)
+    throw new Error("CAPTCHA_MODE needs CAPTCHA_KEY.");
+
   // The website's confirmation page posts the token from the e-mail link.
   // A valid signature is all the bridge checks; the CRM consumer does the
   // rest (an unknown or already confirmed submission changes nothing).
@@ -419,6 +464,29 @@ async function main() {
       }
       return;
     }
+    if (url.pathname === FORM_CHALLENGE_PATH) {
+      if (origin && !origins.has(origin)) {
+        respond(403, { error: "Origin not allowed" });
+        return;
+      }
+      if (req.method === "OPTIONS") {
+        res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+      if (req.method !== "GET") {
+        res.setHeader("Allow", "GET, OPTIONS");
+        respond(405, { error: "Method not allowed" });
+        return;
+      }
+      if (!captchaKey) {
+        respond(404, { error: "No captcha" });
+        return;
+      }
+      respond(200, await createFormChallenge(captchaKey, captchaDifficulty));
+      return;
+    }
     if (url.pathname === FORM_CONFIRMATION_PATH) {
       await handleConfirmation(req, origin, respond, res);
       return;
@@ -438,7 +506,9 @@ async function main() {
       res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
       res.setHeader(
         "Access-Control-Allow-Headers",
-        "Content-Type, Idempotency-Key",
+        req.url === FORM_SUBMISSION_PATH
+          ? "Content-Type, Idempotency-Key, X-Altcha"
+          : "Content-Type, Idempotency-Key",
       );
       res.writeHead(204);
       res.end();
@@ -475,6 +545,28 @@ async function main() {
       if (!parsed.success) {
         respond(400, { error: route.invalidFields });
         return;
+      }
+      if (req.url === FORM_SUBMISSION_PATH && captchaMode !== "off") {
+        const header = req.headers[CAPTCHA_HEADER];
+        const sent = typeof header === "string" ? header : undefined;
+        if (sent || captchaMode === "required") {
+          if (!captchaKey) throw new Error("Captcha key not configured");
+          const captcha = await checkFormCaptcha(sent, captchaKey);
+          if (!captcha.ok) {
+            respond(400, {
+              error: "Captcha not solved",
+              reason: captcha.reason,
+            });
+            return;
+          }
+          const used = await js.publish(CAPTCHA_USED_SUBJECT, "1", {
+            msgID: captcha.id,
+          });
+          if (used?.duplicate) {
+            respond(400, { error: "Captcha not solved", reason: "used" });
+            return;
+          }
+        }
       }
       // Traefik appends the actual peer to X-Forwarded-For. NetworkPolicy
       // restricts this service to Traefik, so direct clients cannot forge it.

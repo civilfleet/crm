@@ -63,7 +63,8 @@ Responses (JSON, `Cache-Control: no-store`):
 | 403 | Origin not in `PUBLIC_EVENTS_ORIGINS` |
 | 404 / 405 | Unknown path (exact match) / method other than POST or OPTIONS |
 | 413 / 415 | Body over 65536 bytes / not JSON |
-| 429 + `Retry-After: 3600` | Per-IP form budget exhausted (separate from events) |
+| 400 `{"reason":"missing\|malformed\|invalid\|expired\|used"}` | Captcha not solved (when required, or when sent) |
+| 429 + `Retry-After: 3600` | Per-IP form budget exhausted: 30 per hour (separate from events) |
 | 503 | Broker unavailable; retry with the same `Idempotency-Key` |
 
 CORS is identical to the events route and uses the same `PUBLIC_EVENTS_ORIGINS`
@@ -78,7 +79,7 @@ is required for forms.
 |---|---|---|
 | Submissions (workqueue, file, max_msg_size 98304, duplicate_window 24h, max_bytes 1 GiB, discard new) | `SEAWATCH_FORM_SUBMISSIONS` | `seawatch.forms.submissions.v1` |
 | Failed / needs review (limits, 256 MiB) | `SEAWATCH_FORM_SUBMISSION_FAILURES` | `seawatch.forms.submissions.failed.v1` |
-| Rate limit (10 msgs/subject, discard_new_per_subject, max_age 1h) | `SEAWATCH_FORM_RATE_LIMIT` | `seawatch.ratelimit.forms.<sha256(key:ip)>` |
+| Rate limit (30 msgs/subject, discard_new_per_subject, max_age 1h; also used by confirmations) | `SEAWATCH_FORM_RATE_LIMIT` | `seawatch.ratelimit.forms.<sha256(key:ip)>` |
 
 Message: `{"version":1,"submissionId","receivedAt","submission":{…body…}}`,
 published with `msgID = <submissionId>:<sha256(JSON.stringify(submission))>`
@@ -192,6 +193,33 @@ browser ──GET /v1/forms/count?team=&form=──▶ bridge ──last message
   (at most 1000 forms). Same CORS allowlist; GET and OPTIONS only.
 - If the CRM is down the bridge keeps serving the last count; new
   submissions wait in their stream and the count catches up.
+
+## Captcha
+
+Website forms can be protected with a proof-of-work captcha (ALTCHA,
+`src/lib/public-forms/captcha.ts`), checked by the bridge only; nothing of it
+reaches the queue or the CRM, and no third party is involved.
+
+1. The widget (ALTCHA 3.x) fetches a puzzle from
+   `GET /v1/forms/challenge` (`PBKDF2/SHA-256`, signed with `CAPTCHA_KEY`,
+   valid 10 minutes, `Cache-Control: no-store`; 404 without a key).
+2. It solves it in the browser while the person fills in the form, usually
+   in well under a second.
+3. The submission carries the result in the `X-Altcha` header
+   (base64 JSON `{challenge, solution}`); the preflight allows it.
+4. The bridge checks signature, expiry and proof, then records the puzzle in
+   `SEAWATCH_CAPTCHA_USED` (message id = its signature, 20-minute duplicate
+   window), so each puzzle lets one submission through.
+
+`CAPTCHA_MODE` on the bridge: `off` (default; not checked), `optional`
+(checked when sent; for the website rollout) or `required`. The difficulty
+is configuration, raised during an attack without a website change:
+`CAPTCHA_COST` (PBKDF2 iterations per attempt, default 5000) and
+`CAPTCHA_MIN_COUNTER` / `CAPTCHA_MAX_COUNTER` (the answer lies between them,
+default 2000–6000). With the captcha in place the per-IP limit is 30
+submissions an hour, so shared networks (offices, events, mobile carriers)
+are not locked out; `--initialize` updates that limit on the existing
+stream.
 
 ## Confirmation (double opt-in)
 

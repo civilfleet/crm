@@ -4,7 +4,10 @@ import { readFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import test from "node:test";
+import { solveChallenge } from "altcha-lib";
+import { deriveKey } from "altcha-lib/algorithms/pbkdf2";
 import * as publicEvents from "../src/lib/public-events/registration";
+import * as publicCaptcha from "../src/lib/public-forms/captcha";
 import * as publicConfirmation from "../src/lib/public-forms/confirmation";
 import * as publicCounts from "../src/lib/public-forms/counts";
 import * as publicForms from "../src/lib/public-forms/submission";
@@ -34,7 +37,10 @@ const formBody = (answer = "Synthetic") => ({
 
 async function startBridge(
   t: { after: (fn: () => void) => void },
-  options: { streams?: Array<Record<string, unknown>> } = {},
+  options: {
+    streams?: Array<Record<string, unknown>>;
+    env?: Record<string, string>;
+  } = {},
 ) {
   const saved = {
     origins: process.env.PUBLIC_EVENTS_ORIGINS,
@@ -44,6 +50,14 @@ async function startBridge(
   const before = signals.map((signal) => new Set(process.listeners(signal)));
   process.env.PUBLIC_EVENTS_ORIGINS = ORIGIN;
   process.env.RATE_LIMIT_HASH_KEY = "local-test-only";
+  for (const [name, value] of Object.entries(options.env ?? {})) {
+    const saved = process.env[name];
+    process.env[name] = value;
+    t.after(() => {
+      if (saved === undefined) delete process.env[name];
+      else process.env[name] = saved;
+    });
+  }
   const savedConfirmationKey = process.env.FORM_CONFIRMATION_KEY;
   process.env.FORM_CONFIRMATION_KEY = CONFIRMATION_KEY;
   t.after(() => {
@@ -78,6 +92,7 @@ async function startBridge(
     "../src/lib/public-forms/submission": publicForms,
     "../src/lib/public-forms/counts": publicCounts,
     "../src/lib/public-forms/confirmation": publicConfirmation,
+    "../src/lib/public-forms/captcha": publicCaptcha,
     "node:http": {
       createServer: (handler: Handler) => {
         capture(handler);
@@ -103,7 +118,15 @@ async function startBridge(
         ) => {
           for (const [prefix, message] of failures)
             if (subject.startsWith(prefix)) throw new Error(message);
+          // JetStream reports a message id it has seen as a duplicate.
+          const duplicate = publishes.some(
+            (sent) =>
+              sent.subject === subject &&
+              opts?.msgID !== undefined &&
+              sent.msgID === opts.msgID,
+          );
           publishes.push({ subject, data, msgID: opts?.msgID });
+          return { duplicate };
         },
       }),
       jetstreamManager: async () => ({
@@ -137,6 +160,7 @@ async function startBridge(
     key?: string | null;
     contentType?: string;
     body?: string;
+    captcha?: string;
   }) => {
     const req = Readable.from([
       Buffer.from(request.body ?? "{}"),
@@ -144,6 +168,7 @@ async function startBridge(
     req.url = request.url;
     req.method = request.method ?? "POST";
     req.headers = {
+      ...(request.captcha ? { "x-altcha": request.captcha } : {}),
       origin: ORIGIN,
       "content-type": request.contentType ?? "application/json",
       "x-forwarded-for": "203.0.113.7",
@@ -213,7 +238,7 @@ test("forms route status codes: preflight, 400, 405, 413, 415, 429, 503", async 
   assert.equal(preflight.status, 204);
   assert.equal(
     preflight.headers.get("access-control-allow-headers"),
-    "Content-Type, Idempotency-Key",
+    "Content-Type, Idempotency-Key, X-Altcha",
   );
   assert.equal((await bridge.send({ url, method: "GET" })).status, 405);
   assert.equal(
@@ -413,6 +438,83 @@ test("confirmation route refuses forged tokens and bad requests", async (t) => {
   assert.equal(bridge.publishes.length, 0, "nothing queued or counted");
 });
 
+const CAPTCHA_ENV = {
+  CAPTCHA_MODE: "required",
+  CAPTCHA_KEY: "captcha-test-only",
+  // Cheap enough to solve in a test.
+  CAPTCHA_COST: "10",
+  CAPTCHA_MIN_COUNTER: "5",
+  CAPTCHA_MAX_COUNTER: "20",
+};
+
+test("with the captcha required, a solved puzzle lets one submission through", async (t) => {
+  const bridge = await startBridge(t, { env: CAPTCHA_ENV });
+  const challengeResponse = await bridge.send({
+    url: "/v1/forms/challenge",
+    method: "GET",
+  });
+  assert.equal(challengeResponse.status, 200);
+  assert.equal(challengeResponse.headers.get("cache-control"), "no-store");
+  const challenge = JSON.parse(challengeResponse.body);
+  assert.equal(challenge.parameters.algorithm, "PBKDF2/SHA-256");
+  const solution = await solveChallenge({ challenge, deriveKey });
+  const captcha = Buffer.from(JSON.stringify({ challenge, solution })).toString(
+    "base64",
+  );
+  const url = "/v1/forms/submissions";
+  const body = JSON.stringify(formBody());
+
+  const missing = await bridge.send({ url, body });
+  assert.equal(missing.status, 400);
+  assert.equal(JSON.parse(missing.body).reason, "missing");
+
+  const first = await bridge.send({ url, body, captcha });
+  assert.equal(first.status, 202);
+  assert.ok(
+    bridge.publishes.some(
+      (sent) =>
+        sent.subject === "seawatch.captcha.used" &&
+        sent.msgID === challenge.signature,
+    ),
+  );
+
+  // The same solved puzzle again, even with a new submission id.
+  const again = await bridge.send({
+    url,
+    body,
+    captcha,
+    key: "55555555-5555-4555-8555-555555555555",
+  });
+  assert.equal(again.status, 400);
+  assert.equal(JSON.parse(again.body).reason, "used");
+  assert.equal(
+    bridge.publishes.filter(
+      (sent) => sent.subject === "seawatch.forms.submissions.v1",
+    ).length,
+    1,
+  );
+
+  const preflight = await bridge.send({ url, method: "OPTIONS" });
+  assert.equal(
+    preflight.headers.get("access-control-allow-headers"),
+    "Content-Type, Idempotency-Key, X-Altcha",
+  );
+});
+
+test("with the captcha off, no challenge and no check", async (t) => {
+  const bridge = await startBridge(t);
+  assert.equal(
+    (await bridge.send({ url: "/v1/forms/challenge", method: "GET" })).status,
+    404,
+  );
+  const result = await bridge.send({
+    url: "/v1/forms/submissions",
+    body: JSON.stringify(formBody()),
+    captcha: "anything",
+  });
+  assert.equal(result.status, 202);
+});
+
 test("events route is unaffected by the forms route", async (t) => {
   const bridge = await startBridge(t);
   const url = "/v1/events/registrations";
@@ -489,6 +591,7 @@ test("--initialize creates the form streams per contract", async (t) => {
     "../src/lib/public-forms/submission": publicForms,
     "../src/lib/public-forms/counts": publicCounts,
     "../src/lib/public-forms/confirmation": publicConfirmation,
+    "../src/lib/public-forms/captcha": publicCaptcha,
     "node:http": { createServer: () => ({ listen: () => {} }) },
     "@nats-io/transport-node": {
       connect: async () => ({ drain: async () => resolveDone() }),
@@ -533,6 +636,11 @@ test("--initialize creates the form streams per contract", async (t) => {
   );
   const rate = byName.get("SEAWATCH_FORM_RATE_LIMIT");
   assert.deepEqual(rate?.subjects, ["seawatch.ratelimit.forms.*"]);
+  assert.equal(rate?.max_msgs_per_subject, 30);
+  assert.equal(rate?.update, undefined, "the update marker is not sent");
+  const used = byName.get("SEAWATCH_CAPTCHA_USED");
+  assert.deepEqual(used?.subjects, ["seawatch.captcha.used"]);
+  assert.ok(Number(used?.duplicate_window) >= 10 * 60 * 1e9);
   assert.equal(
     byName.get("SEAWATCH_FORM_SUBMISSION_FAILURES")?.max_bytes,
     256 * 1024 ** 2,
@@ -566,9 +674,58 @@ test("--initialize creates the form streams per contract", async (t) => {
   assert.deepEqual(counts?.subjects, ["seawatch.forms.counts.v1.>"]);
   assert.equal(counts?.max_msgs_per_subject, 1);
   assert.equal(counts?.discard, "old");
-  assert.equal(rate?.max_msgs_per_subject, 10);
   assert.equal(rate?.discard_new_per_subject, true);
   assert.equal(rate?.max_age, 60 * 60 * 1e9);
+});
+
+test("--initialize leaves existing streams, but updates the form rate limit", async (t) => {
+  const added: string[] = [];
+  const updated: Array<[string, Record<string, unknown>]> = [];
+  const argv = process.argv;
+  process.argv = [...argv, "--initialize"];
+  t.after(() => {
+    process.argv = argv;
+  });
+  let resolveDone: () => void = () => {};
+  const done = new Promise<void>((resolve) => {
+    resolveDone = resolve;
+  });
+  loadModule("scripts/public-api.ts", {
+    "dotenv/config": {},
+    "../src/lib/public-events/registration": publicEvents,
+    "../src/lib/public-forms/submission": publicForms,
+    "../src/lib/public-forms/counts": publicCounts,
+    "../src/lib/public-forms/confirmation": publicConfirmation,
+    "../src/lib/public-forms/captcha": publicCaptcha,
+    "node:http": { createServer: () => ({ listen: () => {} }) },
+    "@nats-io/transport-node": {
+      connect: async () => ({ drain: async () => resolveDone() }),
+    },
+    "@nats-io/jetstream": {
+      DiscardPolicy: { New: "new", Old: "old" },
+      RetentionPolicy: { Workqueue: "workqueue", Limits: "limits" },
+      StorageType: { File: "file" },
+      jetstream: () => ({}),
+      jetstreamManager: async () => ({
+        streams: {
+          info: async () => ({}),
+          add: async (stream: { name: string }) => {
+            added.push(stream.name);
+          },
+          update: async (name: string, config: Record<string, unknown>) => {
+            updated.push([name, config]);
+          },
+        },
+      }),
+    },
+  });
+  await done;
+  assert.deepEqual(added, []);
+  assert.deepEqual(
+    updated.map(([name]) => name),
+    ["SEAWATCH_FORM_RATE_LIMIT"],
+  );
+  assert.equal(updated[0][1].max_msgs_per_subject, 30);
 });
 
 test("NATS authorization example grants the form subjects and consumer", async () => {
@@ -583,6 +740,7 @@ test("NATS authorization example grants the form subjects and consumer", async (
     "seawatch.ratelimit.forms.*",
     "$JS.API.STREAM.MSG.GET.SEAWATCH_FORM_COUNTS",
     "seawatch.forms.confirmations.v1",
+    "seawatch.captcha.used",
   ])
     assert.ok(api.includes(`"${subject}"`), subject);
   for (const subject of [

@@ -4620,6 +4620,59 @@ __metadata:
   languageName: node
   linkType: hard
 
+"altcha-lib@npm:2.8.0":
+  version: 2.8.0
+  resolution: "altcha-lib@npm:2.8.0"
+  peerDependencies:
+    "@fastify/cookie": ^11.0.0
+    "@fastify/cors": ^11.0.0
+    "@fastify/formbody": ^8.0.0 || ^9.0.0
+    "@nestjs/common": ^10.0.0 || ^11.0.0 || ^12.0.0
+    "@nestjs/core": ^10.0.0 || ^11.0.0 || ^12.0.0
+    "@nestjs/platform-express": ^10.0.0 || ^11.0.0 || ^12.0.0
+    "@nestjs/platform-fastify": ^10.0.0 || ^11.0.0 || ^12.0.0
+    "@sveltejs/kit": ^2.0.0 || ^3.0.0
+    cookie-parser: ^1.0.0
+    cors: ^2.0.0
+    express: ^4.0.0 || ^5.0.0
+    fastify: ^5.0.0
+    h3: ^1.15.0 || ^2.0.0
+    hono: ^4.0.0
+  peerDependenciesMeta:
+    "@fastify/cookie":
+      optional: true
+    "@fastify/cors":
+      optional: true
+    "@fastify/formbody":
+      optional: true
+    "@nestjs/common":
+      optional: true
+    "@nestjs/core":
+      optional: true
+    "@nestjs/platform-express":
+      optional: true
+    "@nestjs/platform-fastify":
+      optional: true
+    "@sveltejs/kit":
+      optional: true
+    cookie-parser:
+      optional: true
+    cors:
+      optional: true
+    express:
+      optional: true
+    fastify:
+      optional: true
+    h3:
+      optional: true
+    hono:
+      optional: true
+  bin:
+    altcha-lib: bin/cli.mjs
+  checksum: 10c0/fc25629e8c2b7b1363b76360e1c523011f30646444d10f9abbbca200fa1b053ecf228d126eedc02e93d80b2bcc14beb143f4813a1e6299cfc7c33a9bf9ddad34
+  languageName: node
+  linkType: hard
+
 "argparse@npm:^2.0.1":
   version: 2.0.1
   resolution: "argparse@npm:2.0.1"
@@ -7612,6 +7665,7 @@ __metadata:
     "@types/react-dom": "npm:19.2.3"
     "@types/sanitize-html": "npm:^2.16.1"
     "@types/yauzl": "npm:^2.10.3"
+    altcha-lib: "npm:2.8.0"
     baseline-browser-mapping: "npm:2.11.24"
     class-variance-authority: "npm:^0.7.1"
     clsx: "npm:^2.1.1"

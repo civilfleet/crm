@@ -8,6 +8,7 @@ import {
   REGISTRATION_SUBJECT,
   registrationPayload,
 } from "../src/lib/public-events/registration";
+import * as publicCaptcha from "../src/lib/public-forms/captcha";
 import * as publicConfirmation from "../src/lib/public-forms/confirmation";
 import * as publicCounts from "../src/lib/public-forms/counts";
 import * as publicForms from "../src/lib/public-forms/submission";
@@ -47,6 +48,7 @@ test("bridge exact-origin CORS covers preflight and all registration error paths
       "../src/lib/public-forms/submission": publicForms,
       "../src/lib/public-forms/counts": publicCounts,
       "../src/lib/public-forms/confirmation": publicConfirmation,
+      "../src/lib/public-forms/captcha": publicCaptcha,
       "node:http": {
         createServer: (handler: Handler) => {
           capture(handler);

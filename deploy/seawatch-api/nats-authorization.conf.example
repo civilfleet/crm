@@ -14,7 +14,8 @@ authorization {
         "seawatch.forms.submissions.v1",
         "seawatch.ratelimit.forms.*",
         "$JS.API.STREAM.MSG.GET.SEAWATCH_FORM_COUNTS",
-        "seawatch.forms.confirmations.v1"
+        "seawatch.forms.confirmations.v1",
+        "seawatch.captcha.used"
       ],
       subscribe: ["_INBOX.api.>"]
     } },
