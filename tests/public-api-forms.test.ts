@@ -470,6 +470,26 @@ test("--initialize creates the form streams per contract", async (t) => {
   );
   const rate = byName.get("SEAWATCH_FORM_RATE_LIMIT");
   assert.deepEqual(rate?.subjects, ["seawatch.ratelimit.forms.*"]);
+  assert.equal(
+    byName.get("SEAWATCH_FORM_SUBMISSION_FAILURES")?.max_bytes,
+    256 * 1024 ** 2,
+  );
+  // JetStream reserves every stream's max_bytes against the server's
+  // max_file_store; above it, --initialize fails halfway (as on 2026-11-16).
+  const conf = await readFile(
+    "deploy/seawatch-api/kubernetes/jetstream.yaml",
+    "utf8",
+  );
+  const maxFileStoreGb = Number(/max_file_store:\s*(\d+)GB/.exec(conf)?.[1]);
+  assert.ok(maxFileStoreGb > 0, "max_file_store found");
+  const reserved = streams.reduce(
+    (total, stream) => total + Number(stream.max_bytes ?? 0),
+    0,
+  );
+  assert.ok(
+    reserved <= maxFileStoreGb * 1024 ** 3 * 0.9,
+    `streams reserve ${reserved} bytes, over 90% of max_file_store`,
+  );
   const counts = byName.get("SEAWATCH_FORM_COUNTS");
   assert.deepEqual(counts?.subjects, ["seawatch.forms.counts.v1.>"]);
   assert.equal(counts?.max_msgs_per_subject, 1);

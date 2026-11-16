@@ -77,7 +77,7 @@ is required for forms.
 | Purpose | Stream | Subject |
 |---|---|---|
 | Submissions (workqueue, file, max_msg_size 98304, duplicate_window 24h, max_bytes 1 GiB, discard new) | `SEAWATCH_FORM_SUBMISSIONS` | `seawatch.forms.submissions.v1` |
-| Failed / needs review (limits, 1 GiB) | `SEAWATCH_FORM_SUBMISSION_FAILURES` | `seawatch.forms.submissions.failed.v1` |
+| Failed / needs review (limits, 256 MiB) | `SEAWATCH_FORM_SUBMISSION_FAILURES` | `seawatch.forms.submissions.failed.v1` |
 | Rate limit (10 msgs/subject, discard_new_per_subject, max_age 1h) | `SEAWATCH_FORM_RATE_LIMIT` | `seawatch.ratelimit.forms.<sha256(key:ip)>` |
 
 Message: `{"version":1,"submissionId","receivedAt","submission":{…body…}}`,
@@ -86,6 +86,11 @@ so identical retries within 24 h are deduplicated by the broker.
 
 Durable consumer `crm-form-submissions-v1`: explicit ack, ack_wait 60 s,
 max_ack_pending 1, unlimited redelivery. The consumer creates it on first start.
+
+All streams reserve their `max_bytes` against the server's `max_file_store`
+(4 GB in `deploy/seawatch-api/kubernetes/jetstream.yaml`); a stream that does
+not fit is refused and `--initialize` stops there. The bridge tests keep the
+total under 90% of it.
 
 ## CRM processing
 

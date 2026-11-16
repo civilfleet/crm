@@ -129,12 +129,15 @@ async function main() {
         duplicate_window: 24 * 60 * 60 * 1e9,
       },
       {
+        // JetStream reserves max_bytes up front against the server's
+        // max_file_store (4 GB, deploy/seawatch-api/kubernetes/jetstream.yaml);
+        // failures are rare, so this stream stays small enough to fit.
         name: FORM_SUBMISSION_FAILURE_STREAM,
         subjects: [FORM_SUBMISSION_FAILURE_SUBJECT],
         retention: RetentionPolicy.Limits,
         discard: DiscardPolicy.New,
         storage: StorageType.File,
-        max_bytes: 1024 ** 3,
+        max_bytes: 256 * 1024 ** 2,
         max_age: 0,
       },
       {
