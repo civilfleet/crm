@@ -94,6 +94,7 @@ export const resolveIntakeContact = async (
   }
 
   let proposedChanges = 0;
+  const created = !contact;
 
   if (contact) {
     const contactUpdates: Prisma.ContactUpdateInput = {};
@@ -244,5 +245,5 @@ export const resolveIntakeContact = async (
   if (!contact) {
     throw new Error("Contact could not be resolved for registration.");
   }
-  return { contact, proposedChanges };
+  return { contact, proposedChanges, created };
 };

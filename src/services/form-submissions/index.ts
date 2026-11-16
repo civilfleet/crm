@@ -43,7 +43,7 @@ export const createFormSubmission = async (input: FormSubmissionMessage) => {
     if (!email) throw new FormSubmissionRejectedError("Email is required");
     const name = fields.name?.trim() ?? "";
 
-    const { contact, proposedChanges } = await resolveIntakeContact(
+    const { contact, proposedChanges, created } = await resolveIntakeContact(
       tx,
       {
         teamId: team.id,
@@ -67,7 +67,17 @@ export const createFormSubmission = async (input: FormSubmissionMessage) => {
       },
     );
 
-    const created = await tx.formSubmission.create({
+    // A ticked consent question with a purpose becomes that consent. It
+    // needs the e-mail confirmed first, so it asks for confirmation whatever
+    // the form says (docs/DATA_RULES.md, "Consent").
+    const consents = submission.answers.filter(
+      (answer) =>
+        answer.type === "consent" && answer.purpose && answer.value === true,
+    );
+    const confirmationRequested =
+      form.confirmation === "email" || consents.length > 0;
+
+    const saved = await tx.formSubmission.create({
       data: {
         submissionId,
         teamId: team.id,
@@ -80,22 +90,20 @@ export const createFormSubmission = async (input: FormSubmissionMessage) => {
         answers: JSON.parse(JSON.stringify(submission.answers)),
         submittedAt: new Date(submission.submittedAt),
         receivedAt,
+        email,
+        createdContact: created,
+        confirmationRequested,
       },
     });
 
-    // A ticked consent question with a purpose is recorded as that consent;
-    // an unticked one changes nothing (docs/DATA_RULES.md, "Consent").
-    const consents = submission.answers.filter(
-      (answer) =>
-        answer.type === "consent" && answer.purpose && answer.value === true,
-    );
+    // Pending until the address is confirmed; an unticked box changes nothing.
     if (consents.length) {
       await tx.contactConsent.createMany({
         data: consents.map((answer) => ({
           teamId: team.id,
           contactId: contact.id,
           purpose: answer.purpose as string,
-          status: "GRANTED",
+          status: "PENDING",
           wording: answer.label,
           locale: form.locale,
           source: "FORM",
@@ -129,6 +137,6 @@ export const createFormSubmission = async (input: FormSubmissionMessage) => {
       },
     });
 
-    return created;
+    return saved;
   });
 };

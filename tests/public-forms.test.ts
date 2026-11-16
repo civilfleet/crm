@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as registrationModule from "../src/lib/public-events/registration";
+import * as confirmationModule from "../src/lib/public-forms/confirmation";
 import * as submissionModule from "../src/lib/public-forms/submission";
 import {
   FORM_SUBMISSION_FAILURE_SUBJECT,
@@ -440,7 +441,11 @@ test("ticked consents with a purpose are recorded; others are not", async () => 
   assert.equal(state.consents.length, 1);
   const consent = state.consents[0];
   assert.equal(consent.purpose, "marketing");
-  assert.equal(consent.status, "GRANTED");
+  // Pending until the address is confirmed; the submission asks for it.
+  assert.equal(consent.status, "PENDING");
+  assert.equal(state.submissions[0].confirmationRequested, true);
+  assert.equal(state.submissions[0].email, "person@example.org");
+  assert.equal(state.submissions[0].createdContact, true);
   assert.equal(consent.source, "FORM");
   assert.equal(consent.wording, "Voglio ricevere aggiornamenti da Sea-Watch");
   assert.equal(consent.contactId, state.contacts[0].id);
@@ -450,6 +455,21 @@ test("ticked consents with a purpose are recorded; others are not", async () => 
     (consent.recordedAt as Date).toISOString(),
     "2026-11-12T10:00:00.000Z",
   );
+});
+
+test("confirmation is asked for by the form, or by a marketing consent", async () => {
+  const asked = formHarness();
+  await asked.service.createFormSubmission(
+    message({
+      form: { ...validPayload().form, confirmation: "email" },
+    }),
+  );
+  assert.equal(asked.state().submissions[0].confirmationRequested, true);
+
+  const notAsked = formHarness();
+  await notAsked.service.createFormSubmission(message());
+  assert.equal(notAsked.state().submissions[0].confirmationRequested, false);
+  assert.equal(notAsked.state().consents.length, 0);
 });
 
 test("existing contact only gets empty fields filled, never overwritten", async () => {
@@ -685,6 +705,8 @@ function formPipeline(
       createFormSubmission: create ?? harness.service.createFormSubmission,
     },
     "@/services/events": {},
+    "@/lib/public-forms/confirmation": confirmationModule,
+    "@/services/form-confirmations": {},
   }).formSubmissionPipeline;
 }
 

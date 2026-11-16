@@ -8,63 +8,57 @@ datasource db {
   provider = "postgresql"
 }
 
-
 model Organization {
-  id                      String      @id @default(uuid()) @unique 
-  name                    String?      @db.VarChar(255)          
-  address                 String?      @db.VarChar(255)          
-  email                   String       @db.VarChar(255)   @unique                       
-  phone                   String?      @db.VarChar(255)                         
-  postalCode              String?      @db.VarChar(255)  
-  city                    String?      @db.VarChar(255)  
-  country                 String?      @db.VarChar(255)  
-  website                 String?      @db.VarChar(255)
-  taxID                   String?      @db.VarChar(255)
-  isFilledByOrg           Boolean      @default(false)
-  portalAccessEnabled     Boolean      @default(false)
-  bankDetailsId           String?      @unique
-  orgTypeId               String?
-  orgType                 OrganizationType? @relation(fields: [orgTypeId], references: [id], onDelete: SetNull)
-  profileData             Json?
-  contactPersonId         String?
-  contactPerson           Contact?   @relation("OrganizationContactPerson", fields: [contactPersonId], references: [id], onDelete: SetNull)
-  contacts                ContactOrganization[]
-  users                   User[] @relation("OrganizationUsers") // Many-to-Many relation
-  teamId                  String?     
-  team                    Teams?              @relation(fields: [teamId], references: [id])   
-  bankDetails             BankDetails?        @relation(fields: [bankDetailsId], references: [id])
-  fundingRequests         FundingRequest[]                
-  Files                   File[]                    
-  donationAgreements      DonationAgreement[]
-  engagements             OrganizationEngagement[]
-  fieldValues             OrganizationFieldValue[]
-  tags                    String[]             @default([])
-  
+  id                  String                   @id @unique @default(uuid())
+  name                String?                  @db.VarChar(255)
+  address             String?                  @db.VarChar(255)
+  email               String                   @unique @db.VarChar(255)
+  phone               String?                  @db.VarChar(255)
+  postalCode          String?                  @db.VarChar(255)
+  city                String?                  @db.VarChar(255)
+  country             String?                  @db.VarChar(255)
+  website             String?                  @db.VarChar(255)
+  taxID               String?                  @db.VarChar(255)
+  isFilledByOrg       Boolean                  @default(false)
+  portalAccessEnabled Boolean                  @default(false)
+  bankDetailsId       String?                  @unique
+  orgTypeId           String?
+  orgType             OrganizationType?        @relation(fields: [orgTypeId], references: [id], onDelete: SetNull)
+  profileData         Json?
+  contactPersonId     String?
+  contactPerson       Contact?                 @relation("OrganizationContactPerson", fields: [contactPersonId], references: [id], onDelete: SetNull)
+  contacts            ContactOrganization[]
+  users               User[]                   @relation("OrganizationUsers") // Many-to-Many relation
+  teamId              String?
+  team                Teams?                   @relation(fields: [teamId], references: [id])
+  bankDetails         BankDetails?             @relation(fields: [bankDetailsId], references: [id])
+  fundingRequests     FundingRequest[]
+  Files               File[]
+  donationAgreements  DonationAgreement[]
+  engagements         OrganizationEngagement[]
+  fieldValues         OrganizationFieldValue[]
+  tags                String[]                 @default([])
 
-  createdAt               DateTime    @default(now()) @db.Timestamptz(6) 
-  updatedAt               DateTime    @updatedAt @db.Timestamptz(6) 
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
 
-
-  Transaction Transaction[]
+  Transaction        Transaction[]
   fileDownloadAudits FileDownloadAudit[]
 
   @@index([tags], type: Gin)
 }
 
-
 model BankDetails {
-  id              String     @id @default(uuid()) @unique       
-  bankName        String     @db.VarChar(255)                  
-  accountHolder   String     @db.VarChar(255)                  
-  iban            String     @db.VarChar(255)     @unique                
-  bic             String     @db.VarChar(255)                
-  createdAt       DateTime @default(now()) @db.Timestamptz(6) 
-  updatedAt       DateTime @updatedAt @db.Timestamptz(6) 
-  organization    Organization? @relation
-  teams           Teams? @relation 
+  id            String        @id @unique @default(uuid())
+  bankName      String        @db.VarChar(255)
+  accountHolder String        @db.VarChar(255)
+  iban          String        @unique @db.VarChar(255)
+  bic           String        @db.VarChar(255)
+  createdAt     DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @db.Timestamptz(6)
+  organization  Organization? @relation
+  teams         Teams?        @relation
 }
-
-
 
 enum FundingStatus {
   Submitted
@@ -75,59 +69,58 @@ enum FundingStatus {
   Completed
   Rejected
 
-
   // remove below
   UnderReview
   Pending
-  Processing 
+  Processing
   FundsTransferred
 }
+
 model FundingRequest {
-  id                        String    @id @default(uuid()) @unique   
-  name                      String      @db.VarChar(255) 
-  organizationId            String                                
-  organization              Organization @relation(fields: [organizationId], references: [id])
-  description               String       @db.Text                   
-  purpose                   String       @db.Text
-  amountRequested           Decimal                                 
-  amountAgreed              Decimal?                              
-  remainingAmount           Decimal?    
-  refinancingConcept        String       @db.Text
-  sustainability            String       @db.Text
-  expectedCompletionDate    DateTime                               
-  status                    FundingStatus @default(Submitted)   
-  submittedById             String           
-  submittedBy               User? @relation(fields: [submittedById], references: [id])
-  customFields              Json?                                  // Store dynamic field data as JSON
-  createdAt                 DateTime @default(now()) @db.Timestamptz(6) 
-  updatedAt                 DateTime @updatedAt @db.Timestamptz(6) 
-  files                     File[]          
-  teamId                    String?
-  team                      Teams? @relation(fields: [teamId], references: [id])
-  donationAgreement         DonationAgreement[]
-  Transaction Transaction[]
+  id                     String              @id @unique @default(uuid())
+  name                   String              @db.VarChar(255)
+  organizationId         String
+  organization           Organization        @relation(fields: [organizationId], references: [id])
+  description            String              @db.Text
+  purpose                String              @db.Text
+  amountRequested        Decimal
+  amountAgreed           Decimal?
+  remainingAmount        Decimal?
+  refinancingConcept     String              @db.Text
+  sustainability         String              @db.Text
+  expectedCompletionDate DateTime
+  status                 FundingStatus       @default(Submitted)
+  submittedById          String
+  submittedBy            User?               @relation(fields: [submittedById], references: [id])
+  customFields           Json? // Store dynamic field data as JSON
+  createdAt              DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime            @updatedAt @db.Timestamptz(6)
+  files                  File[]
+  teamId                 String?
+  team                   Teams?              @relation(fields: [teamId], references: [id])
+  donationAgreement      DonationAgreement[]
+  Transaction            Transaction[]
 }
 
 model File {
-  id          String    @id @default(uuid()) @unique 
-  name        String?      @db.VarChar(255)  
-  url         String      @unique
-  type        String      @db.VarChar(255)                             
-  createdBy   User @relation("CreatedByRelation", fields: [createdById], references: [id])
-  createdById String                       
-  updatedBy   User @relation("UpdatedByRelation", fields: [updatedById], references: [id])
-  updatedById String               
-  createdAt   DateTime    @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime    @updatedAt @db.Timestamptz(6) 
+  id          String   @id @unique @default(uuid())
+  name        String?  @db.VarChar(255)
+  url         String   @unique
+  type        String   @db.VarChar(255)
+  createdBy   User     @relation("CreatedByRelation", fields: [createdById], references: [id])
+  createdById String
+  updatedBy   User     @relation("UpdatedByRelation", fields: [updatedById], references: [id])
+  updatedById String
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
 
-  organizationId String?  @db.VarChar(255)  
-  organization   Organization? @relation(fields: [organizationId], references: [id])  // One-to-Many relation
-  fundingRequestId String?
-  FundingRequest FundingRequest? @relation(fields: [fundingRequestId], references: [id])
+  organizationId    String?             @db.VarChar(255)
+  organization      Organization?       @relation(fields: [organizationId], references: [id]) // One-to-Many relation
+  fundingRequestId  String?
+  FundingRequest    FundingRequest?     @relation(fields: [fundingRequestId], references: [id])
   donationAgreement DonationAgreement[]
 
-
-  Transaction Transaction[]
+  Transaction    Transaction[]
   downloadAudits FileDownloadAudit[]
 
   contactId String?  @db.VarChar(255)
@@ -138,18 +131,18 @@ model File {
 }
 
 model PendingUpload {
-  id            String    @id @default(uuid()) @unique
-  key           String    @unique
-  originalName  String?   @db.VarChar(255)
-  contentType   String?   @db.VarChar(255)
-  teamId        String
-  team          Teams     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  consumedAt    DateTime? @db.Timestamptz(6)
+  id               String    @id @unique @default(uuid())
+  key              String    @unique
+  originalName     String?   @db.VarChar(255)
+  contentType      String?   @db.VarChar(255)
+  teamId           String
+  team             Teams     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  consumedAt       DateTime? @db.Timestamptz(6)
   consumedByFileId String?
-  expiresAt     DateTime  @db.Timestamptz(6)
-  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  expiresAt        DateTime  @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
 
   @@index([teamId, userId, consumedAt])
   @@index([expiresAt, consumedAt])
@@ -161,7 +154,7 @@ enum FileDownloadType {
 }
 
 model FileDownloadAudit {
-  id             String           @id @default(uuid()) @unique
+  id             String           @id @unique @default(uuid())
   type           FileDownloadType
   fileCount      Int              @default(1)
   query          String?          @db.Text
@@ -199,83 +192,82 @@ model GlobalSettings {
   updatedAt                 DateTime @updatedAt @db.Timestamptz(6)
 }
 
-
 model Teams {
-  id          String           @id @default(uuid()) @unique
-  name        String           @unique
-  email       String           @db.VarChar(255) @unique
-  loginDomain String?          @db.VarChar(255)
-  loginMethod LoginMethod      @default(EMAIL_MAGIC_LINK)
-  emailLoginEnabled Boolean    @default(true)
-  oidcLoginEnabled Boolean     @default(false)
-  oidcButtonLabel String       @default("Sign in with SSO") @db.VarChar(80)
-  oidcIssuer  String?          @db.VarChar(500)
-  oidcClientId String?         @db.VarChar(255)
-  oidcClientSecret String?     @db.Text
-  autoProvisionUsersFromOidc Boolean @default(false)
-  publicFormsEnabled Boolean   @default(false)
-  defaultOidcGroupId String?
-  defaultOidcGroup Group? @relation("DefaultOidcGroup", fields: [defaultOidcGroupId], references: [id], onDelete: SetNull)
-  domainVerificationToken String? @db.VarChar(255)
-  domainVerifiedAt DateTime?   @db.Timestamptz(6)
-  domainLastCheckedAt DateTime? @db.Timestamptz(6)
-  registrationPageLogoKey String? @db.VarChar(255)
-  phone       String?          @db.VarChar(255)
-  address     String?          @db.VarChar(255)
-  postalCode  String?          @db.VarChar(255)
-  city        String?          @db.VarChar(255)
-  country     String?          @db.VarChar(255)
-  website     String?          @db.VarChar(255)
-  strategicPriorities String?  @db.Text
-  modules     AppModule[]      @default([CRM, FUNDING])
+  id                         String      @id @unique @default(uuid())
+  name                       String      @unique
+  email                      String      @unique @db.VarChar(255)
+  loginDomain                String?     @db.VarChar(255)
+  loginMethod                LoginMethod @default(EMAIL_MAGIC_LINK)
+  emailLoginEnabled          Boolean     @default(true)
+  oidcLoginEnabled           Boolean     @default(false)
+  oidcButtonLabel            String      @default("Sign in with SSO") @db.VarChar(80)
+  oidcIssuer                 String?     @db.VarChar(500)
+  oidcClientId               String?     @db.VarChar(255)
+  oidcClientSecret           String?     @db.Text
+  autoProvisionUsersFromOidc Boolean     @default(false)
+  publicFormsEnabled         Boolean     @default(false)
+  defaultOidcGroupId         String?
+  defaultOidcGroup           Group?      @relation("DefaultOidcGroup", fields: [defaultOidcGroupId], references: [id], onDelete: SetNull)
+  domainVerificationToken    String?     @db.VarChar(255)
+  domainVerifiedAt           DateTime?   @db.Timestamptz(6)
+  domainLastCheckedAt        DateTime?   @db.Timestamptz(6)
+  registrationPageLogoKey    String?     @db.VarChar(255)
+  phone                      String?     @db.VarChar(255)
+  address                    String?     @db.VarChar(255)
+  postalCode                 String?     @db.VarChar(255)
+  city                       String?     @db.VarChar(255)
+  country                    String?     @db.VarChar(255)
+  website                    String?     @db.VarChar(255)
+  strategicPriorities        String?     @db.Text
+  modules                    AppModule[] @default([CRM, FUNDING])
 
-  bankDetailsId String?        @unique
-  bankDetails   BankDetails?   @relation(fields: [bankDetailsId], references: [id])
-  organizations Organization[]
+  bankDetailsId     String?            @unique
+  bankDetails       BankDetails?       @relation(fields: [bankDetailsId], references: [id])
+  organizations     Organization[]
   organizationTypes OrganizationType[]
 
-  users     User[] @relation("TeamUsers") // Many-to-Many relation
+  users              User[]              @relation("TeamUsers") // Many-to-Many relation
   fundingRequests    FundingRequest[]
   donationAgreements DonationAgreement[]
-  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime        @updatedAt @db.Timestamptz(6)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(6)
 
   ownerId String?
-  owner   User? @relation("TeamOwner", fields: [ownerId], references: [id])
+  owner   User?   @relation("TeamOwner", fields: [ownerId], references: [id])
 
   emailTemplates emailTemplates[]
-  formSections FormSection[]
+  formSections   FormSection[]
 
-  Transaction Transaction[]
-  contacts     Contact[]
-  contactEmails ContactEmail[]
-  contactLists ContactList[]
-  emailBatches EmailBatch[]
-  emailSuppressions EmailSuppression[]
-  emailDeliveryEvents EmailDeliveryEvent[]
-  emailInboxes EmailInbox[]
-  emailReplyDispatches EmailReplyDispatch[]
-  emailAttachments EmailAttachment[]
-  inboundEmailMessages InboundEmailMessage[]
-  contactAccessReviews ContactAccessReview[]
-  events       Event[]
-  formSubmissions FormSubmission[]
-  contactConsents ContactConsent[]
-  formSettings FormSetting[]
-  eventRoles   EventRole[]
-  eventTypes   EventType[]
-  groups       Group[]
-  integrationConnections IntegrationConnection[]
-  zammadGroupSettings ZammadGroupSetting[]
-  zammadSyncJobs ZammadSyncJob[]
-  contactFieldAccesses ContactFieldAccess[]
+  Transaction             Transaction[]
+  contacts                Contact[]
+  contactEmails           ContactEmail[]
+  contactLists            ContactList[]
+  emailBatches            EmailBatch[]
+  emailSuppressions       EmailSuppression[]
+  emailDeliveryEvents     EmailDeliveryEvent[]
+  emailInboxes            EmailInbox[]
+  emailReplyDispatches    EmailReplyDispatch[]
+  emailAttachments        EmailAttachment[]
+  inboundEmailMessages    InboundEmailMessage[]
+  contactAccessReviews    ContactAccessReview[]
+  events                  Event[]
+  formSubmissions         FormSubmission[]
+  contactConsents         ContactConsent[]
+  formSettings            FormSetting[]
+  eventRoles              EventRole[]
+  eventTypes              EventType[]
+  groups                  Group[]
+  integrationConnections  IntegrationConnection[]
+  zammadGroupSettings     ZammadGroupSetting[]
+  zammadSyncJobs          ZammadSyncJob[]
+  contactFieldAccesses    ContactFieldAccess[]
   organizationEngagements OrganizationEngagement[]
-  fileDownloadAudits FileDownloadAudit[]
-  pendingUploads PendingUpload[]
-  systemLogs SystemLog[]
-  engagementInboxStates ContactEngagementInboxState[]
-  engagementUserStates ContactEngagementUserState[]
-  tags         Tag[]
+  fileDownloadAudits      FileDownloadAudit[]
+  pendingUploads          PendingUpload[]
+  systemLogs              SystemLog[]
+  engagementInboxStates   ContactEngagementInboxState[]
+  engagementUserStates    ContactEngagementUserState[]
+  tags                    Tag[]
 }
 
 model Tag {
@@ -290,14 +282,14 @@ model Tag {
 }
 
 model OrganizationType {
-  id        String   @id @default(uuid()) @unique
-  teamId    String
-  team      Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  name      String   @db.VarChar(255)
-  color     String?  @db.VarChar(50)
-  schema    Json?
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  id            String         @id @unique @default(uuid())
+  teamId        String
+  team          Teams          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name          String         @db.VarChar(255)
+  color         String?        @db.VarChar(50)
+  schema        Json?
+  createdAt     DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(6)
   organizations Organization[]
 
   @@unique([teamId, name])
@@ -305,17 +297,17 @@ model OrganizationType {
 }
 
 model OrganizationEngagement {
-  id          String   @id @default(uuid()) @unique
+  id             String       @id @unique @default(uuid())
   organizationId String
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  teamId      String
-  team        Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  type        String   @db.VarChar(100)
-  note        String?  @db.Text
-  engagedAt   DateTime @db.Timestamptz(6)
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
-  tags        String[] @default([])
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  teamId         String
+  team           Teams        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  type           String       @db.VarChar(100)
+  note           String?      @db.Text
+  engagedAt      DateTime     @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
+  tags           String[]     @default([])
 
   @@index([organizationId])
   @@index([teamId])
@@ -324,17 +316,17 @@ model OrganizationEngagement {
 }
 
 model OrganizationFieldValue {
-  id             String   @id @default(uuid()) @unique
+  id             String       @id @unique @default(uuid())
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  key            String   @db.VarChar(255)
-  type           String   @db.VarChar(50)
-  stringValue    String?  @db.Text
+  key            String       @db.VarChar(255)
+  type           String       @db.VarChar(50)
+  stringValue    String?      @db.Text
   numberValue    Decimal?
-  dateValue      DateTime? @db.Timestamptz(6)
+  dateValue      DateTime?    @db.Timestamptz(6)
   booleanValue   Boolean?
-  createdAt      DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime @updatedAt @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
 
   @@unique([organizationId, key])
   @@index([key])
@@ -342,26 +334,26 @@ model OrganizationFieldValue {
 }
 
 model IntegrationConnection {
-  id            String               @id @default(uuid()) @unique
+  id            String              @id @unique @default(uuid())
   teamId        String
-  team          Teams                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team          Teams               @relation(fields: [teamId], references: [id], onDelete: Cascade)
   provider      IntegrationProvider
-  apiKey        String               @db.Text
-  baseUrl       String?              @db.VarChar(500)
-  webhookSecret String?              @db.Text
-  defaultListId String?              @db.VarChar(255)
-  senderEmail   String?              @db.VarChar(255)
-  senderName    String?              @db.VarChar(255)
-  isEnabled     Boolean              @default(true)
-  lastSyncedAt  DateTime?            @db.Timestamptz(6)
-  createdAt     DateTime             @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime             @updatedAt @db.Timestamptz(6)
+  apiKey        String              @db.Text
+  baseUrl       String?             @db.VarChar(500)
+  webhookSecret String?             @db.Text
+  defaultListId String?             @db.VarChar(255)
+  senderEmail   String?             @db.VarChar(255)
+  senderName    String?             @db.VarChar(255)
+  isEnabled     Boolean             @default(true)
+  lastSyncedAt  DateTime?           @db.Timestamptz(6)
+  createdAt     DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime            @updatedAt @db.Timestamptz(6)
 
   @@unique([teamId, provider])
 }
 
 model ZammadGroupSetting {
-  id                 String   @id @default(uuid()) @unique
+  id                 String   @id @unique @default(uuid())
   teamId             String
   team               Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
   groupId            Int
@@ -376,7 +368,7 @@ model ZammadGroupSetting {
 }
 
 model ZammadSyncJob {
-  id          String              @id @default(uuid()) @unique
+  id          String              @id @unique @default(uuid())
   teamId      String
   team        Teams               @relation(fields: [teamId], references: [id], onDelete: Cascade)
   type        ZammadSyncJobType
@@ -401,73 +393,72 @@ model ZammadSyncJob {
 }
 
 model User {
-  id             String           @id @default(uuid()) @unique
-  name           String?          @db.VarChar(255)
-  address        String?          @db.VarChar(255)
-  email          String           @db.VarChar(255) @unique
-  phone          String?          @db.VarChar(255)
-  postalCode     String?          @db.VarChar(255)
-  city           String?          @db.VarChar(255)
-  country        String?          @db.VarChar(255)
-  roles          Roles[]
+  id            String    @id @unique @default(uuid())
+  name          String?   @db.VarChar(255)
+  address       String?   @db.VarChar(255)
+  email         String    @unique @db.VarChar(255)
+  phone         String?   @db.VarChar(255)
+  postalCode    String?   @db.VarChar(255)
+  city          String?   @db.VarChar(255)
+  country       String?   @db.VarChar(255)
+  roles         Roles[]
   emailVerified DateTime?
   image         String?
 
   fundingRequests FundingRequest[]
   teams           Teams[]          @relation("TeamUsers") // Many-to-Many relation
   organizations   Organization[]   @relation("OrganizationUsers") // Many-to-Many relation
-  groups          UserGroup[]      // Many-to-Many relation through UserGroup
+  groups          UserGroup[] // Many-to-Many relation through UserGroup
   ownedTeams      Teams[]          @relation("TeamOwner")
 
-  signedAgreements DonationAgreementSignature[]
-  donationAgreement DonationAgreement[] @relation("CreatedByRelation")
+  signedAgreements  DonationAgreementSignature[]
+  donationAgreement DonationAgreement[]          @relation("CreatedByRelation")
 
-  createdBy       File[]           @relation("CreatedByRelation") // One-to-Many relation
-  updatedBy       File[]           @relation("UpdatedByRelation") // One-to-Many relation
-  fileDownloadAudits FileDownloadAudit[]
-  pendingUploads PendingUpload[]
-  accounts      Account[]
-  sessions      Session[]
+  createdBy             File[]                        @relation("CreatedByRelation") // One-to-Many relation
+  updatedBy             File[]                        @relation("UpdatedByRelation") // One-to-Many relation
+  fileDownloadAudits    FileDownloadAudit[]
+  pendingUploads        PendingUpload[]
+  accounts              Account[]
+  sessions              Session[]
   engagementInboxStates ContactEngagementInboxState[]
-  engagementUserStates ContactEngagementUserState[]
+  engagementUserStates  ContactEngagementUserState[]
 
-
-  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime         @updatedAt @db.Timestamptz(6)
-  lastLoginAt    DateTime?        @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
+  lastLoginAt DateTime? @db.Timestamptz(6)
 
   viewPreferences UserViewPreference[]
 }
 
 model DonationAgreement {
-  id               String    @id @default(uuid()) @unique
+  id               String         @id @unique @default(uuid())
   fundingRequestId String
   fundingRequest   FundingRequest @relation(fields: [fundingRequestId], references: [id])
 
-  fileId           String
-  file             File      @relation(fields: [fileId], references: [id])
-  agreement        String    @db.Text
+  fileId    String
+  file      File   @relation(fields: [fileId], references: [id])
+  agreement String @db.Text
 
-  createdBy        User @relation("CreatedByRelation", fields: [createdById], references: [id])
-  createdById      String
+  createdBy      User                         @relation("CreatedByRelation", fields: [createdById], references: [id])
+  createdById    String
   userSignatures DonationAgreementSignature[]
-  teamId           String?
-  team             Teams? @relation(fields: [teamId], references: [id])
-  organizationId           String?
-  organization             Organization? @relation(fields: [organizationId], references: [id])
+  teamId         String?
+  team           Teams?                       @relation(fields: [teamId], references: [id])
+  organizationId String?
+  organization   Organization?                @relation(fields: [organizationId], references: [id])
 
-  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime  @updatedAt @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
 }
 
 model DonationAgreementSignature {
   donationAgreementId String
   userId              String
-  signedAt            DateTime?  // If NULL, person hasn't signed
+  signedAt            DateTime? // If NULL, person hasn't signed
 
   donationAgreement DonationAgreement @relation(fields: [donationAgreementId], references: [id], onDelete: Cascade)
   // A signature is the record of who signed: a signer cannot be deleted.
-  user     User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  user              User              @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@id([donationAgreementId, userId]) // Composite key to avoid duplicate signatures
 }
@@ -564,56 +555,56 @@ enum ContactEmailKind {
 }
 
 model Contact {
-  id                String               @id @default(uuid()) @unique
-  teamId            String
-  team              Teams                @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  name              String
-  pronouns          String?             @db.VarChar(120)
-  gender            ContactGender?
-  genderRequestPreference  ContactRequestPreference?
-  isBipoc           Boolean?
-  racismRequestPreference  ContactRequestPreference?
-  otherMargins      String?             @db.Text
-  onboardingDate    DateTime?            @db.Timestamptz(6)
-  breakUntil        DateTime?            @db.Timestamptz(6)
-  address           String?             @db.VarChar(255)
-  postalCode        String?             @db.VarChar(255)
-  state             String?             @db.VarChar(255)
-  city              String?             @db.VarChar(255)
-  country           String?             @db.VarChar(255)
-  countryCode       String?             @db.Char(2)
-  latitude          Decimal?            @db.Decimal(9, 6)
-  longitude         Decimal?            @db.Decimal(9, 6)
-  phone             String?              @db.VarChar(255)
+  id                           String                    @id @unique @default(uuid())
+  teamId                       String
+  team                         Teams                     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name                         String
+  pronouns                     String?                   @db.VarChar(120)
+  gender                       ContactGender?
+  genderRequestPreference      ContactRequestPreference?
+  isBipoc                      Boolean?
+  racismRequestPreference      ContactRequestPreference?
+  otherMargins                 String?                   @db.Text
+  onboardingDate               DateTime?                 @db.Timestamptz(6)
+  breakUntil                   DateTime?                 @db.Timestamptz(6)
+  address                      String?                   @db.VarChar(255)
+  postalCode                   String?                   @db.VarChar(255)
+  state                        String?                   @db.VarChar(255)
+  city                         String?                   @db.VarChar(255)
+  country                      String?                   @db.VarChar(255)
+  countryCode                  String?                   @db.Char(2)
+  latitude                     Decimal?                  @db.Decimal(9, 6)
+  longitude                    Decimal?                  @db.Decimal(9, 6)
+  phone                        String?                   @db.VarChar(255)
   /// The primary e-mail address, for sorting. Kept in step with ContactEmail
   /// by a database trigger (contact_primary_email_sync); never write it.
-  primaryEmail      String?             @db.VarChar(255)
-  signal            String?              @db.VarChar(255)
-  website           String?             @db.VarChar(255)
-  notes             String?             @db.Text
-  groupId           String?              // Optional group for access control
-  group             Group?               @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  createdAt         DateTime             @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime             @updatedAt @db.Timestamptz(6)
-  deletedAt         DateTime?            @db.Timestamptz(6)
-  emails            ContactEmail[]
-  attributes        ContactAttribute[]
-  socialLinks       ContactSocialLink[]
-  events            EventContact[]
-  registrations     EventRegistration[]
-  formSubmissions   FormSubmission[]
-  consents          ContactConsent[]
-  engagements       ContactEngagement[]
-  emailRecipients   EmailRecipient[]
-  inboundEmailMessages InboundEmailMessage[]
-  contactAccessReviews ContactAccessReview[]
-  changeLogs        ContactChangeLog[]
-  lists             ContactListMember[]
-  organizationsAsContactPerson Organization[] @relation("OrganizationContactPerson")
-  organizations     ContactOrganization[]
-  files             File[]
-  groups            ContactGroup[]
-  tags              String[]             @default([])
+  primaryEmail                 String?                   @db.VarChar(255)
+  signal                       String?                   @db.VarChar(255)
+  website                      String?                   @db.VarChar(255)
+  notes                        String?                   @db.Text
+  groupId                      String? // Optional group for access control
+  group                        Group?                    @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  createdAt                    DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt                    DateTime                  @updatedAt @db.Timestamptz(6)
+  deletedAt                    DateTime?                 @db.Timestamptz(6)
+  emails                       ContactEmail[]
+  attributes                   ContactAttribute[]
+  socialLinks                  ContactSocialLink[]
+  events                       EventContact[]
+  registrations                EventRegistration[]
+  formSubmissions              FormSubmission[]
+  consents                     ContactConsent[]
+  engagements                  ContactEngagement[]
+  emailRecipients              EmailRecipient[]
+  inboundEmailMessages         InboundEmailMessage[]
+  contactAccessReviews         ContactAccessReview[]
+  changeLogs                   ContactChangeLog[]
+  lists                        ContactListMember[]
+  organizationsAsContactPerson Organization[]            @relation("OrganizationContactPerson")
+  organizations                ContactOrganization[]
+  files                        File[]
+  groups                       ContactGroup[]
+  tags                         String[]                  @default([])
 
   @@index([groupId])
   @@index([teamId, groupId])
@@ -627,7 +618,7 @@ model Contact {
 }
 
 model ContactEmail {
-  id        String           @id @default(uuid()) @unique
+  id        String           @id @unique @default(uuid())
   teamId    String
   team      Teams            @relation(fields: [teamId], references: [id], onDelete: Cascade)
   contactId String
@@ -638,14 +629,14 @@ model ContactEmail {
   createdAt DateTime         @default(now()) @db.Timestamptz(6)
   updatedAt DateTime         @updatedAt @db.Timestamptz(6)
 
-  @@index([teamId, email])
-  @@index([contactId])
-  @@index([kind])
   @@unique([contactId, email])
   // An address identifies one contact per team (shared addresses may repeat).
   @@unique([teamId, email], map: "ContactEmail_identity_email_key", where: raw("kind = ANY (ARRAY['PRIMARY'::\"ContactEmailKind\", 'ALIAS'::\"ContactEmailKind\"])"))
   // A contact has at most one primary address.
   @@unique([contactId], map: "ContactEmail_primary_contact_key", where: raw("kind = 'PRIMARY'"))
+  @@index([teamId, email])
+  @@index([contactId])
+  @@index([kind])
 }
 
 model ContactOrganization {
@@ -662,8 +653,8 @@ model ContactOrganization {
 model ContactGroup {
   contactId String
   groupId   String
-  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  group     Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
 
   @@id([contactId, groupId])
@@ -672,37 +663,37 @@ model ContactGroup {
 }
 
 model EmailBatch {
-  id          String              @id @default(uuid()) @unique
-  teamId      String
-  team        Teams               @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  provider    IntegrationProvider
-  subject     String              @db.VarChar(500)
-  html        String              @db.Text
-  text        String?             @db.Text
-  bccEmails   String[]            @default([])
-  internalCopyMode String         @default("summary") @db.VarChar(32)
-  internalCopySentAt DateTime?    @db.Timestamptz(6)
-  senderEmail String?             @db.VarChar(255)
-  senderName  String?             @db.VarChar(255)
-  status      EmailBatchStatus    @default(SENDING)
-  requestedCount Int              @default(0)
-  sentCount      Int              @default(0)
-  skippedCount   Int              @default(0)
-  failedCount    Int              @default(0)
-  attempts    Int                 @default(0)
-  maxAttempts Int                 @default(5)
-  runAfter    DateTime            @default(now()) @db.Timestamptz(6)
-  lockedAt    DateTime?           @db.Timestamptz(6)
-  lockedBy    String?             @db.VarChar(255)
-  startedAt   DateTime?           @db.Timestamptz(6)
-  lastError   String?             @db.Text
-  userId      String?
-  userName    String?             @db.VarChar(255)
-  recipients  EmailRecipient[]
+  id                     String                       @id @unique @default(uuid())
+  teamId                 String
+  team                   Teams                        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  provider               IntegrationProvider
+  subject                String                       @db.VarChar(500)
+  html                   String                       @db.Text
+  text                   String?                      @db.Text
+  bccEmails              String[]                     @default([])
+  internalCopyMode       String                       @default("summary") @db.VarChar(32)
+  internalCopySentAt     DateTime?                    @db.Timestamptz(6)
+  senderEmail            String?                      @db.VarChar(255)
+  senderName             String?                      @db.VarChar(255)
+  status                 EmailBatchStatus             @default(SENDING)
+  requestedCount         Int                          @default(0)
+  sentCount              Int                          @default(0)
+  skippedCount           Int                          @default(0)
+  failedCount            Int                          @default(0)
+  attempts               Int                          @default(0)
+  maxAttempts            Int                          @default(5)
+  runAfter               DateTime                     @default(now()) @db.Timestamptz(6)
+  lockedAt               DateTime?                    @db.Timestamptz(6)
+  lockedBy               String?                      @db.VarChar(255)
+  startedAt              DateTime?                    @db.Timestamptz(6)
+  lastError              String?                      @db.Text
+  userId                 String?
+  userName               String?                      @db.VarChar(255)
+  recipients             EmailRecipient[]
   internalCopyRecipients EmailInternalCopyRecipient[]
-  createdAt   DateTime            @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime            @updatedAt @db.Timestamptz(6)
-  completedAt DateTime?           @db.Timestamptz(6)
+  createdAt              DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt              DateTime                     @updatedAt @db.Timestamptz(6)
+  completedAt            DateTime?                    @db.Timestamptz(6)
 
   @@index([teamId, createdAt])
   @@index([status, runAfter])
@@ -711,20 +702,20 @@ model EmailBatch {
 }
 
 model EmailRecipient {
-  id          String                @id @default(uuid()) @unique
-  batchId     String
-  batch       EmailBatch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
-  contactId   String?
-  contact     Contact?              @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  email       String                @db.VarChar(255)
-  name        String?               @db.VarChar(255)
-  status      EmailRecipientStatus  @default(PENDING)
-  providerMessageId String?         @db.VarChar(255)
-  errorMessage String?              @db.Text
-  dispatchStartedAt DateTime?       @db.Timestamptz(6)
-  sentAt      DateTime?             @db.Timestamptz(6)
-  createdAt   DateTime              @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime              @updatedAt @db.Timestamptz(6)
+  id                String               @id @unique @default(uuid())
+  batchId           String
+  batch             EmailBatch           @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  contactId         String?
+  contact           Contact?             @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  email             String               @db.VarChar(255)
+  name              String?              @db.VarChar(255)
+  status            EmailRecipientStatus @default(PENDING)
+  providerMessageId String?              @db.VarChar(255)
+  errorMessage      String?              @db.Text
+  dispatchStartedAt DateTime?            @db.Timestamptz(6)
+  sentAt            DateTime?            @db.Timestamptz(6)
+  createdAt         DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime             @updatedAt @db.Timestamptz(6)
 
   @@index([batchId])
   @@index([contactId])
@@ -733,7 +724,7 @@ model EmailRecipient {
 }
 
 model EmailInternalCopyRecipient {
-  id                String               @id @default(uuid()) @unique
+  id                String               @id @unique @default(uuid())
   batchId           String
   batch             EmailBatch           @relation(fields: [batchId], references: [id], onDelete: Cascade)
   email             String               @db.VarChar(255)
@@ -794,45 +785,45 @@ enum SystemLogLevel {
 }
 
 model EmailInbox {
-  id           String   @id @default(uuid()) @unique
-  teamId       String
-  team         Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  groupId      String
-  group        Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  id      String @id @unique @default(uuid())
+  teamId  String
+  team    Teams  @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
-  name         String   @db.VarChar(255)
-  host         String   @db.VarChar(255)
-  port         Int
-  secure       Boolean  @default(true)
-  username     String   @db.VarChar(255)
-  passwordEncrypted String @db.Text
-  mailbox      String   @default("INBOX") @db.VarChar(255)
-  outboundMode EmailInboxOutboundMode @default(DISABLED)
-  replyFromEmail String? @db.VarChar(255)
-  replyFromName String? @db.VarChar(255)
-  smtpHost String? @db.VarChar(255)
-  smtpPort Int?
-  smtpSecure Boolean @default(false)
-  smtpUsername String? @db.VarChar(255)
-  smtpPasswordEncrypted String? @db.Text
-  autoApproveExistingVisible Boolean @default(true)
-  requireReviewForHiddenMatches Boolean @default(true)
-  allowCreateContacts Boolean @default(false)
-  allowedDomains String[] @default([])
+  name                          String                 @db.VarChar(255)
+  host                          String                 @db.VarChar(255)
+  port                          Int
+  secure                        Boolean                @default(true)
+  username                      String                 @db.VarChar(255)
+  passwordEncrypted             String                 @db.Text
+  mailbox                       String                 @default("INBOX") @db.VarChar(255)
+  outboundMode                  EmailInboxOutboundMode @default(DISABLED)
+  replyFromEmail                String?                @db.VarChar(255)
+  replyFromName                 String?                @db.VarChar(255)
+  smtpHost                      String?                @db.VarChar(255)
+  smtpPort                      Int?
+  smtpSecure                    Boolean                @default(false)
+  smtpUsername                  String?                @db.VarChar(255)
+  smtpPasswordEncrypted         String?                @db.Text
+  autoApproveExistingVisible    Boolean                @default(true)
+  requireReviewForHiddenMatches Boolean                @default(true)
+  allowCreateContacts           Boolean                @default(false)
+  allowedDomains                String[]               @default([])
 
-  isEnabled    Boolean  @default(true)
-  lastSyncedAt DateTime? @db.Timestamptz(6)
-  uidValidity  BigInt?
-  lastUid      BigInt?
-  syncLockedAt DateTime? @db.Timestamptz(6)
-  syncLockedBy String? @db.VarChar(255)
-  lastSyncError String? @db.Text
+  isEnabled     Boolean   @default(true)
+  lastSyncedAt  DateTime? @db.Timestamptz(6)
+  uidValidity   BigInt?
+  lastUid       BigInt?
+  syncLockedAt  DateTime? @db.Timestamptz(6)
+  syncLockedBy  String?   @db.VarChar(255)
+  lastSyncError String?   @db.Text
 
-  messages     InboundEmailMessage[]
+  messages        InboundEmailMessage[]
   sentEngagements ContactEngagement[]
   replyDispatches EmailReplyDispatch[]
-  createdAt    DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+  createdAt       DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime              @updatedAt @db.Timestamptz(6)
 
   @@index([teamId])
   @@index([groupId])
@@ -847,38 +838,38 @@ enum EmailInboxOutboundMode {
 }
 
 model InboundEmailMessage {
-  id            String   @id @default(uuid()) @unique
-  teamId        String
-  team          Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  groupId       String
-  group         Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  emailInboxId  String
-  emailInbox    EmailInbox @relation(fields: [emailInboxId], references: [id], onDelete: Cascade)
+  id           String     @id @unique @default(uuid())
+  teamId       String
+  team         Teams      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  groupId      String
+  group        Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  emailInboxId String
+  emailInbox   EmailInbox @relation(fields: [emailInboxId], references: [id], onDelete: Cascade)
 
-  mailbox       String   @db.VarChar(255)
-  uidValidity   BigInt
-  uid           BigInt
-  messageId     String?  @db.VarChar(500)
+  mailbox     String  @db.VarChar(255)
+  uidValidity BigInt
+  uid         BigInt
+  messageId   String? @db.VarChar(500)
 
-  fromEmail     String   @db.VarChar(255)
-  fromName      String?  @db.VarChar(255)
-  replyToEmail  String?  @db.VarChar(255)
-  replyToName   String?  @db.VarChar(255)
-  subject       String?  @db.VarChar(500)
-  body          String   @db.Text
-  receivedAt    DateTime @db.Timestamptz(6)
+  fromEmail    String   @db.VarChar(255)
+  fromName     String?  @db.VarChar(255)
+  replyToEmail String?  @db.VarChar(255)
+  replyToName  String?  @db.VarChar(255)
+  subject      String?  @db.VarChar(500)
+  body         String   @db.Text
+  receivedAt   DateTime @db.Timestamptz(6)
 
-  contactId     String?
-  contact       Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
-  engagementId  String?
-  engagement    ContactEngagement? @relation(fields: [engagementId], references: [id], onDelete: SetNull)
-  accessReviews ContactAccessReview[]
-  replyDispatches EmailReplyDispatch[]
-  attachments   EmailAttachment[]
-  rawHeaders    Json?
-  authenticationStatus InboundEmailAuthenticationStatus @default(UNKNOWN)
+  contactId             String?
+  contact               Contact?                         @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  engagementId          String?
+  engagement            ContactEngagement?               @relation(fields: [engagementId], references: [id], onDelete: SetNull)
+  accessReviews         ContactAccessReview[]
+  replyDispatches       EmailReplyDispatch[]
+  attachments           EmailAttachment[]
+  rawHeaders            Json?
+  authenticationStatus  InboundEmailAuthenticationStatus @default(UNKNOWN)
   authenticationDetails Json?
-  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  createdAt             DateTime                         @default(now()) @db.Timestamptz(6)
 
   @@unique([emailInboxId, mailbox, uidValidity, uid])
   @@index([teamId, fromEmail])
@@ -890,7 +881,7 @@ model InboundEmailMessage {
 }
 
 model EmailReplyDispatch {
-  id                    String                   @id @default(uuid()) @unique
+  id                    String                   @id @unique @default(uuid())
   teamId                String
   team                  Teams                    @relation(fields: [teamId], references: [id], onDelete: Cascade)
   emailInboxId          String
@@ -930,7 +921,7 @@ enum EmailAttachmentStatus {
 }
 
 model EmailAttachment {
-  id                    String                   @id @default(uuid()) @unique
+  id                    String                   @id @unique @default(uuid())
   teamId                String
   team                  Teams                    @relation(fields: [teamId], references: [id], onDelete: Cascade)
   inboundEmailMessageId String?
@@ -953,26 +944,26 @@ model EmailAttachment {
 }
 
 model ContactAccessReview {
-  id            String   @id @default(uuid()) @unique
-  teamId        String
-  team          Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  groupId       String
-  group         Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  contactId     String
-  contact       Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  source        String   @db.VarChar(64)
+  id                    String                    @id @unique @default(uuid())
+  teamId                String
+  team                  Teams                     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  groupId               String
+  group                 Group                     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  contactId             String
+  contact               Contact                   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  source                String                    @db.VarChar(64)
   inboundEmailMessageId String?
-  inboundEmailMessage InboundEmailMessage? @relation(fields: [inboundEmailMessageId], references: [id], onDelete: Cascade)
-  status        ContactAccessReviewStatus @default(PENDING)
-  reviewedAt    DateTime? @db.Timestamptz(6)
-  reviewedByUserId String?
-  reviewedByUserName String? @db.VarChar(255)
-  revokedAt     DateTime? @db.Timestamptz(6)
-  revokedByUserId String?
-  revokedByUserName String? @db.VarChar(255)
-  reviewNote    String? @db.Text
-  createdAt     DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime @updatedAt @db.Timestamptz(6)
+  inboundEmailMessage   InboundEmailMessage?      @relation(fields: [inboundEmailMessageId], references: [id], onDelete: Cascade)
+  status                ContactAccessReviewStatus @default(PENDING)
+  reviewedAt            DateTime?                 @db.Timestamptz(6)
+  reviewedByUserId      String?
+  reviewedByUserName    String?                   @db.VarChar(255)
+  revokedAt             DateTime?                 @db.Timestamptz(6)
+  revokedByUserId       String?
+  revokedByUserName     String?                   @db.VarChar(255)
+  reviewNote            String?                   @db.Text
+  createdAt             DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                  @updatedAt @db.Timestamptz(6)
 
   @@unique([source, inboundEmailMessageId, groupId, contactId], map: "ContactAccessReview_source_inboundEmailMessageId_groupId_contac")
   @@index([teamId, status])
@@ -982,7 +973,7 @@ model ContactAccessReview {
 }
 
 model SystemLog {
-  id         String         @id @default(uuid()) @unique
+  id         String         @id @unique @default(uuid())
   teamId     String?
   team       Teams?         @relation(fields: [teamId], references: [id], onDelete: Cascade)
   level      SystemLogLevel
@@ -1002,17 +993,17 @@ model SystemLog {
 }
 
 model BackgroundWorkerHeartbeat {
-  workerId            String    @id @db.VarChar(255)
-  startedAt           DateTime  @db.Timestamptz(6)
-  lastSeenAt          DateTime  @db.Timestamptz(6)
-  emailQueueDepth     Int       @default(0)
-  oldestEmailQueuedAt DateTime? @db.Timestamptz(6)
-  zammadQueueDepth    Int       @default(0)
+  workerId             String    @id @db.VarChar(255)
+  startedAt            DateTime  @db.Timestamptz(6)
+  lastSeenAt           DateTime  @db.Timestamptz(6)
+  emailQueueDepth      Int       @default(0)
+  oldestEmailQueuedAt  DateTime? @db.Timestamptz(6)
+  zammadQueueDepth     Int       @default(0)
   oldestZammadQueuedAt DateTime? @db.Timestamptz(6)
-  enabledInboxCount   Int       @default(0)
-  oldestInboxSyncedAt DateTime? @db.Timestamptz(6)
-  createdAt           DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt           DateTime  @updatedAt @db.Timestamptz(6)
+  enabledInboxCount    Int       @default(0)
+  oldestInboxSyncedAt  DateTime? @db.Timestamptz(6)
+  createdAt            DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime  @updatedAt @db.Timestamptz(6)
 
   @@index([lastSeenAt])
 }
@@ -1037,7 +1028,7 @@ model PostalCodeCentroid {
 }
 
 model ContactSocialLink {
-  id        String   @id @default(uuid()) @unique
+  id        String   @id @unique @default(uuid())
   contactId String
   contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
   platform  String   @db.VarChar(50)
@@ -1055,7 +1046,7 @@ enum ContactListType {
 }
 
 model ContactList {
-  id          String              @id @default(uuid()) @unique
+  id          String              @id @unique @default(uuid())
   teamId      String
   team        Teams               @relation(fields: [teamId], references: [id], onDelete: Cascade)
   name        String              @db.VarChar(255)
@@ -1073,12 +1064,12 @@ model ContactList {
 }
 
 model ContactListMember {
-  id          String      @id @default(uuid()) @unique
-  listId      String
-  list        ContactList @relation(fields: [listId], references: [id], onDelete: Cascade)
-  contactId   String
-  contact     Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  createdAt   DateTime    @default(now()) @db.Timestamptz(6)
+  id        String      @id @unique @default(uuid())
+  listId    String
+  list      ContactList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  contactId String
+  contact   Contact     @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now()) @db.Timestamptz(6)
 
   @@unique([listId, contactId])
   @@index([listId])
@@ -1086,26 +1077,26 @@ model ContactListMember {
 }
 
 model ContactAttribute {
-  id            String                @id @default(uuid()) @unique
+  id            String               @id @unique @default(uuid())
   contactId     String
-  contact       Contact               @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  key           String                @db.VarChar(255)
+  contact       Contact              @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  key           String               @db.VarChar(255)
   type          ContactAttributeType
-  stringValue   String?               @db.Text
+  stringValue   String?              @db.Text
   numberValue   Decimal?
-  dateValue     DateTime?             @db.Timestamptz(6)
-  locationLabel String?               @db.VarChar(255)
+  dateValue     DateTime?            @db.Timestamptz(6)
+  locationLabel String?              @db.VarChar(255)
   latitude      Decimal?
   longitude     Decimal?
-  createdAt     DateTime              @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime              @updatedAt @db.Timestamptz(6)
+  createdAt     DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime             @updatedAt @db.Timestamptz(6)
 
-  @@index([key])
   @@unique([contactId, key])
+  @@index([key])
 }
 
 model ContactFieldAccess {
-  id        String   @id @default(uuid()) @unique
+  id        String   @id @unique @default(uuid())
   teamId    String
   team      Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
   fieldKey  String   @db.VarChar(255)
@@ -1118,19 +1109,17 @@ model ContactFieldAccess {
   @@index([groupId])
 }
 
-
 model emailTemplates {
-  id String @id @default(uuid()) @unique
-  name String @db.VarChar(255)
-  subject String @db.VarChar(255)
-  content String @db.Text
-  type String @db.VarChar(255)
-  isActive Boolean @default(true)
-  teamId String?
-  team Teams? @relation( fields: [teamId],references: [id], onDelete: Cascade)
+  id        String   @id @unique @default(uuid())
+  name      String   @db.VarChar(255)
+  subject   String   @db.VarChar(255)
+  content   String   @db.Text
+  type      String   @db.VarChar(255)
+  isActive  Boolean  @default(true)
+  teamId    String?
+  team      Teams?   @relation(fields: [teamId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
-  
 }
 
 enum FieldType {
@@ -1148,63 +1137,60 @@ enum FieldType {
 }
 
 model FormSection {
-  id String @id @default(uuid()) @unique
-  name String @db.VarChar(255)
-  description String? @db.Text
-  order Int
-  teamId String?
-  team Teams? @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  fields FormField[]
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  id          String      @id @unique @default(uuid())
+  name        String      @db.VarChar(255)
+  description String?     @db.Text
+  order       Int
+  teamId      String?
+  team        Teams?      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  fields      FormField[]
+  createdAt   DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime    @updatedAt @db.Timestamptz(6)
 }
 
 model FormField {
-  id String @id @default(uuid()) @unique
-  key String @db.VarChar(255)
-  label String @db.VarChar(255)
-  description String? @db.Text
-  type FieldType
-  placeholder String? @db.VarChar(255)
-  defaultValue String? @db.Text
-  isRequired Boolean @default(false)
-  order Int
-  
+  id           String    @id @unique @default(uuid())
+  key          String    @db.VarChar(255)
+  label        String    @db.VarChar(255)
+  description  String?   @db.Text
+  type         FieldType
+  placeholder  String?   @db.VarChar(255)
+  defaultValue String?   @db.Text
+  isRequired   Boolean   @default(false)
+  order        Int
+
   // Validation rules
   minLength Int?
   maxLength Int?
-  minValue Decimal?
-  maxValue Decimal?
-  pattern String? @db.VarChar(255)
-  
+  minValue  Decimal?
+  maxValue  Decimal?
+  pattern   String?  @db.VarChar(255)
+
   // Select/Radio options (JSON array of {label: string, value: string})
   options Json?
-  
+
   sectionId String
-  section FormSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  
+  section   FormSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
-  
+
   @@unique([sectionId, key])
 }
 
-
-
-
 model Transaction {
-  id String @id @default(uuid()) @unique
-  amount Decimal
-  totalAmount Decimal
-  remainingAmount Decimal
-  transactionReciept String? 
-  fundingRequestId String
-  fundingRequest FundingRequest @relation(fields: [fundingRequestId], references: [id])
-  organizationId String
-  organization Organization @relation(fields: [organizationId], references: [id])
-  teamId String
-  
-  team Teams @relation(fields: [teamId], references: [id])  
+  id                 String         @id @unique @default(uuid())
+  amount             Decimal
+  totalAmount        Decimal
+  remainingAmount    Decimal
+  transactionReciept String?
+  fundingRequestId   String
+  fundingRequest     FundingRequest @relation(fields: [fundingRequestId], references: [id])
+  organizationId     String
+  organization       Organization   @relation(fields: [organizationId], references: [id])
+  teamId             String
+
+  team Teams @relation(fields: [teamId], references: [id])
   file File? @relation(fields: [transactionReciept], references: [id], onDelete: SetNull, onUpdate: SetNull)
 
   createdAt DateTime @default(now()) @db.Timestamptz(6)
@@ -1212,33 +1198,31 @@ model Transaction {
 }
 
 model Account {
-  id                 String  @id @default(cuid())
-  userId             String  
-  type               String
-  provider           String
-  providerAccountId  String  
-  refresh_token      String? @db.Text
-  access_token       String? @db.Text
-  expires_at         Int?
-  token_type         String?
-  scope              String?
-  id_token           String? @db.Text
-  session_state      String?
- 
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
+
   @@unique([provider, providerAccountId])
 }
- 
+
 model Session {
   id           String   @id @default(cuid())
-  sessionToken String   @unique 
-  userId       String  
+  sessionToken String   @unique
+  userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
- 
 }
- 
 
 model VerificationToken {
   identifier String
@@ -1249,34 +1233,34 @@ model VerificationToken {
 }
 
 model Event {
-  id            String              @id @default(uuid()) @unique
-  teamId        String
-  team          Teams               @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  eventTypeId   String?
-  eventType     EventType?          @relation(fields: [eventTypeId], references: [id], onDelete: SetNull)
-  title         String              @db.VarChar(255)
-  slug          String?             @db.VarChar(255)
-  description   String?             @db.Text
-  location      String?             @db.VarChar(255)
-  isOnline      Boolean             @default(false)
-  expectedGuests Int?
-  hasRemuneration Boolean            @default(false)
-  address       String?             @db.VarChar(255)
-  city          String?             @db.VarChar(255)
-  postalCode    String?             @db.VarChar(255)
-  countryCode   String?             @db.Char(2)
-  state         String?             @db.VarChar(255)
-  timeZone      String?             @db.VarChar(255)
-  merchNeeded   Boolean             @default(false)
-  startDate     DateTime            @db.Timestamptz(6)
-  endDate       DateTime?           @db.Timestamptz(6)
-  isPublic      Boolean             @default(false)
-  createdAt     DateTime            @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime            @updatedAt @db.Timestamptz(6)
-  contacts      EventContact[]
-  lists         EventList[]
-  registrations EventRegistration[]
-  tags          String[]            @default([])
+  id              String              @id @unique @default(uuid())
+  teamId          String
+  team            Teams               @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  eventTypeId     String?
+  eventType       EventType?          @relation(fields: [eventTypeId], references: [id], onDelete: SetNull)
+  title           String              @db.VarChar(255)
+  slug            String?             @db.VarChar(255)
+  description     String?             @db.Text
+  location        String?             @db.VarChar(255)
+  isOnline        Boolean             @default(false)
+  expectedGuests  Int?
+  hasRemuneration Boolean             @default(false)
+  address         String?             @db.VarChar(255)
+  city            String?             @db.VarChar(255)
+  postalCode      String?             @db.VarChar(255)
+  countryCode     String?             @db.Char(2)
+  state           String?             @db.VarChar(255)
+  timeZone        String?             @db.VarChar(255)
+  merchNeeded     Boolean             @default(false)
+  startDate       DateTime            @db.Timestamptz(6)
+  endDate         DateTime?           @db.Timestamptz(6)
+  isPublic        Boolean             @default(false)
+  createdAt       DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime            @updatedAt @db.Timestamptz(6)
+  contacts        EventContact[]
+  lists           EventList[]
+  registrations   EventRegistration[]
+  tags            String[]            @default([])
 
   @@unique([teamId, slug])
   @@index([teamId])
@@ -1297,13 +1281,13 @@ model EventList {
 }
 
 model EventType {
-  id        String    @id @default(uuid()) @unique
+  id        String   @id @unique @default(uuid())
   teamId    String
-  team      Teams     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  name      String    @db.VarChar(255)
-  color     String?   @db.VarChar(50)
-  createdAt DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  team      Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name      String   @db.VarChar(255)
+  color     String?  @db.VarChar(50)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
   events    Event[]
 
   @@unique([teamId, name])
@@ -1311,11 +1295,11 @@ model EventType {
 }
 
 model EventContact {
-  eventId      String
-  contactId    String
-  event        Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  roles        EventContactRole[]
+  eventId   String
+  contactId String
+  event     Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  contact   Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  roles     EventContactRole[]
 
   @@id([eventId, contactId])
   @@index([eventId])
@@ -1333,13 +1317,13 @@ model EventContactRole {
 }
 
 model EventRole {
-  id        String    @id @default(uuid()) @unique
+  id        String             @id @unique @default(uuid())
   teamId    String
-  team      Teams     @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  name      String    @db.VarChar(255)
-  color     String?   @db.VarChar(50)
-  createdAt DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  team      Teams              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name      String             @db.VarChar(255)
+  color     String?            @db.VarChar(50)
+  createdAt DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime           @updatedAt @db.Timestamptz(6)
   contacts  EventContactRole[]
 
   @@unique([teamId, name])
@@ -1347,19 +1331,19 @@ model EventRole {
 }
 
 model EventRegistration {
-  id          String   @id @default(uuid()) @unique
-  submissionId String? @unique @db.Uuid
-  eventId     String
-  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  contactId   String
-  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  name        String   @db.VarChar(255)
-  email       String   @db.VarChar(255)
-  phone       String?  @db.VarChar(255)
-  notes       String?  @db.Text
-  customData  Json?    // Store additional registration form data as JSON
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+  id           String   @id @unique @default(uuid())
+  submissionId String?  @unique @db.Uuid
+  eventId      String
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  name         String   @db.VarChar(255)
+  email        String   @db.VarChar(255)
+  phone        String?  @db.VarChar(255)
+  notes        String?  @db.Text
+  customData   Json? // Store additional registration form data as JSON
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
 
   @@index([eventId])
   @@index([email])
@@ -1367,14 +1351,15 @@ model EventRegistration {
 }
 
 enum ConsentStatus {
+  PENDING // ticked, waiting for the e-mail confirmation
   GRANTED
   WITHDRAWN
 }
 
 enum ConsentSource {
-  FORM      // a ticked consent question of a website form
-  MANUAL    // set by a team member
-  EXTERNAL  // reported by another system, e.g. an unsubscribe
+  FORM // a ticked consent question of a website form
+  MANUAL // set by a team member
+  EXTERNAL // reported by another system, e.g. an unsubscribe
 }
 
 // What a contact agreed to, append-only: the latest row per purpose is the
@@ -1403,46 +1388,57 @@ model ContactConsent {
 
 // How the team uses one website form (by its form id); made on first change.
 model FormSetting {
-  id          String   @id @default(uuid())
-  teamId      String
-  team        Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  formId      String   @db.VarChar(64)
+  id                 String   @id @default(uuid())
+  teamId             String
+  team               Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  formId             String   @db.VarChar(64)
   // Publish the number of people who sent it, for a counter on the website.
-  publicCount Boolean  @default(false)
+  publicCount        Boolean  @default(false)
   // The number the website counts toward, if any.
-  goal        Int?
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+  goal               Int?
+  // Count only people who confirmed their e-mail address.
+  countConfirmedOnly Boolean  @default(false)
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(6)
 
   @@unique([teamId, formId])
 }
 
 // Website form submission accepted through the public API bridge.
 model FormSubmission {
-  id           String   @id @default(uuid()) @unique
-  submissionId String   @unique @db.Uuid
-  teamId       String
-  team         Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  contactId    String
-  contact      Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  formId       String   @db.VarChar(64)
-  formTitle    String   @db.VarChar(255)
-  formRevision String   @db.VarChar(64)
-  locale       String   @db.VarChar(10)
-  page         String?  @db.VarChar(2048)
-  answers      Json
-  submittedAt  DateTime @db.Timestamptz(6)
-  receivedAt   DateTime @db.Timestamptz(6)
-  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  id                    String    @id @unique @default(uuid())
+  submissionId          String    @unique @db.Uuid
+  teamId                String
+  team                  Teams     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  contactId             String
+  contact               Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  formId                String    @db.VarChar(64)
+  formTitle             String    @db.VarChar(255)
+  formRevision          String    @db.VarChar(64)
+  locale                String    @db.VarChar(10)
+  page                  String?   @db.VarChar(2048)
+  answers               Json
+  submittedAt           DateTime  @db.Timestamptz(6)
+  receivedAt            DateTime  @db.Timestamptz(6)
+  // The address it was sent with, which the confirmation e-mail goes to.
+  email                 String?   @db.VarChar(255)
+  // Whether this submission made the contact (for removing unconfirmed ones).
+  createdContact        Boolean   @default(false)
+  // E-mail confirmation (docs/PUBLIC_FORMS_INTAKE.md, "Confirmation").
+  confirmationRequested Boolean   @default(false)
+  confirmationSentAt    DateTime? @db.Timestamptz(6)
+  confirmedAt           DateTime? @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(6)
 
   @@index([teamId])
   @@index([contactId])
   @@index([formId])
+  @@index([confirmationRequested, confirmedAt, confirmationSentAt])
 }
 
 enum EngagementDirection {
-  INBOUND   // Message received by contact
-  OUTBOUND  // Message sent to contact
+  INBOUND // Message received by contact
+  OUTBOUND // Message sent to contact
 }
 
 enum EngagementSource {
@@ -1471,40 +1467,41 @@ enum ContactSubmodule {
 }
 
 model ContactEngagement {
-  id          String               @id @default(uuid()) @unique
-  contactId   String
-  contact     Contact              @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  teamId      String
-  direction   EngagementDirection
-  source      EngagementSource
-  subject     String?              @db.VarChar(500)
-  message     String               @db.Text
-  userId      String?              // Team user who sent/received the message
-  userName    String?              @db.VarChar(255) // Store name for display even if user deleted
-  externalId  String?              @db.VarChar(255)
-  externalSource String?           @db.VarChar(255)
-  emailInboxId String?
-  emailInbox EmailInbox? @relation(fields: [emailInboxId], references: [id], onDelete: SetNull)
-  replyToEngagementId String?
-  replyToEngagement ContactEngagement? @relation("EngagementReplies", fields: [replyToEngagementId], references: [id], onDelete: SetNull)
-  replies ContactEngagement[] @relation("EngagementReplies")
+  id                    String              @id @unique @default(uuid())
+  contactId             String
+  contact               Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  teamId                String
+  direction             EngagementDirection
+  source                EngagementSource
+  subject               String?             @db.VarChar(500)
+  message               String              @db.Text
+  userId                String? // Team user who sent/received the message
+  userName              String?             @db.VarChar(255) // Store name for display even if user deleted
+  externalId            String?             @db.VarChar(255)
+  externalSource        String?             @db.VarChar(255)
+  emailInboxId          String?
+  emailInbox            EmailInbox?         @relation(fields: [emailInboxId], references: [id], onDelete: SetNull)
+  replyToEngagementId   String?
+  replyToEngagement     ContactEngagement?  @relation("EngagementReplies", fields: [replyToEngagementId], references: [id], onDelete: SetNull)
+  replies               ContactEngagement[] @relation("EngagementReplies")
   restrictedToSubmodule ContactSubmodule?
 
   // Todo-specific fields
-  assignedToUserId String?          // User assigned to complete the todo
-  assignedToUserName String?        @db.VarChar(255)
-  todoStatus      TodoStatus?       // Status of the todo (only for TODO source)
-  dueDate         DateTime?         @db.Timestamptz(6) // Due date for todos
+  assignedToUserId   String? // User assigned to complete the todo
+  assignedToUserName String?     @db.VarChar(255)
+  todoStatus         TodoStatus? // Status of the todo (only for TODO source)
+  dueDate            DateTime?   @db.Timestamptz(6) // Due date for todos
 
-  engagedAt   DateTime             @db.Timestamptz(6) // When the engagement occurred
-  createdAt   DateTime             @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime             @updatedAt @db.Timestamptz(6)
+  engagedAt            DateTime                     @db.Timestamptz(6) // When the engagement occurred
+  createdAt            DateTime                     @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime                     @updatedAt @db.Timestamptz(6)
   inboundEmailMessages InboundEmailMessage[]
-  replyDispatch EmailReplyDispatch?
-  emailAttachments EmailAttachment[]
-  userStates ContactEngagementUserState[]
-  tags       String[] @default([])
+  replyDispatch        EmailReplyDispatch?
+  emailAttachments     EmailAttachment[]
+  userStates           ContactEngagementUserState[]
+  tags                 String[]                     @default([])
 
+  @@unique([teamId, externalId, externalSource])
   @@index([contactId])
   @@index([teamId])
   @@index([emailInboxId])
@@ -1512,7 +1509,6 @@ model ContactEngagement {
   @@index([engagedAt])
   @@index([assignedToUserId])
   @@index([todoStatus])
-  @@unique([teamId, externalId, externalSource])
   @@index([tags], type: Gin)
 }
 
@@ -1531,16 +1527,16 @@ model ContactEngagementInboxState {
 }
 
 model ContactEngagementUserState {
-  teamId      String
-  team        Teams            @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId       String
+  team         Teams             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   engagementId String
-  engagement  ContactEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
-  isRead      Boolean
-  dismissedAt DateTime?        @db.Timestamptz(6)
-  createdAt   DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime         @updatedAt @db.Timestamptz(6)
+  engagement   ContactEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  isRead       Boolean
+  dismissedAt  DateTime?         @db.Timestamptz(6)
+  createdAt    DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime          @updatedAt @db.Timestamptz(6)
 
   @@id([engagementId, userId])
   @@index([teamId, userId, isRead])
@@ -1552,57 +1548,57 @@ enum ChangeAction {
   CREATED
   UPDATED
   DELETED
-  PROPOSED          // An intake (form, event registration) wanted this change; contact unchanged
+  PROPOSED // An intake (form, event registration) wanted this change; contact unchanged
   PROPOSAL_REJECTED // A reviewer declined a proposal; contact unchanged
 }
 
 model ContactChangeLog {
-  id          String       @id @default(uuid()) @unique
+  id          String             @id @unique @default(uuid())
   contactId   String
-  contact     Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contact     Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
   action      ChangeAction
-  fieldName   String?      @db.VarChar(255) // Field that changed (null for CREATE/DELETE)
-  oldValue    String?      @db.Text         // Previous value (JSON for complex types)
-  newValue    String?      @db.Text         // New value (JSON for complex types)
+  fieldName   String?            @db.VarChar(255) // Field that changed (null for CREATE/DELETE)
+  oldValue    String?            @db.Text // Previous value (JSON for complex types)
+  newValue    String?            @db.Text // New value (JSON for complex types)
   metadata    Json?
-  userId      String?      // User who made the change
-  userName    String?      @db.VarChar(255) // Store name for display
+  userId      String? // User who made the change
+  userName    String?            @db.VarChar(255) // Store name for display
   // Set on the UPDATED or PROPOSAL_REJECTED entry that resolves a PROPOSED entry.
   // A proposal is pending while nothing references it; a partial unique index
   // (migration SQL) allows one resolution per proposal.
   proposalId  String?
   proposal    ContactChangeLog?  @relation("ProposalResolution", fields: [proposalId], references: [id], onDelete: SetNull)
   resolutions ContactChangeLog[] @relation("ProposalResolution")
-  createdAt   DateTime     @default(now()) @db.Timestamptz(6)
+  createdAt   DateTime           @default(now()) @db.Timestamptz(6)
 
+  // A proposal is resolved at most once.
+  @@unique([proposalId], map: "ContactChangeLog_proposal_resolution_key", where: raw("\"proposalId\" IS NOT NULL"))
   @@index([contactId])
   @@index([createdAt])
   @@index([proposalId])
-  // A proposal is resolved at most once.
-  @@unique([proposalId], map: "ContactChangeLog_proposal_resolution_key", where: raw("\"proposalId\" IS NOT NULL"))
 }
 
 // Group and UserGroup models for access control
 model Group {
-  id                    String      @id @default(uuid()) @unique
-  teamId                String
-  team                  Teams       @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  name                  String      @db.VarChar(255)
-  description           String?     @db.Text
-  canAccessAllContacts  Boolean     @default(false)  // If true, users in this group can see all contacts
-  isDefaultGroup        Boolean     @default(false)
-  modulePermissions     GroupModulePermission[]
-  createdAt             DateTime    @default(now()) @db.Timestamptz(6)
-  updatedAt             DateTime    @updatedAt @db.Timestamptz(6)
+  id                   String                  @id @unique @default(uuid())
+  teamId               String
+  team                 Teams                   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  name                 String                  @db.VarChar(255)
+  description          String?                 @db.Text
+  canAccessAllContacts Boolean                 @default(false) // If true, users in this group can see all contacts
+  isDefaultGroup       Boolean                 @default(false)
+  modulePermissions    GroupModulePermission[]
+  createdAt            DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime                @updatedAt @db.Timestamptz(6)
 
-  users       UserGroup[]
-  contacts    Contact[]
-  contactGroups ContactGroup[]
+  users                UserGroup[]
+  contacts             Contact[]
+  contactGroups        ContactGroup[]
   contactFieldAccesses ContactFieldAccess[]
-  emailInboxes EmailInbox[]
+  emailInboxes         EmailInbox[]
   inboundEmailMessages InboundEmailMessage[]
   contactAccessReviews ContactAccessReview[]
-  teamsDefaultOidcFor Teams[] @relation("DefaultOidcGroup")
+  teamsDefaultOidcFor  Teams[]               @relation("DefaultOidcGroup")
 
   @@unique([teamId, name])
   @@index([teamId])
@@ -1612,8 +1608,8 @@ model Group {
 model UserGroup {
   userId    String
   groupId   String
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  group     Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
 
   @@id([userId, groupId])
@@ -1622,7 +1618,7 @@ model UserGroup {
 }
 
 model GroupModulePermission {
-  id        String    @id @default(uuid()) @unique
+  id        String    @id @unique @default(uuid())
   groupId   String
   group     Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
   module    AppModule

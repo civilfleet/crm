@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as registrationModule from "../src/lib/public-events/registration";
+import * as confirmationModule from "../src/lib/public-forms/confirmation";
 import * as submissionModule from "../src/lib/public-forms/submission";
 import {
   ensureConsumer,
@@ -235,6 +236,8 @@ test("intake pipelines keep the event and form streams and rejection rules", () 
         FormSubmissionRejectedError: class extends Error {},
       },
       "@/services/events": {},
+      "@/lib/public-forms/confirmation": confirmationModule,
+      "@/services/form-confirmations": {},
     });
   assert.deepEqual(
     intakePipelines.map((p) => [p.stream, p.consumer, p.failureSubject]),
@@ -248,6 +251,11 @@ test("intake pipelines keep the event and form streams and rejection rules", () 
         "SEAWATCH_FORM_SUBMISSIONS",
         "crm-form-submissions-v1",
         "seawatch.forms.submissions.failed.v1",
+      ],
+      [
+        "SEAWATCH_FORM_CONFIRMATIONS",
+        "crm-form-confirmations-v1",
+        "seawatch.forms.confirmations.failed.v1",
       ],
     ],
   );

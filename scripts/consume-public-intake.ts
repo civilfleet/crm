@@ -7,12 +7,17 @@ import {
   FORM_COUNT_INTERVAL_MS,
   publishFormCounts,
 } from "../src/lib/public-forms/counts";
+import { createPublishedFormReader } from "../src/lib/public-forms/published-form";
 import {
   type IntakeJetStream,
   type IntakeManager,
   runIntakePipelines,
 } from "../src/lib/public-intake/consumer";
 import { intakePipelines } from "../src/lib/public-intake/pipelines";
+import {
+  removeExpiredUnconfirmed,
+  sendDueConfirmations,
+} from "../src/services/form-confirmations";
 import { getFormCountRows } from "../src/services/forms";
 
 // Public intake consumer: event registrations and website form submissions on
@@ -77,6 +82,64 @@ async function main() {
   void publishCounts();
   const countTimer = setInterval(publishCounts, FORM_COUNT_INTERVAL_MS);
   callbacks.push(() => clearInterval(countTimer));
+
+  // Form confirmation e-mails (double opt-in), every half minute, and the
+  // removal of what was never confirmed, every hour. Without the website
+  // address or the signing key nothing is sent; submissions keep waiting.
+  const websiteUrl = process.env.PUBLIC_WEBSITE_URL;
+  const confirmationKey = process.env.FORM_CONFIRMATION_KEY;
+  if (websiteUrl && confirmationKey) {
+    const readForm = createPublishedFormReader({ websiteUrl });
+    let isSending = false;
+    const sendConfirmations = async () => {
+      if (isSending || stopping) return;
+      isSending = true;
+      try {
+        const result = await sendDueConfirmations({
+          readForm,
+          websiteUrl,
+          key: confirmationKey,
+        });
+        if (result.sent || result.skipped || result.waiting)
+          console.info("Form confirmations:", JSON.stringify(result));
+      } catch (error) {
+        console.error(
+          "Form confirmations not sent; retrying on the next round.",
+          JSON.stringify({ errors: consumerErrorCodes(error) }),
+        );
+      } finally {
+        isSending = false;
+      }
+    };
+    const removeExpired = async () => {
+      if (stopping) return;
+      try {
+        const result = await removeExpiredUnconfirmed();
+        if (result.submissionsRemoved)
+          console.info(
+            "Unconfirmed form submissions removed:",
+            JSON.stringify(result),
+          );
+      } catch (error) {
+        console.error(
+          "Unconfirmed form submissions not removed; retrying in an hour.",
+          JSON.stringify({ errors: consumerErrorCodes(error) }),
+        );
+      }
+    };
+    void sendConfirmations();
+    void removeExpired();
+    const sendTimer = setInterval(sendConfirmations, 30_000);
+    const removeTimer = setInterval(removeExpired, 60 * 60_000);
+    callbacks.push(() => {
+      clearInterval(sendTimer);
+      clearInterval(removeTimer);
+    });
+  } else {
+    console.warn(
+      "PUBLIC_WEBSITE_URL or FORM_CONFIRMATION_KEY not set: form confirmation e-mails are not sent.",
+    );
+  }
 
   phase = "pipelines";
   try {

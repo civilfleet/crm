@@ -38,6 +38,7 @@ const settingsSchema = z
     teamId: z.string().min(1),
     publicCount: z.boolean().optional(),
     goal: z.number().int().positive().max(100_000_000).nullable().optional(),
+    countConfirmedOnly: z.boolean().optional(),
   })
   .strict();
 

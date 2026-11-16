@@ -3,6 +3,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import {
   CalendarClock,
+  CircleCheck,
   CircleUserRound,
   Globe,
   Inbox,
@@ -40,6 +41,8 @@ type FormSubmissionRow = {
   submittedAt: string;
   receivedAt: string;
   answers: FormSubmissionAnswer[];
+  confirmationRequested: boolean;
+  confirmedAt: string | null;
 };
 
 /** Every column starts visible. */
@@ -125,6 +128,18 @@ export const FormSubmissionsTable = ({
           width: 150,
         },
         cell: ({ row }) => <DateCell value={row.original.receivedAt} />,
+      },
+      {
+        id: "confirmed",
+        meta: { label: "E-mail confirmed", icon: CircleCheck, width: 160 },
+        cell: ({ row }) =>
+          row.original.confirmedAt ? (
+            <DateCell value={row.original.confirmedAt} />
+          ) : row.original.confirmationRequested ? (
+            <TextCell value="Waiting" muted />
+          ) : (
+            <TextCell value="Not asked" muted />
+          ),
       },
       {
         id: "locale",

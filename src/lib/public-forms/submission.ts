@@ -96,6 +96,9 @@ export const formSubmissionPayload = z
         title: z.string().trim().min(1).max(255),
         revision: z.string().min(1).max(64),
         locale: z.string().min(2).max(10),
+        // Asks the CRM to confirm the e-mail address before the submission
+        // counts as confirmed. A ticked marketing consent asks for it anyway.
+        confirmation: z.enum(["email"]).optional(),
       })
       .strict(),
     page: z.string().startsWith("/").max(2048).optional(),

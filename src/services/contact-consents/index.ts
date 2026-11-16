@@ -3,7 +3,7 @@ import prisma from "@/lib/prisma";
 export type ContactConsentEntry = {
   id: string;
   purpose: string;
-  status: "GRANTED" | "WITHDRAWN";
+  status: "PENDING" | "GRANTED" | "WITHDRAWN";
   wording: string | null;
   locale: string | null;
   source: "FORM" | "MANUAL" | "EXTERNAL";
@@ -14,7 +14,10 @@ export type ContactConsentEntry = {
 
 export type ContactConsentState = {
   purpose: string;
-  /** The latest entry: what holds now. */
+  /**
+   * What holds now: the latest grant or withdrawal. A pending entry (ticked,
+   * e-mail not yet confirmed) holds only while there is none.
+   */
   current: ContactConsentEntry;
   /** Every entry for this purpose, newest first. */
   history: ContactConsentEntry[];
@@ -52,7 +55,7 @@ export const getContactConsents = async (
   }
   return [...byPurpose].map(([purpose, history]) => ({
     purpose,
-    current: history[0],
+    current: history.find((entry) => entry.status !== "PENDING") ?? history[0],
     history,
   }));
 };

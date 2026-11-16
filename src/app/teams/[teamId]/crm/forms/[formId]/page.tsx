@@ -41,6 +41,7 @@ export default async function FormDetailPage({
 
   const facts = [
     { label: "People", value: form.people.toLocaleString() },
+    { label: "Confirmed", value: form.confirmedPeople.toLocaleString() },
     { label: "Submissions", value: form.submissions.toLocaleString() },
     { label: "Last received", value: formatRecordDate(form.lastReceivedAt) },
     { label: "Form id", value: form.formId },
@@ -69,7 +70,7 @@ export default async function FormDetailPage({
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-4">
-              <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <dl className="grid grid-cols-2 gap-4 sm:grid-cols-5">
                 {facts.map((fact) => (
                   <div key={fact.label} className="min-w-0">
                     <dt className="text-xs text-muted-foreground">
@@ -91,7 +92,9 @@ export default async function FormDetailPage({
               teamId={teamId}
               formId={form.formId}
               people={form.people}
+              confirmedPeople={form.confirmedPeople}
               initialPublicCount={form.publicCount}
+              initialCountConfirmedOnly={form.countConfirmedOnly}
               initialGoal={form.goal}
               publicApiUrl={
                 process.env.PUBLIC_API_URL ?? "https://api.sea.watch"

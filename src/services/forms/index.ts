@@ -29,9 +29,12 @@ export type FormSummary = {
   submissions: number;
   /** Unique contacts who sent it. */
   people: number;
+  /** Unique contacts with a confirmed e-mail address for it. */
+  confirmedPeople: number;
   lastReceivedAt: Date;
   publicCount: boolean;
   goal: number | null;
+  countConfirmedOnly: boolean;
 };
 
 const visibleSubmissionsWhere = async (
@@ -58,7 +61,7 @@ const getFormSummaries = async (
     ...(await visibleSubmissionsWhere(teamId, viewer)),
     ...(formId ? { formId } : {}),
   };
-  const [totals, people, latest, settings] = await Promise.all([
+  const [totals, people, confirmed, latest, settings] = await Promise.all([
     prisma.formSubmission.groupBy({
       by: ["formId"],
       where,
@@ -66,6 +69,10 @@ const getFormSummaries = async (
       _max: { receivedAt: true },
     }),
     prisma.formSubmission.groupBy({ by: ["formId", "contactId"], where }),
+    prisma.formSubmission.groupBy({
+      by: ["formId", "contactId"],
+      where: { ...where, confirmedAt: { not: null } },
+    }),
     // The newest submission names the form: titles change with revisions.
     prisma.formSubmission.findMany({
       where,
@@ -81,6 +88,9 @@ const getFormSummaries = async (
   const peopleByForm = new Map<string, number>();
   for (const row of people)
     peopleByForm.set(row.formId, (peopleByForm.get(row.formId) ?? 0) + 1);
+  const confirmedByForm = new Map<string, number>();
+  for (const row of confirmed)
+    confirmedByForm.set(row.formId, (confirmedByForm.get(row.formId) ?? 0) + 1);
   const latestByForm = new Map(latest.map((row) => [row.formId, row]));
   const settingByForm = new Map(settings.map((row) => [row.formId, row]));
 
@@ -90,9 +100,12 @@ const getFormSummaries = async (
     revision: latestByForm.get(row.formId)?.formRevision ?? "",
     submissions: row._count._all,
     people: peopleByForm.get(row.formId) ?? 0,
+    confirmedPeople: confirmedByForm.get(row.formId) ?? 0,
     lastReceivedAt: row._max.receivedAt ?? new Date(0),
     publicCount: settingByForm.get(row.formId)?.publicCount ?? false,
     goal: settingByForm.get(row.formId)?.goal ?? null,
+    countConfirmedOnly:
+      settingByForm.get(row.formId)?.countConfirmedOnly ?? false,
   }));
 };
 
@@ -188,6 +201,8 @@ export type FormSubmissionRow = {
   submittedAt: Date;
   receivedAt: Date;
   answers: FormSubmissionAnswer[];
+  confirmationRequested: boolean;
+  confirmedAt: Date | null;
 };
 
 /** One form's submissions, newest first unless asked otherwise. */
@@ -241,6 +256,8 @@ export const getFormSubmissionsPage = async (
         submittedAt: true,
         receivedAt: true,
         answers: true,
+        confirmationRequested: true,
+        confirmedAt: true,
         contact: { select: { id: true, name: true, primaryEmail: true } },
       },
     }),
@@ -265,7 +282,11 @@ export const getFormSubmissionsPage = async (
 export const updateFormSetting = async (
   teamId: string,
   formId: string,
-  input: { publicCount?: boolean; goal?: number | null },
+  input: {
+    publicCount?: boolean;
+    goal?: number | null;
+    countConfirmedOnly?: boolean;
+  },
 ) => {
   const received = await prisma.formSubmission.findFirst({
     where: { teamId, formId },
@@ -286,25 +307,45 @@ export const updateFormSetting = async (
  */
 export const getFormCountRows = async (): Promise<FormCountRow[]> => {
   const settings = await prisma.formSetting.findMany({
-    select: { teamId: true, formId: true, publicCount: true, goal: true },
+    select: {
+      teamId: true,
+      formId: true,
+      publicCount: true,
+      goal: true,
+      countConfirmedOnly: true,
+    },
   });
   const shown = settings.filter((setting) => setting.publicCount);
   const counts = new Map<string, number>();
   if (shown.length) {
     const rows = await prisma.$queryRaw<
-      Array<{ teamId: string; formId: string; count: number }>
+      Array<{
+        teamId: string;
+        formId: string;
+        count: number;
+        confirmed: number;
+      }>
     >`
-      SELECT "teamId", "formId", COUNT(DISTINCT "contactId")::int AS "count"
+      SELECT "teamId", "formId",
+        COUNT(DISTINCT "contactId")::int AS "count",
+        COUNT(DISTINCT "contactId") FILTER (WHERE "confirmedAt" IS NOT NULL)::int AS "confirmed"
       FROM "FormSubmission"
       WHERE ("teamId", "formId") IN (${Prisma.join(
         shown.map(({ teamId, formId }) => Prisma.sql`(${teamId}, ${formId})`),
       )})
       GROUP BY "teamId", "formId"
     `;
-    for (const row of rows)
-      counts.set(`${row.teamId}:${row.formId}`, row.count);
+    const confirmedOnly = new Set(
+      shown
+        .filter((setting) => setting.countConfirmedOnly)
+        .map(({ teamId, formId }) => `${teamId}:${formId}`),
+    );
+    for (const row of rows) {
+      const key = `${row.teamId}:${row.formId}`;
+      counts.set(key, confirmedOnly.has(key) ? row.confirmed : row.count);
+    }
   }
-  return settings.map((setting) => ({
+  return settings.map(({ countConfirmedOnly: _, ...setting }) => ({
     ...setting,
     count: counts.get(`${setting.teamId}:${setting.formId}`) ?? 0,
   }));

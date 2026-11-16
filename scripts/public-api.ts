@@ -1,6 +1,10 @@
 import "dotenv/config";
 import { createHash } from "node:crypto";
-import { createServer } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import {
   DiscardPolicy,
   jetstream,
@@ -15,6 +19,14 @@ import {
   REGISTRATION_SUBJECT,
   registrationPayload,
 } from "../src/lib/public-events/registration";
+import {
+  FORM_CONFIRMATION_FAILURE_SUBJECT,
+  FORM_CONFIRMATION_PATH,
+  FORM_CONFIRMATION_STREAM,
+  FORM_CONFIRMATION_SUBJECT,
+  formConfirmationRequest,
+  verifyConfirmationToken,
+} from "../src/lib/public-forms/confirmation";
 import {
   FORM_COUNT_CACHE_SECONDS,
   FORM_COUNT_PATH,
@@ -141,6 +153,26 @@ async function main() {
         max_age: 0,
       },
       {
+        name: FORM_CONFIRMATION_STREAM,
+        subjects: [FORM_CONFIRMATION_SUBJECT],
+        storage: StorageType.File,
+        retention: RetentionPolicy.Workqueue,
+        discard: DiscardPolicy.New,
+        max_bytes: 64 * 1024 ** 2,
+        max_msg_size: 1024,
+        max_age: 0,
+        duplicate_window: 24 * 60 * 60 * 1e9,
+      },
+      {
+        name: "SEAWATCH_FORM_CONFIRMATION_FAILURES",
+        subjects: [FORM_CONFIRMATION_FAILURE_SUBJECT],
+        retention: RetentionPolicy.Limits,
+        discard: DiscardPolicy.New,
+        storage: StorageType.File,
+        max_bytes: 16 * 1024 ** 2,
+        max_age: 0,
+      },
+      {
         // One subject per form; only its latest count is kept.
         name: FORM_COUNT_STREAM,
         subjects: [`${FORM_COUNT_SUBJECT_PREFIX}.>`],
@@ -222,6 +254,107 @@ async function main() {
     countCache.set(subject, stored);
     return stored;
   };
+  // The website's confirmation page posts the token from the e-mail link.
+  // A valid signature is all the bridge checks; the CRM consumer does the
+  // rest (an unknown or already confirmed submission changes nothing).
+  const handleConfirmation = async (
+    req: IncomingMessage,
+    origin: string | undefined,
+    respond: (status: number, body: unknown) => void,
+    res: ServerResponse,
+  ) => {
+    if (origin && !origins.has(origin)) {
+      respond(403, { error: "Origin not allowed" });
+      return;
+    }
+    if (req.method === "OPTIONS") {
+      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+    if (req.method !== "POST") {
+      res.setHeader("Allow", "POST, OPTIONS");
+      respond(405, { error: "Method not allowed" });
+      return;
+    }
+    if (!req.headers["content-type"]?.startsWith("application/json")) {
+      respond(415, { error: "JSON required" });
+      return;
+    }
+    const key = process.env.FORM_CONFIRMATION_KEY;
+    if (!key) {
+      respond(503, { error: "Confirmations unavailable" });
+      return;
+    }
+    try {
+      let size = 0;
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) {
+        size += chunk.length;
+        if (size > 1024) {
+          respond(413, { error: "Request too large" });
+          return;
+        }
+        chunks.push(Buffer.from(chunk));
+      }
+      const body = formConfirmationRequest.safeParse(
+        JSON.parse(Buffer.concat(chunks).toString("utf8")),
+      );
+      const submissionId = body.success
+        ? verifyConfirmationToken(body.data.token, key)
+        : null;
+      if (!submissionId) {
+        respond(400, { error: "Invalid or expired confirmation link" });
+        return;
+      }
+      // Shares the per-IP budget of form submissions.
+      const forwarded = req.headers["x-forwarded-for"];
+      const ip =
+        typeof forwarded === "string"
+          ? forwarded.split(",").at(-1)?.trim()
+          : req.socket.remoteAddress;
+      if (!process.env.RATE_LIMIT_HASH_KEY)
+        throw new Error("Rate limit key not configured");
+      const addressKey = createHash("sha256")
+        .update(`${process.env.RATE_LIMIT_HASH_KEY}:${ip}`)
+        .digest("hex");
+      try {
+        await js.publish(
+          `${FORM_RATE_LIMIT_SUBJECT_PREFIX}.${addressKey}`,
+          "1",
+        );
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          /maximum messages|message limit|maximum number/i.test(error.message)
+        ) {
+          res.setHeader("Retry-After", "3600");
+          respond(429, { error: "Too many attempts" });
+          return;
+        }
+        throw error;
+      }
+      await js.publish(
+        FORM_CONFIRMATION_SUBJECT,
+        JSON.stringify({
+          version: 1,
+          submissionId,
+          confirmedAt: new Date().toISOString(),
+        }),
+        { msgID: `confirm:${submissionId}` },
+      );
+      respond(202, { status: "confirmed" });
+    } catch (error) {
+      respond(error instanceof SyntaxError ? 400 : 503, {
+        error:
+          error instanceof SyntaxError
+            ? "Invalid JSON"
+            : "Confirmations unavailable. Please try again.",
+      });
+    }
+  };
   const server = createServer(async (req, res) => {
     const origin = req.headers.origin;
     if (origin && origins.has(origin)) {
@@ -284,6 +417,10 @@ async function main() {
       } catch {
         respond(503, { error: "Form counts unavailable" });
       }
+      return;
+    }
+    if (url.pathname === FORM_CONFIRMATION_PATH) {
+      await handleConfirmation(req, origin, respond, res);
       return;
     }
     const route = Object.hasOwn(intakeRoutes, req.url ?? "")

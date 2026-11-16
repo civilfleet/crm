@@ -81,7 +81,7 @@ const updates = (value: boolean) => ({
   purpose: "marketing",
 });
 
-test("a ticked marketing consent is recorded with its words", async () => {
+test("a ticked marketing consent is recorded with its words, pending", async () => {
   const team = await db.teams.create({
     data: {
       name: "Petition",
@@ -100,14 +100,15 @@ test("a ticked marketing consent is recorded with its words", async () => {
   );
   assert.equal(others.length, 0, "the privacy consent stays an answer");
   assert.equal(marketing.purpose, "marketing");
-  assert.equal(marketing.current.status, "GRANTED");
+  // Until the person confirms their e-mail address.
+  assert.equal(marketing.current.status, "PENDING");
   assert.equal(
     marketing.current.wording,
     "Voglio ricevere aggiornamenti da Sea-Watch",
   );
 });
 
-test("signing again without the tick keeps the earlier consent", async () => {
+test("a confirmed consent holds: signing again, ticked or not, does not hide it", async () => {
   const team = await db.teams.create({
     data: {
       name: "Petition",
@@ -119,14 +120,30 @@ test("signing again without the tick keeps the earlier consent", async () => {
   const { contactId } = await forms.createFormSubmission(
     petition(team.id, [privacy, updates(true)]),
   );
+  // Confirmed (as the confirmation pipeline records it).
+  await db.contactConsent.create({
+    data: {
+      teamId: team.id,
+      contactId,
+      purpose: "marketing",
+      status: "GRANTED",
+      wording: "Voglio ricevere aggiornamenti da Sea-Watch",
+      source: "FORM",
+      recordedAt: new Date("2026-11-17T11:00:00.000Z"),
+    },
+  });
   await forms.createFormSubmission(
     petition(team.id, [privacy, updates(false)], "2026-11-18T10:00:00.000Z"),
+  );
+  await forms.createFormSubmission(
+    petition(team.id, [privacy, updates(true)], "2026-11-19T10:00:00.000Z"),
   );
 
   const [marketing] = await consents.getContactConsents(contactId, team.id);
   assert.equal(marketing.current.status, "GRANTED");
-  assert.equal(marketing.history.length, 1);
-  assert.equal(await db.formSubmission.count({ where: { contactId } }), 2);
+  // Two pending entries (both ticks) and the grant; the unticked one adds none.
+  assert.equal(marketing.history.length, 3);
+  assert.equal(await db.formSubmission.count({ where: { contactId } }), 3);
 });
 
 test("another team's consents are not shown", async () => {

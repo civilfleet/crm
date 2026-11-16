@@ -192,11 +192,17 @@ What a person agreed to beyond a single form, for example to receive updates
   the words the person saw, the locale, the source (website form, by hand or
   another system), the form and submission, and when. The latest row per
   purpose is what holds now (`src/services/contact-consents`).
-- **From website forms**, a ticked consent question with a purpose becomes a
-  `GRANTED` row in the same transaction as the submission
-  (`src/services/form-submissions`). A consent question without a purpose,
-  such as agreeing to the processing of a petition signature, stays an answer
-  of that submission only.
+- **From website forms, only after the e-mail is confirmed.** A ticked
+  consent question with a purpose becomes a `PENDING` row in the same
+  transaction as the submission (`src/services/form-submissions`) and makes
+  the CRM send a confirmation e-mail. When the link is used, a `GRANTED` row
+  follows with the confirmation time (`src/services/form-confirmations`).
+  Never confirmed within 7 days, the pending row is removed with its
+  submission. A consent question without a purpose, such as agreeing to the
+  processing of a petition signature, stays an answer of that submission only.
+- **What holds now** is the latest `GRANTED` or `WITHDRAWN` row; a `PENDING`
+  row only while there is none, so signing again never hides a confirmed
+  consent.
 - **An unticked box never withdraws.** Signing again without the tick leaves
   an earlier consent as it is; only an explicit unsubscribe or a change by
   hand writes `WITHDRAWN`.
@@ -207,8 +213,19 @@ What a person agreed to beyond a single form, for example to receive updates
   permanently deletes them.
 
 Tests: `tests/public-forms.test.ts` (contract, intake),
-`tests/db/form-consent.test.ts` (real intake, unticked box, team scope) and
-`tests/db/contacts-merge.test.ts`.
+`tests/db/form-consent.test.ts` (real intake, unticked box, a confirmed
+consent holds, team scope), `tests/db/form-confirmation.test.ts`
+(confirmation, removal after 7 days) and `tests/db/contacts-merge.test.ts`.
+
+### Unconfirmed website submissions
+
+A submission that asks for e-mail confirmation (the form requires it, or a
+marketing consent was ticked) and is not confirmed within 7 days is removed
+with its pending consents, its engagement and the change proposals it made.
+The contact goes too, but only if that submission created it and nothing else
+refers to it: no other submission, registration, engagement, consent, list,
+group, event, organization, file, e-mail, attribute or change by a person
+(`removeExpiredUnconfirmed`, `tests/db/form-confirmation.test.ts`).
 
 ### Trash, restore and permanent delete
 

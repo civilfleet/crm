@@ -5,6 +5,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import test from "node:test";
 import * as publicEvents from "../src/lib/public-events/registration";
+import * as publicConfirmation from "../src/lib/public-forms/confirmation";
 import * as publicCounts from "../src/lib/public-forms/counts";
 import * as publicForms from "../src/lib/public-forms/submission";
 import { loadModule } from "./helpers/load-module";
@@ -14,6 +15,7 @@ type Publish = { subject: string; data: string; msgID?: string };
 
 const ORIGIN = "https://sea-watch.org";
 const KEY = "33333333-3333-4333-8333-333333333333";
+const CONFIRMATION_KEY = "confirmation-test-only";
 
 const formBody = (answer = "Synthetic") => ({
   version: 1,
@@ -42,6 +44,13 @@ async function startBridge(
   const before = signals.map((signal) => new Set(process.listeners(signal)));
   process.env.PUBLIC_EVENTS_ORIGINS = ORIGIN;
   process.env.RATE_LIMIT_HASH_KEY = "local-test-only";
+  const savedConfirmationKey = process.env.FORM_CONFIRMATION_KEY;
+  process.env.FORM_CONFIRMATION_KEY = CONFIRMATION_KEY;
+  t.after(() => {
+    if (savedConfirmationKey === undefined)
+      delete process.env.FORM_CONFIRMATION_KEY;
+    else process.env.FORM_CONFIRMATION_KEY = savedConfirmationKey;
+  });
   t.after(() => {
     if (saved.origins === undefined) delete process.env.PUBLIC_EVENTS_ORIGINS;
     else process.env.PUBLIC_EVENTS_ORIGINS = saved.origins;
@@ -68,6 +77,7 @@ async function startBridge(
     "../src/lib/public-events/registration": publicEvents,
     "../src/lib/public-forms/submission": publicForms,
     "../src/lib/public-forms/counts": publicCounts,
+    "../src/lib/public-forms/confirmation": publicConfirmation,
     "node:http": {
       createServer: (handler: Handler) => {
         capture(handler);
@@ -351,6 +361,58 @@ test("the CRM publishes counts only when they change", async () => {
   assert.equal(sent.at(-1)?.data, JSON.stringify({ public: false }));
 });
 
+test("confirmation route queues a validly signed confirmation once", async (t) => {
+  const bridge = await startBridge(t);
+  const submissionId = "44444444-4444-4444-8444-444444444444";
+  const token = publicConfirmation.createConfirmationToken(
+    submissionId,
+    CONFIRMATION_KEY,
+  );
+  const result = await bridge.send({
+    url: "/v1/forms/confirmations",
+    key: null,
+    body: JSON.stringify({ token }),
+  });
+  assert.equal(result.status, 202);
+  assert.deepEqual(JSON.parse(result.body), { status: "confirmed" });
+  const [limit, queued] = bridge.publishes;
+  assert.match(limit.subject, /^seawatch\.ratelimit\.forms\.[a-f0-9]{64}$/);
+  assert.equal(queued.subject, "seawatch.forms.confirmations.v1");
+  assert.equal(queued.msgID, `confirm:${submissionId}`);
+  const message = JSON.parse(queued.data);
+  assert.equal(message.submissionId, submissionId);
+  assert.ok(
+    publicConfirmation.formConfirmationMessage.safeParse(message).success,
+  );
+});
+
+test("confirmation route refuses forged tokens and bad requests", async (t) => {
+  const bridge = await startBridge(t);
+  const url = "/v1/forms/confirmations";
+  const send = (body: unknown, extra = {}) =>
+    bridge.send({ url, key: null, body: JSON.stringify(body), ...extra });
+  const forged = publicConfirmation.createConfirmationToken(
+    "44444444-4444-4444-8444-444444444444",
+    "someone else's key",
+  );
+  assert.equal((await send({ token: forged })).status, 400);
+  assert.equal((await send({ token: "nonsense" })).status, 400);
+  assert.equal((await send({ token: "x", extra: 1 })).status, 400);
+  assert.equal((await send({}, { contentType: "text/plain" })).status, 415);
+  assert.equal(
+    (await bridge.send({ url, key: null, body: "x".repeat(2000) })).status,
+    413,
+  );
+  assert.equal((await bridge.send({ url, method: "GET" })).status, 405);
+  const preflight = await bridge.send({ url, method: "OPTIONS" });
+  assert.equal(preflight.status, 204);
+  assert.equal(
+    preflight.headers.get("access-control-allow-headers"),
+    "Content-Type",
+  );
+  assert.equal(bridge.publishes.length, 0, "nothing queued or counted");
+});
+
 test("events route is unaffected by the forms route", async (t) => {
   const bridge = await startBridge(t);
   const url = "/v1/events/registrations";
@@ -426,6 +488,7 @@ test("--initialize creates the form streams per contract", async (t) => {
     "../src/lib/public-events/registration": publicEvents,
     "../src/lib/public-forms/submission": publicForms,
     "../src/lib/public-forms/counts": publicCounts,
+    "../src/lib/public-forms/confirmation": publicConfirmation,
     "node:http": { createServer: () => ({ listen: () => {} }) },
     "@nats-io/transport-node": {
       connect: async () => ({ drain: async () => resolveDone() }),
@@ -490,6 +553,15 @@ test("--initialize creates the form streams per contract", async (t) => {
     reserved <= maxFileStoreGb * 1024 ** 3 * 0.9,
     `streams reserve ${reserved} bytes, over 90% of max_file_store`,
   );
+  const confirmations = byName.get("SEAWATCH_FORM_CONFIRMATIONS");
+  assert.deepEqual(confirmations?.subjects, [
+    "seawatch.forms.confirmations.v1",
+  ]);
+  assert.equal(confirmations?.retention, "workqueue");
+  assert.deepEqual(
+    byName.get("SEAWATCH_FORM_CONFIRMATION_FAILURES")?.subjects,
+    ["seawatch.forms.confirmations.failed.v1"],
+  );
   const counts = byName.get("SEAWATCH_FORM_COUNTS");
   assert.deepEqual(counts?.subjects, ["seawatch.forms.counts.v1.>"]);
   assert.equal(counts?.max_msgs_per_subject, 1);
@@ -510,6 +582,7 @@ test("NATS authorization example grants the form subjects and consumer", async (
     "seawatch.forms.submissions.v1",
     "seawatch.ratelimit.forms.*",
     "$JS.API.STREAM.MSG.GET.SEAWATCH_FORM_COUNTS",
+    "seawatch.forms.confirmations.v1",
   ])
     assert.ok(api.includes(`"${subject}"`), subject);
   for (const subject of [
@@ -519,6 +592,8 @@ test("NATS authorization example grants the form subjects and consumer", async (
     "$JS.API.CONSUMER.MSG.NEXT.SEAWATCH_FORM_SUBMISSIONS.crm-form-submissions-v1",
     "seawatch.forms.submissions.failed.v1",
     "seawatch.forms.counts.v1.>",
+    "$JS.API.CONSUMER.MSG.NEXT.SEAWATCH_FORM_CONFIRMATIONS.crm-form-confirmations-v1",
+    "seawatch.forms.confirmations.failed.v1",
   ])
     assert.ok(crm.includes(`"${subject}"`), subject);
   assert.ok(!api.includes("seawatch.forms.submissions.failed.v1"));

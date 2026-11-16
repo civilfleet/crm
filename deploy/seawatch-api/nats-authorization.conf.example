@@ -13,7 +13,8 @@ authorization {
         "seawatch.ratelimit.events.*",
         "seawatch.forms.submissions.v1",
         "seawatch.ratelimit.forms.*",
-        "$JS.API.STREAM.MSG.GET.SEAWATCH_FORM_COUNTS"
+        "$JS.API.STREAM.MSG.GET.SEAWATCH_FORM_COUNTS",
+        "seawatch.forms.confirmations.v1"
       ],
       subscribe: ["_INBOX.api.>"]
     } },
@@ -30,10 +31,16 @@ authorization {
         "$JS.API.CONSUMER.CREATE.SEAWATCH_FORM_SUBMISSIONS.>",
         "$JS.API.CONSUMER.DURABLE.CREATE.SEAWATCH_FORM_SUBMISSIONS.crm-form-submissions-v1",
         "$JS.API.CONSUMER.MSG.NEXT.SEAWATCH_FORM_SUBMISSIONS.crm-form-submissions-v1",
+        "$JS.API.STREAM.INFO.SEAWATCH_FORM_CONFIRMATIONS",
+        "$JS.API.CONSUMER.INFO.SEAWATCH_FORM_CONFIRMATIONS.crm-form-confirmations-v1",
+        "$JS.API.CONSUMER.CREATE.SEAWATCH_FORM_CONFIRMATIONS.>",
+        "$JS.API.CONSUMER.DURABLE.CREATE.SEAWATCH_FORM_CONFIRMATIONS.crm-form-confirmations-v1",
+        "$JS.API.CONSUMER.MSG.NEXT.SEAWATCH_FORM_CONFIRMATIONS.crm-form-confirmations-v1",
         "$JS.ACK.>",
         "seawatch.events.registrations.failed.v1",
         "seawatch.forms.submissions.failed.v1",
-        "seawatch.forms.counts.v1.>"
+        "seawatch.forms.counts.v1.>",
+        "seawatch.forms.confirmations.failed.v1"
       ],
       subscribe: ["_INBOX.crm.>"]
     } }

@@ -20,7 +20,9 @@ type FormCounterSettingsProps = {
   teamId: string;
   formId: string;
   people: number;
+  confirmedPeople: number;
   initialPublicCount: boolean;
+  initialCountConfirmedOnly: boolean;
   initialGoal: number | null;
   /** The public API the website calls, e.g. https://api.sea.watch. */
   publicApiUrl?: string;
@@ -34,14 +36,20 @@ export const FormCounterSettings = ({
   teamId,
   formId,
   people,
+  confirmedPeople,
   initialPublicCount,
+  initialCountConfirmedOnly,
   initialGoal,
   publicApiUrl,
 }: FormCounterSettingsProps) => {
   const { toast } = useToast();
   const switchId = useId();
+  const confirmedId = useId();
   const goalId = useId();
   const [publicCount, setPublicCount] = useState(initialPublicCount);
+  const [countConfirmedOnly, setCountConfirmedOnly] = useState(
+    initialCountConfirmedOnly,
+  );
   const [goal, setGoal] = useState(initialGoal ? String(initialGoal) : "");
   const [savedGoal, setSavedGoal] = useState(initialGoal);
   const [isSaving, setIsSaving] = useState(false);
@@ -50,6 +58,7 @@ export const FormCounterSettings = ({
   const save = async (settings: {
     publicCount?: boolean;
     goal?: number | null;
+    countConfirmedOnly?: boolean;
   }) => {
     setIsSaving(true);
     try {
@@ -76,6 +85,13 @@ export const FormCounterSettings = ({
     setPublicCount(checked);
     if (!(await save({ publicCount: checked }))) setPublicCount(!checked);
   };
+
+  const handleToggleConfirmedOnly = async (checked: boolean) => {
+    setCountConfirmedOnly(checked);
+    if (!(await save({ countConfirmedOnly: checked })))
+      setCountConfirmedOnly(!checked);
+  };
+  const counted = countConfirmedOnly ? confirmedPeople : people;
 
   const parsedGoal = goal.trim() === "" ? null : Number(goal);
   const isGoalValid =
@@ -116,6 +132,25 @@ export const FormCounterSettings = ({
               />
             </div>
 
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label htmlFor={confirmedId} className="text-sm font-medium">
+                  Count only confirmed people
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  People who confirmed their e-mail address:{" "}
+                  {confirmedPeople.toLocaleString()} of{" "}
+                  {people.toLocaleString()}.
+                </p>
+              </div>
+              <Switch
+                id={confirmedId}
+                checked={countConfirmedOnly}
+                disabled={isSaving}
+                onCheckedChange={handleToggleConfirmedOnly}
+              />
+            </div>
+
             <form onSubmit={handleSaveGoal} className="space-y-2">
               <Label htmlFor={goalId} className="text-sm font-medium">
                 Goal
@@ -149,7 +184,7 @@ export const FormCounterSettings = ({
 
             <p className="text-sm text-muted-foreground">
               {publicCount
-                ? `${people.toLocaleString()} ${people === 1 ? "person" : "people"} so far. The website sees changes within about a minute.`
+                ? `The website shows ${counted.toLocaleString()} ${counted === 1 ? "person" : "people"}. It sees changes within about a minute.`
                 : "Off: the website shows no number."}
             </p>
             {publicCount ? (

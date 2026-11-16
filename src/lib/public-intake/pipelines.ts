@@ -6,6 +6,13 @@ import {
   registrationMessage,
 } from "@/lib/public-events/registration";
 import {
+  FORM_CONFIRMATION_CONSUMER,
+  FORM_CONFIRMATION_FAILURE_SUBJECT,
+  FORM_CONFIRMATION_STREAM,
+  type FormConfirmationMessage,
+  formConfirmationMessage,
+} from "@/lib/public-forms/confirmation";
+import {
   FORM_SUBMISSION_CONSUMER,
   FORM_SUBMISSION_FAILURE_SUBJECT,
   FORM_SUBMISSION_STREAM,
@@ -14,6 +21,7 @@ import {
 } from "@/lib/public-forms/submission";
 import type { IntakePipeline } from "@/lib/public-intake/consumer";
 import { createEventRegistration } from "@/services/events";
+import { confirmFormSubmission } from "@/services/form-confirmations";
 import {
   createFormSubmission,
   FormSubmissionRejectedError,
@@ -64,7 +72,29 @@ export const formSubmissionPipeline: IntakePipeline<FormSubmissionMessage> = {
   isRejection: (error) => error instanceof FormSubmissionRejectedError,
 };
 
+// A confirmation for a submission that is gone (removed unconfirmed after
+// FORM_CONFIRMATION_DAYS) or already confirmed needs nothing more.
+export const formConfirmationPipeline: IntakePipeline<FormConfirmationMessage> =
+  {
+    name: "Form confirmations",
+    stream: FORM_CONFIRMATION_STREAM,
+    consumer: FORM_CONFIRMATION_CONSUMER,
+    failureSubject: FORM_CONFIRMATION_FAILURE_SUBJECT,
+    parse: (input) => formConfirmationMessage.safeParse(input),
+    submissionId: (data) => data.submissionId,
+    exists: async (submissionId) => {
+      const submission = await prisma.formSubmission.findUnique({
+        where: { submissionId },
+        select: { confirmedAt: true },
+      });
+      return !submission || submission.confirmedAt !== null;
+    },
+    process: (data) => confirmFormSubmission(data),
+    isRejection: () => false,
+  };
+
 export const intakePipelines = [
   eventRegistrationPipeline,
   formSubmissionPipeline,
+  formConfirmationPipeline,
 ] as IntakePipeline<never>[];

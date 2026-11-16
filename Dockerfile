@@ -77,6 +77,7 @@ COPY scripts/public-api.ts ./scripts/public-api.ts
 COPY src/lib/public-events/registration.ts ./src/lib/public-events/registration.ts
 COPY src/lib/public-forms/submission.ts ./src/lib/public-forms/submission.ts
 COPY src/lib/public-forms/counts.ts ./src/lib/public-forms/counts.ts
+COPY src/lib/public-forms/confirmation.ts ./src/lib/public-forms/confirmation.ts
 RUN yarn api:build
 
 FROM base AS runner-public-api

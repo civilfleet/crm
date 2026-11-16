@@ -14,6 +14,8 @@ done, remove it here and update `docs/DATA_RULES.md` if a rule changed.
 - [8. Test the distance filter](#8-test-the-distance-filter)
 - [9. Production checks](#9-production-checks)
 - [10. Send marketing consent to Klaviyo](#10-send-marketing-consent-to-klaviyo)
+- [11. Check submissions against the published form](#11-check-submissions-against-the-published-form)
+- [12. Unconfirmed submissions still fill existing contacts](#12-unconfirmed-submissions-still-fill-existing-contacts)
 
 ## 1. Protect `Contact.primaryEmail`
 
@@ -178,10 +180,38 @@ does not see them yet. Unsubscribes in Klaviyo do not reach the CRM either.
 
 **How.**
 - An outbox: each `marketing` consent row gets a sync state; a job subscribes
-  `GRANTED` contacts to the Klaviyo list (with the consent time and wording)
+  `GRANTED` (that is, e-mail confirmed) contacts to the Klaviyo list (with the consent time and wording)
   and unsubscribes `WITHDRAWN` ones, retrying on failure.
 - A Klaviyo webhook or a periodic pull writes `WITHDRAWN` rows (source
   `EXTERNAL`) for unsubscribes, so the CRM stays the record.
 - Decide which team's consents go to which Klaviyo list.
 
 **Size.** Medium; needs a Klaviyo API key in the CRM's secrets.
+
+## 11. Check submissions against the published form
+
+**What.** The CRM reads each form's published file
+(`/forms/<formId>/<locale>.json`) for the confirmation text, but does not yet
+compare the submission with it. A forged submission can claim a marketing
+consent the form never had; it still needs the address confirmed, but the
+recorded wording is whatever was sent.
+
+**How.** Before recording consents, read the file (cached) and keep a
+purpose only when the form has a consent question with that id and purpose;
+take the wording from the file when the revisions match. Check option
+answers against `options`, and allow missing `conditional` questions. The
+bridge could reject unknown forms the same way, before queueing.
+
+**Size.** Small to medium.
+
+## 12. Unconfirmed submissions still fill existing contacts
+
+**What.** A submission matched to an existing contact fills its empty fields
+straight away (changes to filled ones are only proposed), even when it asks
+for confirmation and is never confirmed. Someone could add a phone number or
+city to a real person's record by typing their e-mail address.
+
+**How.** For submissions that ask for confirmation, record the fills as
+proposals too, or apply them only on confirmation.
+
+**Size.** Small.

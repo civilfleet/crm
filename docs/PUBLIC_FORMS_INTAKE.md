@@ -193,6 +193,58 @@ browser ──GET /v1/forms/count?team=&form=──▶ bridge ──last message
 - If the CRM is down the bridge keeps serving the last count; new
   submissions wait in their stream and the count catches up.
 
+## Confirmation (double opt-in)
+
+A submission asks for e-mail confirmation when its form says
+`form.confirmation: "email"`, or when a consent answer with a purpose is
+ticked (marketing consent always needs a confirmed address). Asking is a
+request, not a rule: a forged submission without it is simply never
+confirmed, and everything that depends on confirmation filters on
+`confirmedAt` in the CRM.
+
+```
+CRM intake consumer ──every 30 s──▶ confirmation e-mail (SMTP)
+  text: <PUBLIC_WEBSITE_URL>/forms/<formId>/<locale>.json  (published by the website build)
+  link: <PUBLIC_WEBSITE_URL>/<locale>/form-confirmation#<submissionId>.<signature>
+website page ──POST /v1/forms/confirmations {"token"}──▶ bridge (checks the signature)
+  ──JetStream seawatch.forms.confirmations.v1──▶ CRM consumer: confirmedAt, consents GRANTED
+```
+
+- **The e-mail text** comes from the form in Strapi, through the static file
+  the website build publishes per form and language (sea-watch-nuxt
+  `doc/cms-forms.md`). The CRM reads it from `PUBLIC_WEBSITE_URL`, its own
+  configuration, never from a submission, so nobody can choose what we
+  e-mail. A form without its own text uses a default per language (it, de,
+  en). The text is plain text, escaped; only `{{name}}` is replaced. It sits
+  in a fixed layout with the button, the link and a footer
+  (`src/lib/public-forms/confirmation-email.ts`). If the site cannot be read,
+  the e-mail waits and is retried.
+- **Limits** (`src/services/form-confirmations`): one e-mail per address and
+  form per day (a second submission is not mailed again), three per address
+  per day across forms, 300 per hour in total, 25 per round. A flood waits
+  in the queue and expires instead of reaching inboxes.
+- **The token** is `<submissionId>.<HMAC-SHA256>`, signed with
+  `FORM_CONFIRMATION_KEY`, which the CRM and the bridge share. It sits in the
+  URL fragment, so it reaches no server log. The bridge answers `202` for a
+  valid signature (`400` otherwise, `503` without the key) and queues it once
+  per submission (24 h deduplication); it shares the per-IP budget of form
+  submissions.
+- **Confirming** sets `confirmedAt` and writes a `GRANTED` consent for each
+  pending one, at the confirmation time. A confirmation for a removed or
+  already confirmed submission changes nothing.
+- **Removal:** never confirmed within 7 days, the submission is removed with
+  its pending consents, engagement and open proposals, and the contact if
+  only that submission made it (`docs/DATA_RULES.md`).
+- **Counting:** the Forms page shows confirmed people; the public counter
+  counts only them when "Count only confirmed people" is on.
+
+Configuration: the CRM consumer needs `PUBLIC_WEBSITE_URL`
+(`https://sea-watch.org`, or the staging site) and `FORM_CONFIRMATION_KEY`,
+plus the SMTP settings it already uses (`SMTP_FROM`); without the first two
+it sends nothing and logs a warning. The bridge needs the same
+`FORM_CONFIRMATION_KEY` in Secret `seawatch-api-env` (optional there: the
+route answers 503 until it is set).
+
 ## Enabling a team
 
 Teams are opted out by default. After the migration is deployed:

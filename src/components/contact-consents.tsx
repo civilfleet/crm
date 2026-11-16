@@ -21,6 +21,22 @@ const SOURCE_LABELS = {
   EXTERNAL: "Another system",
 } as const;
 
+const STATUS = {
+  GRANTED: {
+    label: "Agreed",
+    className: "border-success/25 bg-success/10 text-success-strong",
+  },
+  PENDING: {
+    label: "Waiting for e-mail confirmation",
+    className: "border-warning/25 bg-warning/10 text-warning-strong",
+  },
+  WITHDRAWN: {
+    label: "Withdrawn",
+    className:
+      "border-destructive/25 bg-destructive/10 text-destructive-strong",
+  },
+} as const;
+
 type ContactConsentsProps = {
   consents: ContactConsentState[];
 };
@@ -41,22 +57,15 @@ const ContactConsents = ({ consents }: ContactConsentsProps) => (
       ) : (
         <ul className="space-y-4">
           {consents.map(({ purpose, current, history }) => {
-            const isGranted = current.status === "GRANTED";
+            const state = STATUS[current.status];
             return (
               <li key={purpose} className="space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium">
                     {PURPOSE_LABELS[purpose] ?? purpose}
                   </span>
-                  <Badge
-                    variant="outline"
-                    className={
-                      isGranted
-                        ? "border-success/25 bg-success/10 text-success-strong"
-                        : "border-destructive/25 bg-destructive/10 text-destructive-strong"
-                    }
-                  >
-                    {isGranted ? "Agreed" : "Withdrawn"}
+                  <Badge variant="outline" className={state.className}>
+                    {state.label}
                   </Badge>
                 </div>
                 {current.wording ? (
