@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { ApiError } from "@/lib/api-guard";
-import type { ListRequest, RecordSort } from "@/lib/list-request";
+import { chainOrderBy, type ListRequest, type RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import {
   assertPendingUploadsAvailable,
@@ -288,12 +288,13 @@ const getDonationAgreements = async (
     prisma.donationAgreement.findMany({
       where,
       include,
-      orderBy: [
-        donationAgreementOrderBy(
-          pagination.sort ?? { field: "createdAt", direction: "desc" },
-        ),
+      orderBy: chainOrderBy(
+        pagination.sorts?.length
+          ? pagination.sorts
+          : [{ field: "createdAt", direction: "desc" } as const],
+        donationAgreementOrderBy,
         { id: "asc" },
-      ],
+      ),
       skip: (pagination.page - 1) * pagination.pageSize,
       take: pagination.pageSize,
     }),

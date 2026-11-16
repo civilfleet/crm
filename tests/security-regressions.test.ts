@@ -291,6 +291,7 @@ test("team user updates reject group IDs from another team before writing", asyn
       actor: { userId?: string; roles?: string[] },
     ) => Promise<void>;
   }>("src/services/users/index.ts", {
+    "@/lib/list-request": listRequest,
     "@/lib/prisma": {
       $transaction: async (
         callback: (client: typeof transactionClient) => Promise<unknown>,
@@ -327,6 +328,7 @@ test("team admins cannot edit another user's global profile", async () => {
       actor: { userId?: string; roles?: string[] },
     ) => Promise<void>;
   }>("src/services/users/index.ts", {
+    "@/lib/list-request": listRequest,
     "@/lib/prisma": {
       $transaction: async () => {
         transactions++;
@@ -773,6 +775,7 @@ test("signing requires a stored, owned upload and an unsigned signer", async () 
       user: string,
     ) => Promise<unknown>;
   }>("src/services/donation-agreement/index.ts", {
+    "@/lib/list-request": listRequest,
     ...base,
     "@/types": { FundingStatus: fundingStatus },
     "@/lib/prisma": {

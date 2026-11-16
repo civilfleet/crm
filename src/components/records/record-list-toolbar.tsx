@@ -106,27 +106,37 @@ export const FilterMenu = ({
 );
 
 type SortChipProps = {
-  sort: RecordSort<string> | null;
-  label?: string;
+  sorts: RecordSort<string>[];
+  /** A column's label for a sort field. */
+  getLabel: (field: string) => string;
   onClear: () => void;
 };
 
-/** "↑ Sorted by Name ×", while a sort is set. */
-export const SortChip = ({ sort, label, onClear }: SortChipProps) => {
-  if (!sort) return null;
+const SortArrow = ({ direction }: { direction: RecordSort<string>["direction"] }) =>
+  direction === "asc" ? (
+    <ArrowUp aria-label="ascending" className="size-3.5 shrink-0" />
+  ) : (
+    <ArrowDown aria-label="descending" className="size-3.5 shrink-0" />
+  );
+
+/** "Sorted by ↑ Name, then ↓ City ×", while a sort is set. */
+export const SortChip = ({ sorts, getLabel, onClear }: SortChipProps) => {
+  if (sorts.length === 0) return null;
   return (
-    <span className="inline-flex h-7 items-center gap-1 rounded-md border bg-card pr-0.5 pl-2 text-xs">
-      {sort.direction === "asc" ? (
-        <ArrowUp aria-hidden="true" className="size-3.5" />
-      ) : (
-        <ArrowDown aria-hidden="true" className="size-3.5" />
-      )}
-      Sorted by {label ?? sort.field}
+    <span className="inline-flex h-7 max-w-full items-center gap-1 rounded-md border bg-card pr-0.5 pl-2 text-xs">
+      <span className="shrink-0">Sorted by</span>
+      {sorts.map((sort, index) => (
+        <span key={sort.field} className="inline-flex min-w-0 items-center gap-0.5">
+          {index > 0 ? <span className="pr-0.5">, then</span> : null}
+          <SortArrow direction={sort.direction} />
+          <span className="truncate">{getLabel(sort.field)}</span>
+        </span>
+      ))}
       <button
         type="button"
-        aria-label="Clear sort"
+        aria-label={sorts.length > 1 ? "Clear sorting" : "Clear sort"}
         onClick={onClear}
-        className="flex size-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
+        className="flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden"
       >
         <X className="size-3.5" />
       </button>
@@ -263,10 +273,9 @@ export const RecordListToolbar = <
   filterMenuLabel,
   start,
 }: RecordListToolbarProps<TData, F, V>) => {
-  const sortLabel = list.sort
-    ? columns.find((column) => column.meta?.sortField === list.sort?.field)
-        ?.meta?.label
-    : undefined;
+  const getSortLabel = (field: string) =>
+    columns.find((column) => column.meta?.sortField === field)?.meta?.label ??
+    field;
 
   return (
     <>
@@ -290,9 +299,9 @@ export const RecordListToolbar = <
             ) : null}
             {list.view === "calendar" ? null : (
               <SortChip
-                sort={list.sort}
-                label={sortLabel}
-                onClear={() => list.setSort(null)}
+                sorts={list.sorts}
+                getLabel={getSortLabel}
+                onClear={() => list.setSorts([])}
               />
             )}
           </>

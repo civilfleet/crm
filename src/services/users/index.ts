@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import type { RecordSort } from "@/lib/list-request";
+import { chainOrderBy, type RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import { ensureDefaultGroup } from "@/services/groups";
 import { type AppModule, DEFAULT_TEAM_MODULES, Roles } from "@/types";
@@ -346,20 +346,22 @@ const NULLABLE_USER_SORT_FIELDS = new Set<UserSortField>([
   "lastLoginAt",
 ]);
 
-const getUserOrderBy = (
-  sort?: RecordSort<UserSortField>,
-): Prisma.UserOrderByWithRelationInput[] => {
-  if (!sort) return [{ createdAt: "desc" }, { id: "asc" }];
-  // The id keeps rows with equal values in one order across pages.
-  const tieBreaker: Prisma.UserOrderByWithRelationInput = { id: "asc" };
+const userOrderStep = (
+  sort: RecordSort<UserSortField>,
+): Prisma.UserOrderByWithRelationInput | Prisma.UserOrderByWithRelationInput[] => {
   if (NULLABLE_USER_SORT_FIELDS.has(sort.field)) {
-    return [
-      { [sort.field]: { sort: sort.direction, nulls: "last" } },
-      tieBreaker,
-    ];
+    return { [sort.field]: { sort: sort.direction, nulls: "last" } };
   }
-  return [{ [sort.field]: sort.direction }, tieBreaker];
+  return { [sort.field]: sort.direction };
 };
+
+/** The order of a page: the asked-for orders, then the id as tie-breaker. */
+const getUserOrderBy = (
+  sorts?: readonly RecordSort<UserSortField>[],
+): Prisma.UserOrderByWithRelationInput[] =>
+  sorts?.length
+    ? chainOrderBy(sorts, userOrderStep, { id: "asc" })
+    : [{ createdAt: "desc" }, { id: "asc" }];
 
 const getUsers = async (
   {
@@ -375,7 +377,7 @@ const getUsers = async (
   pagination?: {
     page: number;
     pageSize: number;
-    sort?: RecordSort<UserSortField>;
+    sorts?: RecordSort<UserSortField>[];
   },
   filters?: {
     field?: string;
@@ -545,7 +547,7 @@ const getUsers = async (
     prisma.user.findMany({
       where,
       include,
-      orderBy: getUserOrderBy(pagination.sort),
+      orderBy: getUserOrderBy(pagination.sorts),
       skip,
       take: pageSize,
     }),

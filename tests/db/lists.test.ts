@@ -16,7 +16,7 @@ import {
   stable across pages, and that each filter does what its chip says.
 */
 
-type Page = { page: number; pageSize: number; sort?: Sort };
+type Page = { page: number; pageSize: number; sorts?: Sort[] };
 type Sort = { field: string; direction: "asc" | "desc" };
 type Result<T> = { data: T[]; total: number };
 
@@ -50,7 +50,7 @@ type TeamsService = {
     modules: string[];
     page: number;
     pageSize: number;
-    sort: Sort;
+    sorts: Sort[];
   }) => Promise<Result<{ id: string; name: string; city: string | null }>>;
 };
 
@@ -138,7 +138,7 @@ test("transactions: pages hold only the team's rows, each exactly once", async (
       pagination: {
         page,
         pageSize: 2,
-        sort: { field: "amount", direction: "asc" },
+        sorts: [{ field: "amount", direction: "asc" }],
       },
     }),
   );
@@ -263,7 +263,7 @@ test("funding requests: status filter, organization scope and sort", async () =>
       { teamId: team.id, orgId: "" },
       "",
       [],
-      { ...page, sort: { field: "amountAgreed", direction } },
+      { ...page, sorts: [{ field: "amountAgreed", direction }] },
     );
     assert.deepEqual(ids(sorted.data), [first.fundingRequest.id, second.id]);
   }
@@ -272,7 +272,7 @@ test("funding requests: status filter, organization scope and sort", async () =>
     { teamId: team.id, orgId: "" },
     "",
     [],
-    { ...page, sort: { field: "organization", direction: "asc" } },
+    { ...page, sorts: [{ field: "organization", direction: "asc" }] },
   );
   assert.deepEqual(ids(byOrganization.data), [
     second.id,
@@ -372,12 +372,12 @@ test("teams: search, module filter and city sort with empty cities last", async 
       modules: [],
       page: 1,
       pageSize: 50,
-      sort: { field: "createdAt", direction: "desc" },
+      sorts: [{ field: "createdAt", direction: "desc" }],
       ...input,
     });
 
   assert.deepEqual(
-    (await read({ sort: { field: "city", direction: "asc" } })).data.map(
+    (await read({ sorts: [{ field: "city", direction: "asc" }] })).data.map(
       ({ name }) => name,
     ),
     ["Gamma", "Alpha", "Beta"],
@@ -386,7 +386,7 @@ test("teams: search, module filter and city sort with empty cities last", async 
     (
       await read({
         modules: ["FUNDING"],
-        sort: { field: "name", direction: "asc" },
+        sorts: [{ field: "name", direction: "asc" }],
       })
     ).data.map(({ name }) => name),
     ["Beta", "Gamma"],

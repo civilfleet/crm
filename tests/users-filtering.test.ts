@@ -79,7 +79,7 @@ test("users route forwards field and group filters with pagination", async () =>
   assert.deepEqual(getUsersArguments, [
     { teamId: "team-a", organizationId: undefined },
     "Berlin",
-    { page: 2, pageSize: 50 },
+    { page: 2, pageSize: 50, sorts: [] },
     { field: "city", groupId: "group-a" },
   ]);
 });
@@ -94,6 +94,7 @@ test("user query combines team, group, and selected-field filters", async () => 
       filters: { field: string; groupId: string },
     ) => Promise<unknown>;
   }>("src/services/users/index.ts", {
+    "@/lib/list-request": listRequest,
     "@/lib/prisma": {
       user: {
         findMany: async ({ where }: { where: unknown }) => {
@@ -145,6 +146,7 @@ test("no-group filter is limited to memberships in the current team", async () =
       filters: { groupId: string },
     ) => Promise<unknown>;
   }>("src/services/users/index.ts", {
+    "@/lib/list-request": listRequest,
     "@/lib/prisma": {
       user: {
         findMany: async ({ where }: { where: { AND: unknown[] } }) => {

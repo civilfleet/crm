@@ -86,3 +86,28 @@ test("the size limit leaves room for many filters", () => {
   }));
   assert.ok(JSON.stringify({ filters }).length < MAX_VIEW_SETTINGS_BYTES);
 });
+
+test("saves several orders, at most three; old single orders still load", () => {
+  const sort = (field: string) => ({ field, direction: "asc" as const });
+  assert.ok(
+    saveViewPreferenceSchema.safeParse({
+      key: KEY,
+      settings: { sorts: [sort("name"), sort("city")] },
+    }).success,
+  );
+  assert.equal(
+    saveViewPreferenceSchema.safeParse({
+      key: KEY,
+      settings: {
+        sorts: [sort("a"), sort("b"), sort("c"), sort("d")],
+      },
+    }).success,
+    false,
+  );
+  assert.ok(
+    saveViewPreferenceSchema.safeParse({
+      key: KEY,
+      settings: { sort: sort("name") },
+    }).success,
+  );
+});

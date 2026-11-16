@@ -55,10 +55,7 @@ export async function GET(req: Request) {
         {
           page: list.page,
           pageSize: list.pageSize,
-          sort: (list.sort ?? {
-            field: "startDate",
-            direction: "desc",
-          }) as RecordSort<EventSortField>,
+          sorts: list.sorts as RecordSort<EventSortField>[],
         },
       );
       return NextResponse.json(

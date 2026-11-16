@@ -67,10 +67,7 @@ export async function GET(req: Request) {
         const result = await getFilesPage(scope, searchQuery, {
           page: list.page,
           pageSize: list.pageSize,
-          sort: (list.sort ?? {
-            field: "createdAt",
-            direction: "desc",
-          }) as RecordSort<FileSortField>,
+          sorts: list.sorts as RecordSort<FileSortField>[],
           types,
         });
         return NextResponse.json(

@@ -464,8 +464,8 @@ export default function OrganizationTable({
           )
         }
         noun={{ one: "organization", other: "organizations" }}
-        sort={list.sort}
-        onSortChange={list.setSort}
+        sorts={list.sorts}
+        onSortsChange={list.setSorts}
         columnVisibility={list.columnVisibility.visibility}
         view={list.view === "cards" ? "cards" : "table"}
         renderCards={(rows) =>

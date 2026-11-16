@@ -703,8 +703,8 @@ export default function ContactListsManager({
           )
         }
         noun={{ one: "list", other: "lists" }}
-        sort={list.sort}
-        onSortChange={list.setSort}
+        sorts={list.sorts}
+        onSortsChange={list.setSorts}
         columnVisibility={list.columnVisibility.visibility}
         view={list.view === "cards" ? "cards" : "table"}
         renderCards={(rows) => rows.map((row) => renderListCard(row))}

@@ -58,14 +58,23 @@ after(disconnect);
 
 const page = { page: 1, pageSize: 50 };
 
+/** Each field alone in both directions, then each after another field. */
 const eachSort = async (
   fields: readonly string[],
-  read: (sort: Sort) => Promise<{ data: unknown[] }>,
+  read: (sorts: Sort[]) => Promise<{ data: unknown[] }>,
 ) => {
   for (const field of fields) {
     for (const direction of ["asc", "desc"] as const) {
-      const result = await read({ field, direction });
+      const result = await read([{ field, direction }]);
       assert.ok(Array.isArray(result.data), `${field} ${direction}`);
+    }
+    const before = fields.find((other) => other !== field);
+    if (before) {
+      const result = await read([
+        { field: before, direction: "desc" },
+        { field, direction: "asc" },
+      ]);
+      assert.ok(Array.isArray(result.data), `${before}, then ${field}`);
     }
   }
 };
@@ -113,48 +122,48 @@ test("every allowed sort of every list runs", async () => {
     data: { teamId: team.id, name: "List", type: "MANUAL" },
   });
 
-  await eachSort(contacts.CONTACT_SORT_FIELDS, (sort) =>
+  await eachSort(contacts.CONTACT_SORT_FIELDS, (sorts) =>
     contacts.getTeamContacts(team.id, undefined, submitter.id, [], ["Admin"], {
       ...page,
-      sort,
+      sorts,
     }),
   );
-  await eachSort(organizations.ORGANIZATION_SORT_FIELDS, (sort) =>
-    organizations.getOrganizations("", team.id, [], { ...page, sort }),
+  await eachSort(organizations.ORGANIZATION_SORT_FIELDS, (sorts) =>
+    organizations.getOrganizations("", team.id, [], { ...page, sorts }),
   );
-  await eachSort(users.USER_SORT_FIELDS, (sort) =>
-    users.getUsers({ teamId: team.id }, "", { ...page, sort }),
+  await eachSort(users.USER_SORT_FIELDS, (sorts) =>
+    users.getUsers({ teamId: team.id }, "", { ...page, sorts }),
   );
-  await eachSort(files.FILE_SORT_FIELDS, (sort) =>
-    files.getFilesPage({ teamId: team.id }, "", { ...page, sort }),
+  await eachSort(files.FILE_SORT_FIELDS, (sorts) =>
+    files.getFilesPage({ teamId: team.id }, "", { ...page, sorts }),
   );
-  await eachSort(events.EVENT_SORT_FIELDS, (sort) =>
-    events.getTeamEventsPage(team.id, undefined, {}, { ...page, sort }),
+  await eachSort(events.EVENT_SORT_FIELDS, (sorts) =>
+    events.getTeamEventsPage(team.id, undefined, {}, { ...page, sorts }),
   );
-  await eachSort(events.EVENT_REGISTRATION_SORT_FIELDS, (sort) =>
-    events.getEventRegistrationsPage(event.id, team.id, "", { ...page, sort }),
+  await eachSort(events.EVENT_REGISTRATION_SORT_FIELDS, (sorts) =>
+    events.getEventRegistrationsPage(event.id, team.id, "", { ...page, sorts }),
   );
-  await eachSort(transactions.TRANSACTION_SORT_FIELDS, (sort) =>
+  await eachSort(transactions.TRANSACTION_SORT_FIELDS, (sorts) =>
     transactions.getTransactions({
       teamId: team.id,
-      pagination: { ...page, sort },
+      pagination: { ...page, sorts },
     }),
   );
-  await eachSort(fundingRequests.FUNDING_REQUEST_SORT_FIELDS, (sort) =>
+  await eachSort(fundingRequests.FUNDING_REQUEST_SORT_FIELDS, (sorts) =>
     fundingRequests.getFundingRequests({ teamId: team.id, orgId: "" }, "", [], {
       ...page,
-      sort,
+      sorts,
     }),
   );
-  await eachSort(agreements.DONATION_AGREEMENT_SORT_FIELDS, (sort) =>
+  await eachSort(agreements.DONATION_AGREEMENT_SORT_FIELDS, (sorts) =>
     agreements.getDonationAgreements({ teamId: team.id, orgId: "" }, "", {
-      pagination: { ...page, sort },
+      pagination: { ...page, sorts },
     }),
   );
-  await eachSort(teams.TEAM_SORT_FIELDS, (sort) =>
-    teams.getTeamsPage({ query: "", modules: [], ...page, sort }),
+  await eachSort(teams.TEAM_SORT_FIELDS, (sorts) =>
+    teams.getTeamsPage({ query: "", modules: [], ...page, sorts }),
   );
-  await eachSort(lists.CONTACT_LIST_SORT_FIELDS, (sort) =>
+  await eachSort(lists.CONTACT_LIST_SORT_FIELDS, (sorts) =>
     lists.getTeamContactListsPage(
       team.id,
       submitter.id,
@@ -162,7 +171,7 @@ test("every allowed sort of every list runs", async () => {
       {},
       {
         ...page,
-        sort,
+        sorts,
       },
     ),
   );
@@ -295,10 +304,100 @@ test("contacts sort by primary e-mail, without one last", async () => {
         admin.id,
         [],
         ["Admin"],
-        { ...page, sort: { field: "email", direction } },
+        { ...page, sorts: [{ field: "email", direction }] },
       )
     ).data.map((row: { name: string }) => row.name);
 
   assert.deepEqual(await names("asc"), ["Zoe", "Cy", "Ada", "Bo"]);
   assert.deepEqual(await names("desc"), ["Ada", "Cy", "Zoe", "Bo"]);
+});
+
+test("contacts sort by several columns, the first one first", async () => {
+  const admin = await createUser("Admin");
+  const team = await db.teams.create({
+    data: { name: "Multi", email: "multi@example.org" },
+  });
+  for (const [name, city] of [
+    ["Ada", "Berlin"],
+    ["Ben", "Aachen"],
+    ["Cy", "Berlin"],
+    ["Dora", "Aachen"],
+  ] as const) {
+    await db.contact.create({ data: { teamId: team.id, name, city } });
+  }
+  const names = async (sorts: Sort[]) =>
+    (
+      await contacts.getTeamContacts(
+        team.id,
+        undefined,
+        admin.id,
+        [],
+        ["Admin"],
+        {
+          ...page,
+          sorts,
+        },
+      )
+    ).data.map((row: { name: string }) => row.name);
+
+  assert.deepEqual(
+    await names([
+      { field: "city", direction: "asc" },
+      { field: "name", direction: "desc" },
+    ]),
+    ["Dora", "Ben", "Cy", "Ada"],
+  );
+  assert.deepEqual(
+    await names([
+      { field: "city", direction: "desc" },
+      { field: "name", direction: "asc" },
+    ]),
+    ["Ada", "Cy", "Ben", "Dora"],
+  );
+});
+
+test("contact lists sort by several columns too", async () => {
+  const admin = await createUser("Admin");
+  const team = await db.teams.create({
+    data: { name: "Lists", email: "lists@example.org" },
+  });
+  for (const [name, description] of [
+    ["Press", null],
+    ["Newsletter", "Monthly"],
+    ["Volunteers", "Monthly"],
+    ["Donors", "Yearly"],
+  ] as const) {
+    await db.contactList.create({
+      data: { teamId: team.id, name, description, type: "MANUAL" },
+    });
+  }
+  const names = async (sorts: Sort[]) =>
+    (
+      await lists.getTeamContactListsPage(
+        team.id,
+        admin.id,
+        ["Admin"],
+        {},
+        {
+          ...page,
+          sorts,
+        },
+      )
+    ).data.map((row: { name: string }) => row.name);
+
+  // No description comes last in both directions.
+  assert.deepEqual(
+    await names([
+      { field: "description", direction: "desc" },
+      { field: "name", direction: "desc" },
+    ]),
+    ["Donors", "Volunteers", "Newsletter", "Press"],
+  );
+  assert.deepEqual(
+    await names([
+      { field: "description", direction: "asc" },
+      { field: "name", direction: "asc" },
+    ]),
+    ["Newsletter", "Volunteers", "Donors", "Press"],
+  );
 });

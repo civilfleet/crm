@@ -170,8 +170,8 @@ export default function FundingRequestTable({
           )
         }
         noun={{ one: "funding request", other: "funding requests" }}
-        sort={list.sort}
-        onSortChange={list.setSort}
+        sorts={list.sorts}
+        onSortsChange={list.setSorts}
         columnVisibility={list.columnVisibility.visibility}
         pagination={{ ...list.pagination, total }}
       />

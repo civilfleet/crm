@@ -362,8 +362,8 @@ export default function EventTable({
             )
           }
           noun={{ one: "event", other: "events" }}
-          sort={list.sort}
-          onSortChange={list.setSort}
+          sorts={list.sorts}
+          onSortsChange={list.setSorts}
           columnVisibility={list.columnVisibility.visibility}
           view={list.view === "cards" ? "cards" : "table"}
           renderCards={(rows) => rows.map(renderEventCard)}

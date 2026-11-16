@@ -74,9 +74,7 @@ export async function GET(req: Request) {
             page: list.page,
             pageSize: list.pageSize,
             deletedOnly,
-            ...(list.sort
-              ? { sort: list.sort as RecordSort<ContactSortField> }
-              : {}),
+            sorts: list.sorts as RecordSort<ContactSortField>[],
           },
         )
       : await getTeamContacts(

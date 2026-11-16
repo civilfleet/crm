@@ -789,8 +789,8 @@ export default function ContactTable({
           )
         }
         noun={{ one: "contact", other: "contacts" }}
-        sort={list.sort}
-        onSortChange={list.setSort}
+        sorts={list.sorts}
+        onSortsChange={list.setSorts}
         columnVisibility={list.columnVisibility.visibility}
         view={list.view}
         renderCards={(rows) => rows.map((contact) => renderCard(contact))}

@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRangeSelect } from "@/hooks/use-range-select";
-import type { RecordSort } from "@/lib/list-request";
+import { nextSorts, type RecordSort } from "@/lib/list-request";
 import { TABLE_PAGE_SIZES } from "@/lib/table-page-size";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +52,8 @@ declare module "@tanstack/react-table" {
     align?: "right";
   }
 }
+
+const NO_SORTS: RecordSort<string>[] = [];
 
 const DEFAULT_WIDTH = 180;
 const SELECT_WIDTH = 40;
@@ -78,8 +80,9 @@ type RecordTableProps<TData> = {
   pagination: Pagination;
   /** "person" / "people", for "1–25 of 59 people". */
   noun: { one: string; other: string };
-  sort?: RecordSort<string> | null;
-  onSortChange?: (sort: RecordSort<string> | null) => void;
+  /** The orders, most important first. */
+  sorts?: RecordSort<string>[];
+  onSortsChange?: (sorts: RecordSort<string>[]) => void;
   columnVisibility?: VisibilityState;
   selectable?: boolean;
   renderBulkActions?: (params: {
@@ -108,8 +111,8 @@ export const RecordTable = <TData,>({
   emptyState,
   pagination,
   noun,
-  sort = null,
-  onSortChange,
+  sorts = NO_SORTS,
+  onSortsChange,
   columnVisibility,
   selectable = false,
   renderBulkActions,
@@ -165,15 +168,10 @@ export const RecordTable = <TData,>({
   );
   const clearSelection = React.useCallback(() => setRowSelection({}), []);
 
-  const handleSort = (field: string) => {
-    if (!onSortChange) return;
-    if (sort?.field !== field) {
-      onSortChange({ field, direction: "asc" });
-    } else if (sort.direction === "asc") {
-      onSortChange({ field, direction: "desc" });
-    } else {
-      onSortChange(null);
-    }
+  // Click: this column alone; Shift-click: add it (lib/list-request).
+  const handleSort = (field: string, isAdding: boolean) => {
+    if (!onSortsChange) return;
+    onSortsChange(nextSorts(sorts, field, isAdding));
   };
 
   const handleRowClick = (
@@ -260,7 +258,10 @@ export const RecordTable = <TData,>({
                       const meta = header.column.columnDef.meta;
                       const Icon = meta?.icon;
                       const sortField = meta?.sortField;
-                      const isSorted = sortField && sort?.field === sortField;
+                      const sortIndex = sortField
+                        ? sorts.findIndex((sort) => sort.field === sortField)
+                        : -1;
+                      const sort = sortIndex >= 0 ? sorts[sortIndex] : null;
                       const label = header.isPlaceholder
                         ? null
                         : (meta?.label ??
@@ -277,7 +278,13 @@ export const RecordTable = <TData,>({
                             />
                           ) : null}
                           <span className="truncate">{label}</span>
-                          {isSorted ? (
+                          {sort && sorts.length > 1 ? (
+                            // Which order this is, when there are several.
+                            <span className="text-[10px] font-semibold tabular-nums text-foreground">
+                              {sortIndex + 1}
+                            </span>
+                          ) : null}
+                          {sort ? (
                             sort.direction === "asc" ? (
                               <ArrowUp
                                 aria-hidden="true"
@@ -300,7 +307,7 @@ export const RecordTable = <TData,>({
                             left: meta?.pinned ? pinnedOffset : undefined,
                           }}
                           aria-sort={
-                            isSorted
+                            sort
                               ? sort.direction === "asc"
                                 ? "ascending"
                                 : "descending"
@@ -309,15 +316,18 @@ export const RecordTable = <TData,>({
                           className={cn(
                             "h-9 border-r border-b bg-card text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground",
                             // A sortable header is one button, edge to edge.
-                            sortField && onSortChange ? "p-0" : "px-3",
+                            sortField && onSortsChange ? "p-0" : "px-3",
                             meta?.pinned && "sticky z-30",
                             meta?.align === "right" && "text-right",
                           )}
                         >
-                          {sortField && onSortChange ? (
+                          {sortField && onSortsChange ? (
                             <button
                               type="button"
-                              onClick={() => handleSort(sortField)}
+                              onClick={(event) =>
+                                handleSort(sortField, event.shiftKey)
+                              }
+                              title="Click to sort; Shift-click to add to the order"
                               className={cn(
                                 "flex h-9 w-full cursor-pointer items-center gap-1.5 px-3 transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden focus-visible:ring-inset",
                                 meta?.align === "right" && "justify-end",

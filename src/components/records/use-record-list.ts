@@ -5,7 +5,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useColumnVisibility } from "@/components/records/records-toolbar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSavedView } from "@/hooks/use-saved-view";
-import type { RecordSort } from "@/lib/list-request";
+import {
+  formatRecordSorts,
+  MAX_SORTS,
+  type RecordSort,
+} from "@/lib/list-request";
 import { persistTablePageSize } from "@/lib/table-page-size";
 import type { ViewPreferenceSettings } from "@/validations/view-preferences";
 
@@ -129,7 +133,8 @@ export const useRecordList = <
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [searchInput, setSearchInput] = useState("");
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<RecordSort<string> | null>(null);
+  // Most important first; empty is the list's default order.
+  const [sorts, setSorts] = useState<RecordSort<string>[]>([]);
   const [filters, setFilters] = useState<F[]>([]);
   const [openFilterKey, setOpenFilterKey] = useState<string | null>(null);
   const [view, setView] = useState<V | "table">("table");
@@ -168,12 +173,17 @@ export const useRecordList = <
     const settings = settingsRef.current;
     if (saved) {
       if (saved.columns) columnVisibility.restore(saved.columns);
-      if (
-        saved.sort &&
-        (!settings.sortFields || settings.sortFields.includes(saved.sort.field))
-      ) {
-        setSort(saved.sort);
-      }
+      // Several orders, or the single one older saved views hold; any on a
+      // field this list no longer sorts by are dropped.
+      const savedSorts = saved.sorts ?? (saved.sort ? [saved.sort] : []);
+      setSorts(
+        savedSorts
+          .filter(
+            (sort) =>
+              !settings.sortFields || settings.sortFields.includes(sort.field),
+          )
+          .slice(0, MAX_SORTS),
+      );
       const savedViewName = saved.view;
       if (
         savedViewName &&
@@ -210,7 +220,7 @@ export const useRecordList = <
     if (!isViewRestored) return;
     const settings = {
       columns: columnVisibility.visibility,
-      sort,
+      sorts,
       view: chosenView,
       filters: model.write ? activeFilters.map(model.write) : activeFilters,
     };
@@ -224,7 +234,7 @@ export const useRecordList = <
     isViewRestored,
     savedView,
     columnVisibility.visibility,
-    sort,
+    sorts,
     chosenView,
     activeFilters,
     model,
@@ -232,17 +242,17 @@ export const useRecordList = <
 
   // A new search, filter or sort starts again from the first page.
   const filterSignature = JSON.stringify(activeFilters);
-  const previousQueryStateRef = useRef({ query, filterSignature, sort });
+  const previousQueryStateRef = useRef({ query, filterSignature, sorts });
   useEffect(() => {
     const previous = previousQueryStateRef.current;
     if (
       previous.query === query &&
       previous.filterSignature === filterSignature &&
-      previous.sort === sort
+      previous.sorts === sorts
     ) {
       return;
     }
-    previousQueryStateRef.current = { query, filterSignature, sort };
+    previousQueryStateRef.current = { query, filterSignature, sorts };
     setPage(1);
   });
 
@@ -255,7 +265,7 @@ export const useRecordList = <
     return Array.isArray(filter?.values) ? filter.values : [];
   };
 
-  /** The list's request: its scope, then query, page, pageSize and sort. */
+  /** The list's request: its scope, then query, page, pageSize and sorts. */
   const getSearchParams = (scope: Record<string, string> = {}) => {
     const params = new URLSearchParams({
       ...scope,
@@ -263,10 +273,7 @@ export const useRecordList = <
       page: String(page),
       pageSize: String(pageSize),
     });
-    if (sort) {
-      params.set("sort", sort.field);
-      params.set("dir", sort.direction);
-    }
+    if (sorts.length) params.set("sort", formatRecordSorts(sorts));
     return params;
   };
 
@@ -322,8 +329,9 @@ export const useRecordList = <
     searchInput,
     setSearchInput,
     query,
-    sort,
-    setSort,
+    /** The orders, most important first (RecordTable `sorts`). */
+    sorts,
+    setSorts,
     filters,
     activeFilters,
     openFilterKey,

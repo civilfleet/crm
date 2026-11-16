@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { normalizeLoginDomain } from "@/lib/auth-routing";
-import type { RecordSort } from "@/lib/list-request";
+import { chainOrderBy, type RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import { ensureDefaultGroup } from "@/services/groups";
 import { type AppModule, Roles } from "@/types";
@@ -232,13 +232,13 @@ const getTeamsPage = async ({
   modules,
   page,
   pageSize,
-  sort,
+  sorts,
 }: {
   query: string;
   modules: AppModule[];
   page: number;
   pageSize: number;
-  sort: RecordSort<TeamSortField>;
+  sorts: RecordSort<TeamSortField>[];
 }) => {
   const trimmedQuery = query.trim();
   const where: Prisma.TeamsWhereInput = {
@@ -257,20 +257,19 @@ const getTeamsPage = async ({
       modules.length ? { modules: { hasSome: modules } } : {},
     ],
   };
-  const { field, direction } = sort;
   // Empty values last; the id keeps equal values in one order across pages.
-  const first: Prisma.TeamsOrderByWithRelationInput =
-    field === "owner"
-      ? { owner: { name: { sort: direction, nulls: "last" } } }
-      : field === "users" || field === "organizations"
-        ? { [field]: { _count: direction } }
-        : field === "name" || field === "email" || field === "createdAt"
-          ? { [field]: direction }
-          : { [field]: { sort: direction, nulls: "last" } };
-  const orderBy: Prisma.TeamsOrderByWithRelationInput[] = [
-    first,
+  const orderBy = chainOrderBy<TeamSortField, Prisma.TeamsOrderByWithRelationInput>(
+    sorts,
+    ({ field, direction }) =>
+      field === "owner"
+        ? { owner: { name: { sort: direction, nulls: "last" } } }
+        : field === "users" || field === "organizations"
+          ? { [field]: { _count: direction } }
+          : field === "name" || field === "email" || field === "createdAt"
+            ? { [field]: direction }
+            : { [field]: { sort: direction, nulls: "last" } },
     { id: "asc" },
-  ];
+  );
 
   const [data, total] = await Promise.all([
     prisma.teams.findMany({

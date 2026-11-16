@@ -320,8 +320,8 @@ export default function FileTable({
         isLoading={isLoading}
         emptyState={emptyState}
         noun={{ one: "file", other: "files" }}
-        sort={list.sort}
-        onSortChange={list.setSort}
+        sorts={list.sorts}
+        onSortsChange={list.setSorts}
         columnVisibility={list.columnVisibility.visibility}
         view={list.view}
         renderCards={(rows) =>

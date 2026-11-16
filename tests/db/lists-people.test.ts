@@ -15,7 +15,7 @@ import {
 */
 
 type Sort = { field: string; direction: "asc" | "desc" };
-type Page = { page: number; pageSize: number; sort?: Sort };
+type Page = { page: number; pageSize: number; sorts?: Sort[] };
 type Result<T> = { data: T[]; total: number };
 
 type ContactsService = {
@@ -108,7 +108,7 @@ test("contacts: sorted pages of the team's active contacts", async () => {
     contacts.getTeamContacts(team.id, undefined, admin.id, [], ["Admin"], {
       page,
       pageSize: 2,
-      sort,
+      sorts: [sort],
     });
 
   const first = await read({ field: "name", direction: "asc" });
@@ -127,7 +127,7 @@ test("contacts: sorted pages of the team's active contacts", async () => {
       admin.id,
       [],
       ["Admin"],
-      { page: 1, pageSize: 10, sort: { field: "city", direction } },
+      { page: 1, pageSize: 10, sorts: [{ field: "city", direction }] },
     );
     assert.equal(names(all.data).at(-1), "Ada");
   }
@@ -139,7 +139,7 @@ test("contacts: field, attribute and group filters, and the trash", async () => 
     contacts.getTeamContacts(team.id, undefined, admin.id, filters, ["Admin"], {
       page: 1,
       pageSize: 10,
-      sort: { field: "name", direction: "asc" },
+      sorts: [{ field: "name", direction: "asc" }],
       deletedOnly,
     });
 
@@ -194,7 +194,7 @@ test("contacts: a member sees no contact of a group they are not in, on any page
     member.id,
     [],
     [],
-    { page: 1, pageSize: 10, sort: { field: "name", direction: "asc" } },
+    { page: 1, pageSize: 10, sorts: [{ field: "name", direction: "asc" }] },
   );
   assert.equal(result.total, 3);
   assert.deepEqual(names(result.data), ["Ada", "Ben", "Carla"]);
@@ -230,7 +230,7 @@ test("organizations: the team's, sorted with empty names last, and field filters
     const sorted = await organizations.getOrganizations("", team.id, [], {
       page: 1,
       pageSize: 10,
-      sort: { field: "name", direction },
+      sorts: [{ field: "name", direction }],
     });
     assert.equal(sorted.total, 3);
     assert.equal(names(sorted.data).at(-1), null);

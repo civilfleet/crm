@@ -62,10 +62,7 @@ export async function GET(req: Request) {
         modules,
         page: list.page,
         pageSize: list.pageSize,
-        sort: (list.sort ?? {
-          field: "createdAt",
-          direction: "desc",
-        }) as RecordSort<TeamSortField>,
+        sorts: list.sorts as RecordSort<TeamSortField>[],
       });
       return NextResponse.json({
         data,

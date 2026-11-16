@@ -33,10 +33,7 @@ export async function GET(
       {
         page: list.page,
         pageSize: list.pageSize,
-        sort: (list.sort ?? {
-          field: "createdAt",
-          direction: "desc",
-        }) as RecordSort<EventRegistrationSortField>,
+        sorts: list.sorts as RecordSort<EventRegistrationSortField>[],
       },
     );
     return NextResponse.json({

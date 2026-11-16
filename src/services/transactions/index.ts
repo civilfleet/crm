@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { FundingRuleError } from "@/lib/funding-status";
-import type { ListRequest, RecordSort } from "@/lib/list-request";
+import { chainOrderBy, type ListRequest, type RecordSort } from "@/lib/list-request";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import { calculateTransactionBalance } from "@/services/transactions/balance";
@@ -166,12 +166,13 @@ const getTransactions = async ({
       where,
       include,
       // The id keeps rows with equal values in one order across pages.
-      orderBy: [
-        transactionOrderBy(
-          pagination.sort ?? { field: "createdAt", direction: "desc" },
-        ),
+      orderBy: chainOrderBy(
+        pagination.sorts?.length
+          ? pagination.sorts
+          : [{ field: "createdAt", direction: "desc" } as const],
+        transactionOrderBy,
         { id: "asc" },
-      ],
+      ),
       skip: (pagination.page - 1) * pagination.pageSize,
       take: pagination.pageSize,
     }),

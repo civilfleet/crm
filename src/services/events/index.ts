@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { normalizeCountryCode } from "@/lib/countries";
 import { normalizePostalCode } from "@/lib/geo";
-import type { RecordSort } from "@/lib/list-request";
+import { chainOrderBy, type RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import { generateSlug } from "@/lib/slug";
 import {
@@ -374,35 +374,36 @@ export const getTeamEvents = async (
   return events.map(mapEvent);
 };
 
-const eventOrderBy = (
+const eventOrderStep = (
   sort: RecordSort<EventSortField>,
-): Prisma.EventOrderByWithRelationInput[] => {
+): Prisma.EventOrderByWithRelationInput | Prisma.EventOrderByWithRelationInput[] => {
   const { field, direction } = sort;
-  // The id keeps rows with equal values in one order across pages.
-  const tieBreaker: Prisma.EventOrderByWithRelationInput = { id: "asc" };
   switch (field) {
     case "registrationCount":
-      return [{ registrations: { _count: direction } }, tieBreaker];
+      return { registrations: { _count: direction } };
     case "endDate":
-      return [{ endDate: { sort: direction, nulls: "last" } }, tieBreaker];
+      return { endDate: { sort: direction, nulls: "last" } };
     case "location":
-      return [{ location: { sort: direction, nulls: "last" } }, tieBreaker];
+      return { location: { sort: direction, nulls: "last" } };
     case "state":
-      return [{ state: { sort: direction, nulls: "last" } }, tieBreaker];
+      return { state: { sort: direction, nulls: "last" } };
     case "expectedGuests":
-      return [
-        { expectedGuests: { sort: direction, nulls: "last" } },
-        tieBreaker,
-      ];
+      return { expectedGuests: { sort: direction, nulls: "last" } };
     case "type":
-      return [{ eventType: { name: direction } }, tieBreaker];
+      return { eventType: { name: direction } };
     // Ascending: private first, then public.
     case "visibility":
-      return [{ isPublic: direction }, tieBreaker];
+      return { isPublic: direction };
     default:
-      return [{ [field]: direction }, tieBreaker];
+      return { [field]: direction };
   }
 };
+
+/** The order of a page: the asked-for orders, then the id as tie-breaker. */
+const eventOrderBy = (
+  sorts?: readonly RecordSort<EventSortField>[],
+): Prisma.EventOrderByWithRelationInput[] =>
+  chainOrderBy(sorts ?? [], eventOrderStep, { id: "asc" });
 
 /** One page of a team's events, for the Events list. */
 export const getTeamEventsPage = async (
@@ -412,7 +413,7 @@ export const getTeamEventsPage = async (
   pagination: {
     page: number;
     pageSize: number;
-    sort: RecordSort<EventSortField>;
+    sorts: RecordSort<EventSortField>[];
   },
 ) => {
   const where = buildTeamEventsWhere(teamId, query, filters);
@@ -420,7 +421,7 @@ export const getTeamEventsPage = async (
     prisma.event.findMany({
       where,
       include: teamEventInclude,
-      orderBy: eventOrderBy(pagination.sort),
+      orderBy: eventOrderBy(pagination.sorts),
       skip: (pagination.page - 1) * pagination.pageSize,
       take: pagination.pageSize,
     }),
@@ -1218,7 +1219,7 @@ export const getEventRegistrationsPage = async (
   pagination: {
     page: number;
     pageSize: number;
-    sort: RecordSort<EventRegistrationSortField>;
+    sorts: RecordSort<EventRegistrationSortField>[];
   },
 ) => {
   const event = await prisma.event.findFirst({
@@ -1245,17 +1246,19 @@ export const getEventRegistrationsPage = async (
     prisma.eventRegistration.findMany({
       where,
       // The id keeps rows with equal values in one order across pages.
-      orderBy: [
-        pagination.sort.field === "phone" || pagination.sort.field === "notes"
-          ? {
-              [pagination.sort.field]: {
-                sort: pagination.sort.direction,
-                nulls: "last",
-              },
-            }
-          : { [pagination.sort.field]: pagination.sort.direction },
+      orderBy: chainOrderBy<
+        EventRegistrationSortField,
+        Prisma.EventRegistrationOrderByWithRelationInput
+      >(
+        pagination.sorts,
+        ({ field, direction }) =>
+          field === "phone"
+            ? { phone: { sort: direction, nulls: "last" } }
+            : field === "notes"
+              ? { notes: { sort: direction, nulls: "last" } }
+              : { [field]: direction },
         { id: "asc" },
-      ],
+      ),
       skip: (pagination.page - 1) * pagination.pageSize,
       take: pagination.pageSize,
       include: {

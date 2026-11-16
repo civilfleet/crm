@@ -192,11 +192,16 @@ lists, an event's registrations, transactions, funding requests, donation
 agreements and the admin teams list) is searched, filtered, sorted and paged
 **on the server**, with one table and toolbar (`src/components/records/`):
 
-- A list request sends `page`, `pageSize` (at most 100), `sort` and `dir`,
-  read by `readListRequest` / `readList` (`src/lib/list-request.ts`). Only
-  the fields a route allows can order a list; anything broken falls back to
-  the default instead of failing. Every order ends with the row id, so pages
-  never overlap or skip rows.
+- A list request sends `page`, `pageSize` (at most 100) and `sort`, read by
+  `readListRequest` / `readList` (`src/lib/list-request.ts`). `sort` holds up
+  to three orders, most important first (`sort=city:asc,name:desc`; older
+  links with `sort=name&dir=desc` still work). Only the fields a route allows
+  can order a list; anything broken falls back to the default instead of
+  failing. The orders are chained (`chainOrderBy`) and end with the row id,
+  so pages never overlap or skip rows.
+- In a list, clicking a column header sorts by that column alone; Shift-click
+  adds it as the next order (or turns, then removes, one already there).
+  Headers number the orders when there are several (`nextSorts`).
 - A caller that asks for no page (a picker, a form) still gets every row, as
   before (`paging: "optional"`).
 - Every page goes through the same access checks and team or organization

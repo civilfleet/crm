@@ -16,7 +16,7 @@ import {
 import { normalizeCountryCode } from "@/lib/countries";
 import { parseCsv, stringifyCsv } from "@/lib/csv";
 import { normalizePostalCode } from "@/lib/geo";
-import type { RecordSort } from "@/lib/list-request";
+import { chainOrderBy, type RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import { parseVCardContacts } from "@/lib/vcard";
 import { getContactVisibility } from "@/services/contacts/access";
@@ -1104,33 +1104,39 @@ export const CONTACT_SORT_FIELDS = [
 ] as const;
 export type ContactSortField = (typeof CONTACT_SORT_FIELDS)[number];
 
-const contactOrderBy = (
-  sort?: RecordSort<ContactSortField>,
-): Prisma.ContactOrderByWithRelationInput[] => {
-  // The id keeps rows with equal values in one order across pages.
-  if (!sort) return [{ createdAt: "desc" }, { id: "asc" }];
+const contactOrderStep = (
+  sort: RecordSort<ContactSortField>,
+): Prisma.ContactOrderByWithRelationInput | Prisma.ContactOrderByWithRelationInput[] => {
   const { field, direction } = sort;
   switch (field) {
     case "name":
     case "createdAt":
     case "updatedAt":
-      return [{ [field]: direction }, { id: "asc" }];
+      return { [field]: direction };
     // A copy of the primary address, kept by a trigger (see the migration
     // 20261116120000_contact_primary_email_sort).
     case "email":
-      return [{ primaryEmail: { sort: direction, nulls: "last" } }, { id: "asc" }];
+      return { primaryEmail: { sort: direction, nulls: "last" } };
     case "phone":
-      return [{ phone: { sort: direction, nulls: "last" } }, { id: "asc" }];
+      return { phone: { sort: direction, nulls: "last" } };
     case "signal":
-      return [{ signal: { sort: direction, nulls: "last" } }, { id: "asc" }];
+      return { signal: { sort: direction, nulls: "last" } };
     case "website":
-      return [{ website: { sort: direction, nulls: "last" } }, { id: "asc" }];
+      return { website: { sort: direction, nulls: "last" } };
     case "address":
-      return [{ address: { sort: direction, nulls: "last" } }, { id: "asc" }];
+      return { address: { sort: direction, nulls: "last" } };
     default:
-      return [{ city: { sort: direction, nulls: "last" } }, { id: "asc" }];
+      return { city: { sort: direction, nulls: "last" } };
   }
 };
+
+/** The order of a page: the asked-for orders, then the id as tie-breaker. */
+const contactOrderBy = (
+  sorts?: readonly RecordSort<ContactSortField>[],
+): Prisma.ContactOrderByWithRelationInput[] =>
+  sorts?.length
+    ? chainOrderBy(sorts, contactOrderStep, { id: "asc" })
+    : [{ createdAt: "desc" }, { id: "asc" }];
 
 async function getTeamContacts(
   teamId: string,
@@ -1149,7 +1155,7 @@ async function getTeamContacts(
     page: number;
     pageSize: number;
     deletedOnly?: boolean;
-    sort?: RecordSort<ContactSortField>;
+    sorts?: RecordSort<ContactSortField>[];
   },
 ): Promise<{ data: ContactType[]; total: number }>;
 async function getTeamContacts(
@@ -1162,7 +1168,7 @@ async function getTeamContacts(
     page: number;
     pageSize: number;
     deletedOnly?: boolean;
-    sort?: RecordSort<ContactSortField>;
+    sorts?: RecordSort<ContactSortField>[];
   },
 ) {
   await ensureDefaultGroup(teamId);
@@ -1694,7 +1700,7 @@ async function getTeamContacts(
     prisma.contact.findMany({
       where,
       include: contactInclude,
-      orderBy: contactOrderBy(pagination?.sort),
+      orderBy: contactOrderBy(pagination?.sorts),
       ...(pagination ? { skip, take: pageSize } : {}),
     }),
     pagination ? prisma.contact.count({ where }) : Promise.resolve(0),

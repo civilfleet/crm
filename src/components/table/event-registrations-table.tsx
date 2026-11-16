@@ -202,8 +202,8 @@ export default function EventRegistrationsTable({
           </p>
         }
         noun={{ one: "registration", other: "registrations" }}
-        sort={list.sort}
-        onSortChange={list.setSort}
+        sorts={list.sorts}
+        onSortsChange={list.setSorts}
         columnVisibility={list.columnVisibility.visibility}
         view={list.view === "cards" ? "cards" : "table"}
         renderCards={(rows) => rows.map(renderEventRegistrationCard)}

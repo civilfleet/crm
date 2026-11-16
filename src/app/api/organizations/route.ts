@@ -58,9 +58,7 @@ export async function GET(req: Request) {
         ? {
             page: list.page,
             pageSize: list.pageSize,
-            ...(list.sort
-              ? { sort: list.sort as RecordSort<OrganizationSortField> }
-              : {}),
+            sorts: list.sorts as RecordSort<OrganizationSortField>[],
           }
         : undefined,
     );

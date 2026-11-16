@@ -176,8 +176,8 @@ export default function DonationAgreementTable({
           )
         }
         noun={{ one: "donation agreement", other: "donation agreements" }}
-        sort={list.sort}
-        onSortChange={list.setSort}
+        sorts={list.sorts}
+        onSortsChange={list.setSorts}
         columnVisibility={list.columnVisibility.visibility}
         pagination={{ ...list.pagination, total }}
       />

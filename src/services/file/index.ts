@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import type { RecordSort } from "@/lib/list-request";
+import { chainOrderBy, type RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
 import { primaryContactEmailSelect } from "@/services/contact-emails";
@@ -208,30 +208,28 @@ const getFiles = async (
   });
 };
 
-const getFileOrderBy = (
+const fileOrderStep = (
   sort: RecordSort<FileSortField>,
-): Prisma.FileOrderByWithRelationInput[] => {
-  // The id keeps rows with equal values in one order across pages.
-  const tieBreaker: Prisma.FileOrderByWithRelationInput = { id: "asc" };
+): Prisma.FileOrderByWithRelationInput | Prisma.FileOrderByWithRelationInput[] => {
   if (sort.field === "name") {
-    return [
-      { name: { sort: sort.direction, nulls: "last" } },
-      { url: sort.direction },
-      tieBreaker,
-    ];
+    return [{ name: { sort: sort.direction, nulls: "last" } },
+      { url: sort.direction }];
   }
   // The people show by e-mail; files of no organization come last.
   if (sort.field === "organization") {
-    return [
-      { organization: { name: { sort: sort.direction, nulls: "last" } } },
-      tieBreaker,
-    ];
+    return { organization: { name: { sort: sort.direction, nulls: "last" } } };
   }
   if (sort.field === "createdBy" || sort.field === "updatedBy") {
-    return [{ [sort.field]: { email: sort.direction } }, tieBreaker];
+    return { [sort.field]: { email: sort.direction } };
   }
-  return [{ [sort.field]: sort.direction }, tieBreaker];
+  return { [sort.field]: sort.direction };
 };
+
+/** The order of a page: the asked-for orders, then the id as tie-breaker. */
+const getFileOrderBy = (
+  sorts?: readonly RecordSort<FileSortField>[],
+): Prisma.FileOrderByWithRelationInput[] =>
+  chainOrderBy(sorts ?? [], fileOrderStep, { id: "asc" });
 
 /**
  * One page of a Files list, with the total and the types present in it
@@ -243,12 +241,12 @@ const getFilesPage = async (
   {
     page,
     pageSize,
-    sort,
+    sorts,
     types,
   }: FileListFilters & {
     page: number;
     pageSize: number;
-    sort: RecordSort<FileSortField>;
+    sorts: RecordSort<FileSortField>[];
   },
 ) => {
   const baseWhere = combineWhere([
@@ -264,7 +262,7 @@ const getFilesPage = async (
     prisma.file.findMany({
       where,
       include: fileListInclude,
-      orderBy: getFileOrderBy(sort),
+      orderBy: getFileOrderBy(sorts),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as listRequest from "@/lib/list-request";
 import { loadModule } from "./helpers/load-module";
 import {
   distanceKm,
@@ -55,6 +56,7 @@ function registrationService() {
       email: string;
     }) => Promise<unknown>;
   }>("src/services/events/index.ts", {
+    "@/lib/list-request": listRequest,
     "@/lib/countries": {},
     "@/lib/geo": {},
     "@/lib/slug": {},

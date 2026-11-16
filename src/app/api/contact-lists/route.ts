@@ -61,10 +61,7 @@ export async function GET(request: NextRequest) {
         {
           page: list.page,
           pageSize: list.pageSize,
-          sort: (list.sort ?? {
-            field: "updatedAt",
-            direction: "desc",
-          }) as RecordSort<ContactListSortField>,
+          sorts: list.sorts as RecordSort<ContactListSortField>[],
         },
       );
       return NextResponse.json(

@@ -192,8 +192,8 @@ export default function TeamsTable({
         isLoading={isLoading}
         emptyState={emptyState}
         noun={{ one: "team", other: "teams" }}
-        sort={list.sort}
-        onSortChange={list.setSort}
+        sorts={list.sorts}
+        onSortsChange={list.setSorts}
         columnVisibility={list.columnVisibility.visibility}
         pagination={{ ...list.pagination, total }}
         selectable

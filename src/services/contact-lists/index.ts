@@ -246,7 +246,7 @@ const getTeamContactListsPage = async (
   pagination: {
     page: number;
     pageSize: number;
-    sort: RecordSort<ContactListSortField>;
+    sorts: RecordSort<ContactListSortField>[];
   },
 ) => {
   const search = query.trim().toLowerCase();
@@ -257,21 +257,35 @@ const getTeamContactListsPage = async (
         list.name.toLowerCase().includes(search) ||
         (list.description ?? "").toLowerCase().includes(search)),
   );
-  const { field, direction } = pagination.sort;
-  const factor = direction === "asc" ? 1 : -1;
+  type ListRow = (typeof lists)[number];
+  // One order, already in its direction; empty descriptions last either way.
+  const compareBy = (
+    { field, direction }: RecordSort<ContactListSortField>,
+    a: ListRow,
+    b: ListRow,
+  ) => {
+    const factor = direction === "asc" ? 1 : -1;
+    if (field === "description") {
+      return (
+        (a.description ? 0 : 1) - (b.description ? 0 : 1) ||
+        factor * (a.description ?? "").localeCompare(b.description ?? "")
+      );
+    }
+    if (field === "name") return factor * a.name.localeCompare(b.name);
+    if (field === "contactCount") {
+      return factor * (a.contactCount - b.contactCount);
+    }
+    return (
+      factor * (new Date(a[field]).getTime() - new Date(b[field]).getTime())
+    );
+  };
   const sorted = [...lists].sort((a, b) => {
-    const order =
-      field === "name"
-        ? a.name.localeCompare(b.name)
-        : field === "description"
-          ? // Lists without a description come last either way.
-            (a.description ? 0 : 1) - (b.description ? 0 : 1) ||
-            factor * (a.description ?? "").localeCompare(b.description ?? "")
-          : field === "contactCount"
-            ? a.contactCount - b.contactCount
-            : new Date(a[field]).getTime() - new Date(b[field]).getTime();
+    for (const sort of pagination.sorts) {
+      const order = compareBy(sort, a, b);
+      if (order !== 0) return order;
+    }
     // The id keeps lists with equal values in one order across pages.
-    return factor * order || a.id.localeCompare(b.id);
+    return a.id.localeCompare(b.id);
   });
   const start = (pagination.page - 1) * pagination.pageSize;
   return {

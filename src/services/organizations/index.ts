@@ -1,6 +1,6 @@
 import { type Prisma, Roles } from "@prisma/client";
 import { auth } from "@/auth";
-import type { RecordSort } from "@/lib/list-request";
+import { chainOrderBy, type RecordSort } from "@/lib/list-request";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import {
@@ -553,41 +553,46 @@ export const ORGANIZATION_SORT_FIELDS = [
 ] as const;
 export type OrganizationSortField = (typeof ORGANIZATION_SORT_FIELDS)[number];
 
-const organizationOrderBy = (
-  sort?: RecordSort<OrganizationSortField>,
-): Prisma.OrganizationOrderByWithRelationInput[] => {
-  // The id keeps rows with equal values in one order across pages.
-  if (!sort) return [{ createdAt: "desc" }, { id: "asc" }];
+const organizationOrderStep = (
+  sort: RecordSort<OrganizationSortField>,
+): Prisma.OrganizationOrderByWithRelationInput | Prisma.OrganizationOrderByWithRelationInput[] => {
   const { field, direction } = sort;
-  const tieBreaker: Prisma.OrganizationOrderByWithRelationInput = { id: "asc" };
   switch (field) {
     case "email":
     case "createdAt":
     case "isFilledByOrg":
-      return [{ [field]: direction }, tieBreaker];
+      return { [field]: direction };
     // Linked records by their name; organizations without one come last.
     case "team":
-      return [{ team: { name: direction } }, tieBreaker];
+      return { team: { name: direction } };
     case "type":
-      return [{ orgType: { name: direction } }, tieBreaker];
+      return { orgType: { name: direction } };
     case "contactPerson":
-      return [{ contactPerson: { name: direction } }, tieBreaker];
+      return { contactPerson: { name: direction } };
     case "bankName":
-      return [{ bankDetails: { bankName: direction } }, tieBreaker];
+      return { bankDetails: { bankName: direction } };
     case "name":
-      return [{ name: { sort: direction, nulls: "last" } }, tieBreaker];
+      return { name: { sort: direction, nulls: "last" } };
     case "city":
-      return [{ city: { sort: direction, nulls: "last" } }, tieBreaker];
+      return { city: { sort: direction, nulls: "last" } };
     case "country":
-      return [{ country: { sort: direction, nulls: "last" } }, tieBreaker];
+      return { country: { sort: direction, nulls: "last" } };
     case "phone":
-      return [{ phone: { sort: direction, nulls: "last" } }, tieBreaker];
+      return { phone: { sort: direction, nulls: "last" } };
     case "website":
-      return [{ website: { sort: direction, nulls: "last" } }, tieBreaker];
+      return { website: { sort: direction, nulls: "last" } };
     default:
-      return [{ taxID: { sort: direction, nulls: "last" } }, tieBreaker];
+      return { taxID: { sort: direction, nulls: "last" } };
   }
 };
+
+/** The order of a page: the asked-for orders, then the id as tie-breaker. */
+const organizationOrderBy = (
+  sorts?: readonly RecordSort<OrganizationSortField>[],
+): Prisma.OrganizationOrderByWithRelationInput[] =>
+  sorts?.length
+    ? chainOrderBy(sorts, organizationOrderStep, { id: "asc" })
+    : [{ createdAt: "desc" }, { id: "asc" }];
 
 const getOrganizations = async (
   searchQuery: string,
@@ -596,7 +601,7 @@ const getOrganizations = async (
   pagination?: {
     page: number;
     pageSize: number;
-    sort?: RecordSort<OrganizationSortField>;
+    sorts?: RecordSort<OrganizationSortField>[];
   },
 ) => {
   const fieldFilters = filters.filter((filter) => filter.type === "field");
@@ -721,7 +726,7 @@ const getOrganizations = async (
     prisma.organization.findMany({
       where,
       include: organizationListInclude,
-      orderBy: organizationOrderBy(pagination.sort),
+      orderBy: organizationOrderBy(pagination.sorts),
       skip,
       take: pageSize,
     }),

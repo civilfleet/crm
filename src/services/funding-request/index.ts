@@ -4,7 +4,7 @@ import {
   assertManualStatusChange,
   FundingRuleError,
 } from "@/lib/funding-status";
-import type { ListRequest, RecordSort } from "@/lib/list-request";
+import { chainOrderBy, type ListRequest, type RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import { handlePrismaError } from "@/lib/utils";
 import { type FileTypes, FundingStatus } from "@/types";
@@ -542,12 +542,13 @@ const getFundingRequests = async (
       where,
       select,
       // A stable tiebreaker keeps pages from overlapping on equal values.
-      orderBy: [
-        fundingRequestOrderBy(
-          pagination.sort ?? { field: "createdAt", direction: "desc" },
-        ),
+      orderBy: chainOrderBy(
+        pagination.sorts?.length
+          ? pagination.sorts
+          : [{ field: "createdAt", direction: "desc" } as const],
+        fundingRequestOrderBy,
         { id: "asc" },
-      ],
+      ),
       skip: (pagination.page - 1) * pagination.pageSize,
       take: pagination.pageSize,
     }),

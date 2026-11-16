@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_SORTS } from "@/lib/list-request";
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
@@ -31,16 +32,18 @@ export const getViewKeyScope = (key: string): ViewKeyScope => {
 /** Saved settings are small; anything bigger is a bug or abuse. */
 export const MAX_VIEW_SETTINGS_BYTES = 20_000;
 
+const sortSchema = z.object({
+  field: z.string().min(1).max(64),
+  direction: z.enum(["asc", "desc"]),
+});
+
 export const viewPreferenceSettingsSchema = z
   .object({
     columns: z.record(z.string().max(64), z.boolean()).optional(),
-    sort: z
-      .object({
-        field: z.string().min(1).max(64),
-        direction: z.enum(["asc", "desc"]),
-      })
-      .nullable()
-      .optional(),
+    /** The single order older saved views hold; read, no longer written. */
+    sort: sortSchema.nullable().optional(),
+    /** The orders, most important first. */
+    sorts: z.array(sortSchema).max(MAX_SORTS).optional(),
     view: z.enum(["table", "cards", "map", "calendar"]).optional(),
     // Each list validates its own filter shape when it reads them back.
     filters: z.array(z.unknown()).max(50).optional(),

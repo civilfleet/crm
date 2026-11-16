@@ -22,7 +22,7 @@ type UsersService = {
   getUsers: (
     scope: { teamId?: string; organizationId?: string },
     query: string,
-    pagination?: { page: number; pageSize: number; sort?: Sort },
+    pagination?: { page: number; pageSize: number; sorts?: Sort[] },
     filters?: {
       field?: string;
       groupIds?: string[];
@@ -39,7 +39,7 @@ type FilesService = {
   getFilesPage: (
     scope: { teamId?: string; organizationId?: string },
     query: string,
-    options: { page: number; pageSize: number; sort: Sort; types?: string[] },
+    options: { page: number; pageSize: number; sorts: Sort[]; types?: string[] },
   ) => Promise<
     Result<{ id: string; name: string | null }> & {
       types: Array<{ type: string; count: number }>;
@@ -56,13 +56,13 @@ type EventsService = {
       from?: string;
       to?: string;
     },
-    pagination: { page: number; pageSize: number; sort: Sort },
+    pagination: { page: number; pageSize: number; sorts: Sort[] },
   ) => Promise<Result<{ id: string; title: string }>>;
   getEventRegistrationsPage: (
     eventId: string,
     teamId: string,
     query: string,
-    pagination: { page: number; pageSize: number; sort: Sort },
+    pagination: { page: number; pageSize: number; sorts: Sort[] },
   ) => Promise<Result<{ id: string; name: string }>>;
 };
 type ListsService = {
@@ -71,7 +71,7 @@ type ListsService = {
     userId: string | undefined,
     roles: string[],
     filters: { query?: string; types?: string[] },
-    pagination: { page: number; pageSize: number; sort: Sort },
+    pagination: { page: number; pageSize: number; sorts: Sort[] },
   ) => Promise<Result<{ id: string; name: string; contactCount: number }>>;
 };
 
@@ -148,7 +148,7 @@ test("users: the team's people only, filtered by group, role and field", async (
   for (const direction of ["asc", "desc"] as const) {
     const sorted = await users.getUsers(scope, "", {
       ...page,
-      sort: { field: "name", direction },
+      sorts: [{ field: "name", direction }],
     });
     assert.equal(sorted.total, 3);
     assert.equal(names(sorted.data).at(-1), null);
@@ -201,7 +201,7 @@ test("files: scope, type filter with counts, order and the full download", async
 
   const all = await files.getFilesPage(scope, "", {
     ...page,
-    sort: { field: "name", direction: "asc" },
+    sorts: [{ field: "name", direction: "asc" }],
   });
   assert.deepEqual(names(all.data), [
     "a-report.pdf",
@@ -216,7 +216,7 @@ test("files: scope, type filter with counts, order and the full download", async
 
   const reports = await files.getFilesPage(scope, "", {
     ...page,
-    sort: { field: "name", direction: "asc" },
+    sorts: [{ field: "name", direction: "asc" }],
     types: ["REPORT"],
   });
   assert.equal(reports.total, 2);
@@ -275,7 +275,7 @@ test("events: several types, state, start dates and order by registrations", asy
   const read = (
     filters: Parameters<EventsService["getTeamEventsPage"]>[2],
     sort: Sort = { field: "startDate", direction: "asc" },
-  ) => events.getTeamEventsPage(team.id, undefined, filters, { ...page, sort });
+  ) => events.getTeamEventsPage(team.id, undefined, filters, { ...page, sorts: [sort] });
   const titles = (result: Result<{ title: string }>) =>
     result.data.map(({ title }) => title);
 
@@ -321,7 +321,7 @@ test("event registrations: only the event's, of the event's team", async () => {
   const pagination = {
     page: 1,
     pageSize: 2,
-    sort: { field: "name", direction: "asc" as const },
+    sorts: [{ field: "name", direction: "asc" as const }],
   };
 
   const first = await events.getEventRegistrationsPage(
@@ -382,7 +382,7 @@ test("contact lists: search, type and order by the number of people", async () =
     lists.getTeamContactListsPage(team.id, admin.id, ["Admin"], filters, {
       page: 1,
       pageSize: 2,
-      sort,
+      sorts: [sort],
     });
 
   const byCount = await read({}, { field: "contactCount", direction: "desc" });
