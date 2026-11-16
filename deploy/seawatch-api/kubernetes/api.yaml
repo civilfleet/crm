@@ -21,7 +21,7 @@ spec:
       containers:
         - name: api
           # Replaced by the image workflow before Argo CD is bootstrapped.
-          image: git.sea.watch/it-department/seawatch-api@sha256:6b70c3e0d4bc382fbb470354371977a1e5a354f42779add9963993e18270ca38
+          image: git.sea.watch/it-department/seawatch-api@sha256:0fb3d7ebc8dc32bc6b0b1d5cdae4b9cf2bd1d0d65b2c97fe06d6a5dfab8a4967
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -87,7 +87,7 @@ spec:
         seccompProfile: { type: RuntimeDefault }
       containers:
         - name: initialize
-          image: git.sea.watch/it-department/seawatch-api@sha256:6b70c3e0d4bc382fbb470354371977a1e5a354f42779add9963993e18270ca38
+          image: git.sea.watch/it-department/seawatch-api@sha256:0fb3d7ebc8dc32bc6b0b1d5cdae4b9cf2bd1d0d65b2c97fe06d6a5dfab8a4967
           args: ["--initialize"]
           command: [node, server.cjs]
           securityContext:
