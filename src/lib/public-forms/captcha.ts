@@ -9,10 +9,11 @@ import {
 import { deriveKey } from "altcha-lib/algorithms/pbkdf2";
 
 /*
-  Proof-of-work captcha for website forms (ALTCHA, protocol of widget 3.x).
-  The public bridge hands out a signed puzzle (GET /v1/forms/challenge); the
-  website's widget solves it while the person fills in the form and sends
-  the result in the X-Altcha header with the submission. Nothing leaves our
+  Proof-of-work captcha for the public intake routes, website forms and
+  event registrations (ALTCHA, protocol of widget 3.x). The public bridge
+  hands out a signed puzzle (GET /v1/challenge); the website's widget solves
+  it while the person fills in the form and sends the result in the X-Altcha
+  header with the submission. Nothing leaves our
   servers: no third party, no cookies, no tracking.
 
   Each solved puzzle counts once (the bridge records used ones in NATS), and
@@ -20,6 +21,9 @@ import { deriveKey } from "altcha-lib/algorithms/pbkdf2";
   can be raised during an attack without a website change.
 */
 
+/** One puzzle endpoint for all public intake (forms, event registrations). */
+export const CHALLENGE_PATH = "/v1/challenge";
+/** The first name of the same endpoint, kept for websites that use it. */
 export const FORM_CHALLENGE_PATH = "/v1/forms/challenge";
 export const CAPTCHA_HEADER = "x-altcha";
 export const CAPTCHA_LIFETIME_MS = 10 * 60_000;

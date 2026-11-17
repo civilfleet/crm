@@ -439,7 +439,7 @@ test("confirmation route refuses forged tokens and bad requests", async (t) => {
 });
 
 const CAPTCHA_ENV = {
-  CAPTCHA_MODE: "required",
+  CAPTCHA_MODE_FORMS: "required",
   CAPTCHA_KEY: "captcha-test-only",
   // Cheap enough to solve in a test.
   CAPTCHA_COST: "10",
@@ -498,6 +498,46 @@ test("with the captcha required, a solved puzzle lets one submission through", a
   assert.equal(
     preflight.headers.get("access-control-allow-headers"),
     "Content-Type, Idempotency-Key, X-Altcha",
+  );
+});
+
+test("event registrations have their own captcha switch", async (t) => {
+  const bridge = await startBridge(t, {
+    env: {
+      ...CAPTCHA_ENV,
+      CAPTCHA_MODE_FORMS: "off",
+      CAPTCHA_MODE_EVENTS: "required",
+    },
+  });
+  // The general puzzle path.
+  const challenge = JSON.parse(
+    (await bridge.send({ url: "/v1/challenge", method: "GET" })).body,
+  );
+  const solution = await solveChallenge({ challenge, deriveKey });
+  const captcha = Buffer.from(JSON.stringify({ challenge, solution })).toString(
+    "base64",
+  );
+  const url = "/v1/events/registrations";
+  const body = JSON.stringify({
+    eventId: "22222222-2222-4222-8222-222222222222",
+    name: "Synthetic",
+    email: "events@example.invalid",
+  });
+
+  const missing = await bridge.send({ url, body });
+  assert.equal(missing.status, 400);
+  assert.equal(JSON.parse(missing.body).reason, "missing");
+  assert.equal((await bridge.send({ url, body, captcha })).status, 202);
+  // Forms are still off here: no captcha needed.
+  assert.equal(
+    (
+      await bridge.send({
+        url: "/v1/forms/submissions",
+        body: JSON.stringify(formBody()),
+        key: "66666666-6666-4666-8666-666666666666",
+      })
+    ).status,
+    202,
   );
 });
 
@@ -637,6 +677,10 @@ test("--initialize creates the form streams per contract", async (t) => {
   const rate = byName.get("SEAWATCH_FORM_RATE_LIMIT");
   assert.deepEqual(rate?.subjects, ["seawatch.ratelimit.forms.*"]);
   assert.equal(rate?.max_msgs_per_subject, 30);
+  assert.equal(
+    byName.get("SEAWATCH_REGISTRATION_RATE_LIMIT")?.max_msgs_per_subject,
+    30,
+  );
   assert.equal(rate?.update, undefined, "the update marker is not sent");
   const used = byName.get("SEAWATCH_CAPTCHA_USED");
   assert.deepEqual(used?.subjects, ["seawatch.captcha.used"]);
@@ -721,11 +765,12 @@ test("--initialize leaves existing streams, but updates the form rate limit", as
   });
   await done;
   assert.deepEqual(added, []);
-  assert.deepEqual(
-    updated.map(([name]) => name),
-    ["SEAWATCH_FORM_RATE_LIMIT"],
-  );
-  assert.equal(updated[0][1].max_msgs_per_subject, 30);
+  assert.deepEqual(updated.map(([name]) => name).sort(), [
+    "SEAWATCH_FORM_RATE_LIMIT",
+    "SEAWATCH_REGISTRATION_RATE_LIMIT",
+  ]);
+  for (const [, config] of updated)
+    assert.equal(config.max_msgs_per_subject, 30);
 });
 
 test("NATS authorization example grants the form subjects and consumer", async () => {

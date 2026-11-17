@@ -24,6 +24,7 @@ import {
   CAPTCHA_LIFETIME_MS,
   CAPTCHA_USED_STREAM,
   CAPTCHA_USED_SUBJECT,
+  CHALLENGE_PATH,
   checkFormCaptcha,
   createFormChallenge,
   FORM_CHALLENGE_PATH,
@@ -135,7 +136,10 @@ async function main() {
         retention: RetentionPolicy.Limits,
         discard: DiscardPolicy.New,
         storage: StorageType.File,
-        max_msgs_per_subject: 10,
+        // Per IP and hour; people at one venue share its IP. The captcha,
+        // not this limit, keeps scripts out.
+        max_msgs_per_subject: 30,
+        update: true,
         discard_new_per_subject: true,
         max_age: 60 * 60 * 1e9,
         max_bytes: 64 * 1024 ** 2,
@@ -293,11 +297,19 @@ async function main() {
   };
   // Form captcha (src/lib/public-forms/captcha.ts): off until the website
   // sends it; the difficulty can be raised without a website change.
-  const captchaMode = readCaptchaMode(process.env.CAPTCHA_MODE);
+  // Per route, so each website form can be rolled out on its own.
+  const captchaModes: Record<string, ReturnType<typeof readCaptchaMode>> = {
+    "/v1/events/registrations": readCaptchaMode(
+      process.env.CAPTCHA_MODE_EVENTS,
+    ),
+    [FORM_SUBMISSION_PATH]: readCaptchaMode(
+      process.env.CAPTCHA_MODE_FORMS ?? process.env.CAPTCHA_MODE,
+    ),
+  };
   const captchaKey = process.env.CAPTCHA_KEY;
   const captchaDifficulty = readCaptchaDifficulty(process.env);
-  if (captchaMode !== "off" && !captchaKey)
-    throw new Error("CAPTCHA_MODE needs CAPTCHA_KEY.");
+  if (Object.values(captchaModes).some((mode) => mode !== "off") && !captchaKey)
+    throw new Error("A captcha mode other than off needs CAPTCHA_KEY.");
 
   // The website's confirmation page posts the token from the e-mail link.
   // A valid signature is all the bridge checks; the CRM consumer does the
@@ -464,7 +476,10 @@ async function main() {
       }
       return;
     }
-    if (url.pathname === FORM_CHALLENGE_PATH) {
+    if (
+      url.pathname === CHALLENGE_PATH ||
+      url.pathname === FORM_CHALLENGE_PATH
+    ) {
       if (origin && !origins.has(origin)) {
         respond(403, { error: "Origin not allowed" });
         return;
@@ -506,9 +521,7 @@ async function main() {
       res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
       res.setHeader(
         "Access-Control-Allow-Headers",
-        req.url === FORM_SUBMISSION_PATH
-          ? "Content-Type, Idempotency-Key, X-Altcha"
-          : "Content-Type, Idempotency-Key",
+        "Content-Type, Idempotency-Key, X-Altcha",
       );
       res.writeHead(204);
       res.end();
@@ -546,7 +559,8 @@ async function main() {
         respond(400, { error: route.invalidFields });
         return;
       }
-      if (req.url === FORM_SUBMISSION_PATH && captchaMode !== "off") {
+      const captchaMode = captchaModes[req.url ?? ""] ?? "off";
+      if (captchaMode !== "off") {
         const header = req.headers[CAPTCHA_HEADER];
         const sent = typeof header === "string" ? header : undefined;
         if (sent || captchaMode === "required") {

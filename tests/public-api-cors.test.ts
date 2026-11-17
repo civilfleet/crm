@@ -147,7 +147,7 @@ test("bridge exact-origin CORS covers preflight and all registration error paths
               .get("access-control-allow-headers")
               ?.toLowerCase()
               .split(/,\s*/),
-            ["content-type", "idempotency-key"],
+            ["content-type", "idempotency-key", "x-altcha"],
           );
         }
         assert.equal(publishes, 0);

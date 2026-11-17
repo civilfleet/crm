@@ -37,9 +37,11 @@ spec:
             # Optional: without it the confirmation route answers 503.
             - name: FORM_CONFIRMATION_KEY
               valueFrom: { secretKeyRef: { name: seawatch-api-env, key: FORM_CONFIRMATION_KEY, optional: true } }
-            # Form captcha: off, optional (checked when sent) or required.
-            # Switch to required once the website sends it.
-            - name: CAPTCHA_MODE
+            # Captcha per intake route: off, optional (checked when sent) or
+            # required. Switch to required once that website form sends it.
+            - name: CAPTCHA_MODE_FORMS
+              value: "off"
+            - name: CAPTCHA_MODE_EVENTS
               value: "off"
             - name: CAPTCHA_KEY
               valueFrom: { secretKeyRef: { name: seawatch-api-env, key: CAPTCHA_KEY, optional: true } }

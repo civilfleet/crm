@@ -24,7 +24,8 @@ deploys and forms the approved hostname above. That alias currently returns
 Allowed responses reflect the exact origin, preserve `Vary: Origin`, and expose
 `Retry-After`. This applies before validation and registration processing, so
 HTTP 400/413/415, 429 and 503 retain the same CORS headers. Preflight returns 204
-and permits `POST, OPTIONS` with `Content-Type, Idempotency-Key`. Rejected
+and permits `POST, OPTIONS` with `Content-Type, Idempotency-Key, X-Altcha`
+(the captcha, see `PUBLIC_FORMS_INTAKE.md`, "Captcha"). Rejected
 registration origins return 403 without allow-origin or expose headers. No
 cookies or `Access-Control-Allow-Credentials` are introduced; browsers should
 continue to submit with `credentials: 'omit'`.
