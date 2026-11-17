@@ -46,6 +46,13 @@ spec:
               value: "off"
             - name: CAPTCHA_KEY
               valueFrom: { secretKeyRef: { name: seawatch-api-env, key: CAPTCHA_KEY, optional: true } }
+            # Puzzle difficulty: the answer lies between these counters. About
+            # 3 s on a normal phone, solved while the form is filled in. Raise
+            # during an attack; no website change needed.
+            - name: CAPTCHA_MIN_COUNTER
+              value: "6000"
+            - name: CAPTCHA_MAX_COUNTER
+              value: "18000"
             # Exact origins only. www redirects to sea-watch.org; other preview aliases remain denied.
             - name: PUBLIC_EVENTS_ORIGINS
               value: "https://seawatch-events.netlify.app,https://sea-watch.org,https://dev-bridge-integration--seawatch.netlify.app,https://staging--seawatch.netlify.app"
@@ -98,6 +105,10 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: { drop: [ALL] }
           env:
+            # Submissions per source and hour, for forms and registrations
+            # (IPv4 address, IPv6 /64). Generous for mobile CGNAT; raise it
+            # here and sync, the job updates the existing streams.
+            - { name: RATE_LIMIT_PER_HOUR, value: "300" }
             - { name: NATS_URL, value: "nats://jetstream:4222" }
             - { name: NATS_USER, value: bootstrap }
             - name: NATS_PASSWORD

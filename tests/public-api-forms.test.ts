@@ -11,6 +11,7 @@ import * as publicCaptcha from "../src/lib/public-forms/captcha";
 import * as publicConfirmation from "../src/lib/public-forms/confirmation";
 import * as publicCounts from "../src/lib/public-forms/counts";
 import * as publicForms from "../src/lib/public-forms/submission";
+import * as publicRateLimit from "../src/lib/public-intake/rate-limit";
 import { loadModule } from "./helpers/load-module";
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => Promise<void>;
@@ -93,6 +94,7 @@ async function startBridge(
     "../src/lib/public-forms/counts": publicCounts,
     "../src/lib/public-forms/confirmation": publicConfirmation,
     "../src/lib/public-forms/captcha": publicCaptcha,
+    "../src/lib/public-intake/rate-limit": publicRateLimit,
     "node:http": {
       createServer: (handler: Handler) => {
         capture(handler);
@@ -632,6 +634,7 @@ test("--initialize creates the form streams per contract", async (t) => {
     "../src/lib/public-forms/counts": publicCounts,
     "../src/lib/public-forms/confirmation": publicConfirmation,
     "../src/lib/public-forms/captcha": publicCaptcha,
+    "../src/lib/public-intake/rate-limit": publicRateLimit,
     "node:http": { createServer: () => ({ listen: () => {} }) },
     "@nats-io/transport-node": {
       connect: async () => ({ drain: async () => resolveDone() }),
@@ -676,10 +679,10 @@ test("--initialize creates the form streams per contract", async (t) => {
   );
   const rate = byName.get("SEAWATCH_FORM_RATE_LIMIT");
   assert.deepEqual(rate?.subjects, ["seawatch.ratelimit.forms.*"]);
-  assert.equal(rate?.max_msgs_per_subject, 30);
+  assert.equal(rate?.max_msgs_per_subject, 300);
   assert.equal(
     byName.get("SEAWATCH_REGISTRATION_RATE_LIMIT")?.max_msgs_per_subject,
-    30,
+    300,
   );
   assert.equal(rate?.update, undefined, "the update marker is not sent");
   const used = byName.get("SEAWATCH_CAPTCHA_USED");
@@ -741,6 +744,7 @@ test("--initialize leaves existing streams, but updates the form rate limit", as
     "../src/lib/public-forms/counts": publicCounts,
     "../src/lib/public-forms/confirmation": publicConfirmation,
     "../src/lib/public-forms/captcha": publicCaptcha,
+    "../src/lib/public-intake/rate-limit": publicRateLimit,
     "node:http": { createServer: () => ({ listen: () => {} }) },
     "@nats-io/transport-node": {
       connect: async () => ({ drain: async () => resolveDone() }),
@@ -771,10 +775,10 @@ test("--initialize leaves existing streams, but updates the form rate limit", as
     "SEAWATCH_REGISTRATION_RATE_LIMIT",
   ]);
   const updates = Object.fromEntries(updated);
-  assert.equal(updates.SEAWATCH_FORM_RATE_LIMIT.max_msgs_per_subject, 30);
+  assert.equal(updates.SEAWATCH_FORM_RATE_LIMIT.max_msgs_per_subject, 300);
   assert.equal(
     updates.SEAWATCH_REGISTRATION_RATE_LIMIT.max_msgs_per_subject,
-    30,
+    300,
   );
   // NATS counts headers; the message id alone is 64 characters.
   assert.equal(updates.SEAWATCH_CAPTCHA_USED.max_msg_size, 512);

@@ -79,6 +79,7 @@ COPY src/lib/public-forms/submission.ts ./src/lib/public-forms/submission.ts
 COPY src/lib/public-forms/counts.ts ./src/lib/public-forms/counts.ts
 COPY src/lib/public-forms/confirmation.ts ./src/lib/public-forms/confirmation.ts
 COPY src/lib/public-forms/captcha.ts ./src/lib/public-forms/captcha.ts
+COPY src/lib/public-intake/rate-limit.ts ./src/lib/public-intake/rate-limit.ts
 RUN yarn api:build
 
 FROM base AS runner-public-api

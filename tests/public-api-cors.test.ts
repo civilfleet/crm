@@ -12,6 +12,7 @@ import * as publicCaptcha from "../src/lib/public-forms/captcha";
 import * as publicConfirmation from "../src/lib/public-forms/confirmation";
 import * as publicCounts from "../src/lib/public-forms/counts";
 import * as publicForms from "../src/lib/public-forms/submission";
+import * as publicRateLimit from "../src/lib/public-intake/rate-limit";
 import { loadModule } from "./helpers/load-module";
 
 const allowedOrigins = [
@@ -49,6 +50,7 @@ test("bridge exact-origin CORS covers preflight and all registration error paths
       "../src/lib/public-forms/counts": publicCounts,
       "../src/lib/public-forms/confirmation": publicConfirmation,
       "../src/lib/public-forms/captcha": publicCaptcha,
+      "../src/lib/public-intake/rate-limit": publicRateLimit,
       "node:http": {
         createServer: (handler: Handler) => {
           capture(handler);

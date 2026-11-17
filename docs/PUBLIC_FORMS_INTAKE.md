@@ -64,7 +64,7 @@ Responses (JSON, `Cache-Control: no-store`):
 | 404 / 405 | Unknown path (exact match) / method other than POST or OPTIONS |
 | 413 / 415 | Body over 65536 bytes / not JSON |
 | 400 `{"reason":"missing\|malformed\|invalid\|expired\|used"}` | Captcha not solved (when required, or when sent) |
-| 429 + `Retry-After: 3600` | Per-IP form budget exhausted: 30 per hour (separate from events) |
+| 429 + `Retry-After: 3600` | Per-source form budget exhausted: `RATE_LIMIT_PER_HOUR` (300) per hour (separate from events) |
 | 503 | Broker unavailable; retry with the same `Idempotency-Key` |
 
 CORS is identical to the events route and uses the same `PUBLIC_EVENTS_ORIGINS`
@@ -79,7 +79,7 @@ is required for forms.
 |---|---|---|
 | Submissions (workqueue, file, max_msg_size 98304, duplicate_window 24h, max_bytes 1 GiB, discard new) | `SEAWATCH_FORM_SUBMISSIONS` | `seawatch.forms.submissions.v1` |
 | Failed / needs review (limits, 256 MiB) | `SEAWATCH_FORM_SUBMISSION_FAILURES` | `seawatch.forms.submissions.failed.v1` |
-| Rate limit (30 msgs/subject, discard_new_per_subject, max_age 1h; also used by confirmations) | `SEAWATCH_FORM_RATE_LIMIT` | `seawatch.ratelimit.forms.<sha256(key:ip)>` |
+| Rate limit (`RATE_LIMIT_PER_HOUR`, default 300 msgs/subject, discard_new_per_subject, max_age 1h; also used by confirmations) | `SEAWATCH_FORM_RATE_LIMIT` | `seawatch.ratelimit.forms.<sha256(key:ip)>` |
 
 Message: `{"version":1,"submissionId","receivedAt","submission":{…body…}}`,
 published with `msgID = <submissionId>:<sha256(JSON.stringify(submission))>`
@@ -254,10 +254,18 @@ a fallback) and `CAPTCHA_MODE_EVENTS`, each `off` (default; not checked),
 difficulty is shared configuration, raised during an attack without a
 website change: `CAPTCHA_COST` (PBKDF2 iterations per attempt, default 5000)
 and `CAPTCHA_MIN_COUNTER` / `CAPTCHA_MAX_COUNTER` (the answer lies between
-them, default 2000–6000). With the captcha in place the per-IP limits are 30
-an hour for forms and for event registrations, so shared networks (offices,
-venues, mobile carriers) are not locked out; `--initialize` updates both
-limits on the existing streams.
+them, default 2000–6000). The deployment sets the counters to 6000–18000 (about 3 s on a normal phone,
+solved while the form is filled in).
+
+**Per-source limits, ready for CGNAT.** Mobile carriers put many customers
+behind one IPv4 address, so a viral petition must not hit the per-IP limit:
+it is `RATE_LIMIT_PER_HOUR` (default 300) submissions per source and hour,
+for forms and event registrations each, set on the `initialize-event-streams`
+job in `api.yaml`; raise it there and sync, and the job updates the existing
+streams. A source is an IPv4 address, or an IPv6 `/64` (one connection
+usually has a whole `/64`, so single addresses would be no brake;
+`src/lib/public-intake/rate-limit.ts`). The captcha, not this limit, keeps
+scripts out; it only stops one machine from flooding.
 
 ## Confirmation (double opt-in)
 

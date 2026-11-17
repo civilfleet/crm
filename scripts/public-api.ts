@@ -59,6 +59,10 @@ import {
   FORM_SUBMISSION_SUBJECT,
   formSubmissionPayload,
 } from "../src/lib/public-forms/submission";
+import {
+  rateLimitSource,
+  readRateLimitPerHour,
+} from "../src/lib/public-intake/rate-limit";
 
 // Each public intake route has its own size cap, schema, rate-limit budget and
 // stream. The events route values are the original, unchanged behaviour.
@@ -138,7 +142,9 @@ async function main() {
         storage: StorageType.File,
         // Per IP and hour; people at one venue share its IP. The captcha,
         // not this limit, keeps scripts out.
-        max_msgs_per_subject: 30,
+        max_msgs_per_subject: readRateLimitPerHour(
+          process.env.RATE_LIMIT_PER_HOUR,
+        ),
         update: true,
         discard_new_per_subject: true,
         max_age: 60 * 60 * 1e9,
@@ -207,7 +213,9 @@ async function main() {
         storage: StorageType.File,
         // Per IP and hour. Offices, events and mobile networks share an IP;
         // the captcha, not this limit, keeps scripts out.
-        max_msgs_per_subject: 30,
+        max_msgs_per_subject: readRateLimitPerHour(
+          process.env.RATE_LIMIT_PER_HOUR,
+        ),
         // Applied to the existing stream too (see below).
         update: true,
         discard_new_per_subject: true,
@@ -379,7 +387,7 @@ async function main() {
       if (!process.env.RATE_LIMIT_HASH_KEY)
         throw new Error("Rate limit key not configured");
       const addressKey = createHash("sha256")
-        .update(`${process.env.RATE_LIMIT_HASH_KEY}:${ip}`)
+        .update(`${process.env.RATE_LIMIT_HASH_KEY}:${rateLimitSource(ip)}`)
         .digest("hex");
       try {
         await js.publish(
@@ -596,7 +604,7 @@ async function main() {
       if (!process.env.RATE_LIMIT_HASH_KEY)
         throw new Error("Rate limit key not configured");
       const addressKey = createHash("sha256")
-        .update(`${process.env.RATE_LIMIT_HASH_KEY}:${ip}`)
+        .update(`${process.env.RATE_LIMIT_HASH_KEY}:${rateLimitSource(ip)}`)
         .digest("hex");
       try {
         await js.publish(`${route.rateLimitPrefix}.${addressKey}`, "1");
