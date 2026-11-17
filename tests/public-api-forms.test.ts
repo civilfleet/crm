@@ -224,7 +224,11 @@ test("forms route queues a valid submission on its own subject and rate-limit bu
     "submissionId",
     "receivedAt",
     "submission",
+    "source",
   ]);
+  // The hashed source, the same key the rate limit uses; never the address.
+  assert.equal(limit.subject, `seawatch.ratelimit.forms.${envelope.source}`);
+  assert.ok(!JSON.stringify(envelope).includes("203.0.113.7"));
   assert.equal(envelope.submission.contact.email, "forms@example.invalid");
   assert.ok(publicForms.formSubmissionMessage.safeParse(envelope).success);
   const fingerprint = createHash("sha256")

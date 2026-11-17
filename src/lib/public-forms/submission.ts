@@ -113,6 +113,13 @@ export const formSubmissionMessage = z.object({
   submissionId: z.uuid(),
   receivedAt: z.iso.datetime(),
   submission: formSubmissionPayload,
+  // Who sent it, as the bridge's per-source limit counts it: a keyed hash
+  // of the IPv4 address or IPv6 /64, never the address. Lets the CRM keep
+  // one source from using up the confirmation e-mail budget.
+  source: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
 });
 
 /** The contact fields a submission can carry, in display order. */

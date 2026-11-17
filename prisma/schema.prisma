@@ -1425,6 +1425,9 @@ model FormSubmission {
   // The contact details as submitted ({field, label, value}[]), kept even
   // where the contact already had them or they became a proposal.
   contactAnswers        Json?
+  // The sender as the public bridge counts it (keyed hash of the IPv4
+  // address or IPv6 /64), for the per-source confirmation e-mail limit.
+  sourceKey             String?   @db.VarChar(64)
   // Whether this submission made the contact (for removing unconfirmed ones).
   createdContact        Boolean   @default(false)
   // E-mail confirmation (docs/PUBLIC_FORMS_INTAKE.md, "Confirmation").
@@ -1440,6 +1443,7 @@ model FormSubmission {
   @@index([contactId])
   @@index([formId])
   @@index([confirmationRequested, confirmedAt, confirmationSentAt])
+  @@index([sourceKey, confirmationSentAt])
 }
 
 enum EngagementDirection {

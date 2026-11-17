@@ -15,6 +15,7 @@ import {
 } from "../src/lib/public-intake/consumer";
 import { intakePipelines } from "../src/lib/public-intake/pipelines";
 import {
+  readConfirmationLimits,
   removeExpiredUnconfirmed,
   sendDueConfirmations,
 } from "../src/services/form-confirmations";
@@ -90,6 +91,12 @@ async function main() {
   const confirmationKey = process.env.FORM_CONFIRMATION_KEY;
   if (websiteUrl && confirmationKey) {
     const readForm = createPublishedFormReader({ websiteUrl });
+    // Limits and pace from FORM_CONFIRMATION_* (src/services/form-confirmations).
+    const limits = readConfirmationLimits(process.env);
+    const interval = Math.max(
+      Number(process.env.FORM_CONFIRMATION_INTERVAL_MS) || 10_000,
+      1_000,
+    );
     let isSending = false;
     const sendConfirmations = async () => {
       if (isSending || stopping) return;
@@ -99,6 +106,7 @@ async function main() {
           readForm,
           websiteUrl,
           key: confirmationKey,
+          limits,
         });
         if (result.sent || result.skipped || result.waiting)
           console.info("Form confirmations:", JSON.stringify(result));
@@ -129,7 +137,7 @@ async function main() {
     };
     void sendConfirmations();
     void removeExpired();
-    const sendTimer = setInterval(sendConfirmations, 30_000);
+    const sendTimer = setInterval(sendConfirmations, interval);
     const removeTimer = setInterval(removeExpired, 60 * 60_000);
     callbacks.push(() => {
       clearInterval(sendTimer);

@@ -21,8 +21,8 @@ type ConfirmationsService = {
     readForm: (formId: string, locale: string) => Promise<unknown>;
     websiteUrl: string;
     key: string;
-    send: (mail: Mail) => Promise<void>;
-    limits?: { batch: number; perHour: number; perAddressPerDay: number };
+    send?: (mail: Mail) => Promise<void>;
+    limits?: Record<string, number>;
     now?: Date;
     log?: Pick<Console, "info" | "warn" | "error">;
   }) => Promise<{ sent: number; skipped: number; waiting: number }>;
@@ -58,11 +58,21 @@ class ApiError extends Error {
     super(message);
   }
 }
+// The default sender's two ways out, captured.
+const smtpMails: Array<Record<string, unknown>> = [];
+const scalewayMails: Array<Record<string, unknown>> = [];
 const boundaries = {
   "@/lib/api-guard": { ApiError },
   "@/lib/nodemailer": {
-    getTransporter: () => {
-      throw new Error("tests pass their own send");
+    getTransporter: () => ({
+      sendMail: async (mail: Record<string, unknown>) => {
+        smtpMails.push(mail);
+      },
+    }),
+  },
+  "@/services/integrations/scaleway-email": {
+    sendScalewayTransactionalEmail: async (mail: Record<string, unknown>) => {
+      scalewayMails.push(mail);
     },
   },
 };
@@ -94,12 +104,18 @@ const createTeam = () =>
 const sign = (
   teamId: string,
   email: string,
-  options: { confirmation?: boolean; marketing?: boolean; at?: string } = {},
+  options: {
+    confirmation?: boolean;
+    marketing?: boolean;
+    at?: string;
+    source?: string;
+  } = {},
 ) =>
   intake.createFormSubmission({
     version: 1,
     submissionId: randomUUID(),
     receivedAt: options.at ?? "2026-11-17T10:00:00.000Z",
+    ...(options.source ? { source: options.source } : {}),
     submission: {
       version: 1,
       teamId,
@@ -177,7 +193,13 @@ test("the hourly limit holds the rest back; an unreadable form waits", async () 
     await sign(team.id, `${name}@example.org`);
 
   const sent: Mail[] = [];
-  const limits = { batch: 25, perHour: 2, perAddressPerDay: 3 };
+  const limits = {
+    batch: 25,
+    perHour: 2,
+    perAddressPerDay: 3,
+    perSourcePerHour: 30,
+    concurrency: 5,
+  };
   assert.equal((await run(sent, { limits })).sent, 2);
   assert.equal((await run(sent, { limits })).sent, 0, "the hour is used up");
 
@@ -190,6 +212,76 @@ test("the hourly limit holds the rest back; an unreadable form waits", async () 
   assert.deepEqual(failing, { sent: 0, skipped: 0, waiting: 1 });
   const later = await run(sent, { now: new Date("2026-11-17T12:01:00.000Z") });
   assert.equal(later.sent, 1);
+});
+
+test("one sender cannot use up the budget: its e-mails wait, others go", async () => {
+  const team = await createTeam();
+  const busy = "a".repeat(64);
+  for (let index = 0; index < 4; index++)
+    await sign(team.id, `bot${index}@example.org`, { source: busy });
+  await sign(team.id, "person@example.org", { source: "b".repeat(64) });
+
+  const sent: Mail[] = [];
+  const limits = {
+    batch: 25,
+    perHour: 100,
+    perAddressPerDay: 3,
+    perSourcePerHour: 2,
+    concurrency: 5,
+  };
+  const result = await run(sent, { limits });
+  assert.deepEqual(result, { sent: 3, skipped: 0, waiting: 2 });
+  assert.ok(sent.some((mail) => mail.to === "person@example.org"));
+  // An hour later the waiting ones go.
+  const later = await run(sent, {
+    limits,
+    now: new Date("2026-11-17T11:10:00.000Z"),
+  });
+  assert.equal(later.sent, 2);
+});
+
+test("a team with verified Scaleway sends through it; others through SMTP", async () => {
+  const scaleway = await createTeam();
+  const plain = await db.teams.create({
+    data: {
+      name: "Plain",
+      email: "plain@example.org",
+      publicFormsEnabled: true,
+    },
+  });
+  await db.integrationConnection.create({
+    data: {
+      teamId: scaleway.id,
+      provider: "SCALEWAY_TEM",
+      isEnabled: true,
+      apiKey: "enc:v1:test:x:y:z",
+      defaultListId: "project",
+      senderEmail: "firma@sea-watch.org",
+      senderName: "Sea-Watch",
+      lastSyncedAt: new Date(),
+    },
+  });
+  await sign(scaleway.id, "a@example.org");
+  await sign(plain.id, "b@example.org");
+  smtpMails.length = 0;
+  scalewayMails.length = 0;
+
+  const result = await confirmations.sendDueConfirmations({
+    readForm: async () => null,
+    websiteUrl: "https://sea-watch.org",
+    key: KEY,
+    now: new Date("2026-11-17T10:05:00.000Z"),
+    log: quiet,
+  });
+  assert.equal(result.sent, 2);
+  assert.equal(scalewayMails.length, 1);
+  assert.deepEqual(scalewayMails[0].from, {
+    email: "firma@sea-watch.org",
+    name: "Sea-Watch",
+  });
+  assert.deepEqual(scalewayMails[0].to, { email: "a@example.org" });
+  assert.equal(smtpMails.length, 1);
+  assert.equal(smtpMails[0].to, "b@example.org");
 });
 
 test("confirming grants the marketing consent and counts the person", async () => {

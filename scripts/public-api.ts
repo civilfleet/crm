@@ -629,6 +629,8 @@ async function main() {
           submissionId: submissionId.data,
           receivedAt: new Date().toISOString(),
           [route.envelopeKey]: parsed.data,
+          // The hashed source, for the CRM's per-source e-mail limit.
+          ...(req.url === FORM_SUBMISSION_PATH ? { source: addressKey } : {}),
         }),
         { msgID: `${submissionId.data}:${fingerprint}` },
       );

@@ -131,6 +131,7 @@ export const createFormSubmission = async (
         receivedAt,
         email,
         contactAnswers: JSON.parse(JSON.stringify(contactAnswers)),
+        sourceKey: input.source,
         createdContact: created,
         confirmationRequested,
         ...(checked
