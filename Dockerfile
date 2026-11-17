@@ -2,6 +2,10 @@ FROM node:22-bookworm-slim AS base
 
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
+# onnxruntime-node (via @huggingface/transformers) downloads CUDA binaries
+# from outside the npm registry on Linux x64 while installing. Nothing here
+# has a GPU, and a failed download failed whole image builds.
+ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates openssl \
