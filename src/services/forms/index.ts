@@ -2,7 +2,11 @@ import { Prisma } from "@prisma/client";
 import { chainOrderBy, type RecordSort } from "@/lib/list-request";
 import prisma from "@/lib/prisma";
 import type { FormCountRow } from "@/lib/public-forms/counts";
-import type { FormSubmissionAnswer } from "@/lib/public-forms/submission";
+import {
+  FORM_CONTACT_FIELD_LABELS,
+  type FormContactAnswer,
+  type FormSubmissionAnswer,
+} from "@/lib/public-forms/submission";
 import { getContactVisibility } from "@/services/contacts/access";
 import type { Roles } from "@/types";
 
@@ -201,6 +205,8 @@ export type FormSubmissionRow = {
   submittedAt: Date;
   receivedAt: Date;
   answers: FormSubmissionAnswer[];
+  /** The contact details as submitted, with the form's labels. */
+  contactAnswers: FormContactAnswer[];
   confirmationRequested: boolean;
   confirmedAt: Date | null;
   verification: { status: string; issues: string[] } | null;
@@ -257,6 +263,8 @@ export const getFormSubmissionsPage = async (
         submittedAt: true,
         receivedAt: true,
         answers: true,
+        email: true,
+        contactAnswers: true,
         confirmationRequested: true,
         confirmedAt: true,
         verification: true,
@@ -265,16 +273,30 @@ export const getFormSubmissionsPage = async (
     }),
     prisma.formSubmission.count({ where }),
   ]);
-  const data: FormSubmissionRow[] = rows.map(({ contact, ...row }) => ({
-    ...row,
-    answers: (row.answers ?? []) as FormSubmissionAnswer[],
-    verification: row.verification as FormSubmissionRow["verification"],
-    contact: {
-      id: contact.id,
-      name: contact.name,
-      email: contact.primaryEmail,
-    },
-  }));
+  const data: FormSubmissionRow[] = rows.map(
+    ({ contact, email, contactAnswers, ...row }) => ({
+      ...row,
+      // Older submissions kept only the address.
+      contactAnswers: Array.isArray(contactAnswers)
+        ? (contactAnswers as FormContactAnswer[])
+        : email
+          ? [
+              {
+                field: "email",
+                label: FORM_CONTACT_FIELD_LABELS.email,
+                value: email,
+              },
+            ]
+          : [],
+      answers: (row.answers ?? []) as FormSubmissionAnswer[],
+      verification: row.verification as FormSubmissionRow["verification"],
+      contact: {
+        id: contact.id,
+        name: contact.name,
+        email: contact.primaryEmail,
+      },
+    }),
+  );
   return { data, total };
 };
 

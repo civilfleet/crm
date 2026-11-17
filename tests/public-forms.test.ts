@@ -377,6 +377,20 @@ test("new contact is created with contact block and a FORM engagement in one tra
   assert.equal(saved.formId, "abc123documentid");
   assert.equal(saved.locale, "de");
   assert.equal(saved.page, "/de/mitmachen");
+  // What was submitted for the contact stays with the submission.
+  assert.deepEqual(
+    (saved.contactAnswers as Array<{ field: string; value: string }>).map(
+      ({ field, value }) => [field, value],
+    ),
+    [
+      ["name", "Synthetic Person"],
+      ["email", "person@example.org"],
+      ["phone", "+49 30 000000"],
+      ["postalCode", "10115"],
+      ["city", "Berlin"],
+      ["country", "Germany"],
+    ],
+  );
   assert.ok(saved.submittedAt instanceof Date);
   assert.equal(state.engagements.length, 1);
   const engagement = state.engagements[0];
@@ -488,6 +502,13 @@ const publishedForm = (overrides: Row = {}) => ({
   title: "Volunteer interest",
   confirmation: null,
   questions: [
+    {
+      id: "full-name",
+      label: "Nome completo",
+      type: "text",
+      required: true,
+      contactField: "name",
+    },
     { id: "motivation", label: "Warum?", type: "textarea", required: false },
     {
       id: "updates",
@@ -518,6 +539,17 @@ test("checked against the published form: wording from the file, result stored",
   );
   const state = harness.state();
   assert.equal(state.consents[0].wording, "Updates von Sea-Watch");
+  // Labels as the form asked them; fields without a question keep a default.
+  const labels = Object.fromEntries(
+    (
+      state.submissions[0].contactAnswers as Array<{
+        field: string;
+        label: string;
+      }>
+    ).map(({ field, label }) => [field, label]),
+  );
+  assert.equal(labels.name, "Nome completo");
+  assert.equal(labels.city, "City");
   const verification = state.submissions[0].verification as Row;
   // The sample answers include questions the file lacks.
   assert.equal(verification.status, "mismatch");

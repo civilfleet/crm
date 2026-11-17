@@ -1,7 +1,10 @@
 import prisma from "@/lib/prisma";
 import type { PublishedFormReader } from "@/lib/public-forms/published-form";
 import {
+  FORM_CONTACT_FIELD_LABELS,
+  FORM_CONTACT_FIELDS,
   FORM_ENGAGEMENT_EXTERNAL_SOURCE,
+  type FormContactAnswer,
   type FormSubmissionMessage,
   formatFormAnswers,
 } from "@/lib/public-forms/submission";
@@ -37,17 +40,30 @@ export const createFormSubmission = async (
   // Checked against the published form before anything is written. An
   // unreachable website throws, so the message is retried later rather than
   // stored unchecked.
+  const published = options.readForm
+    ? await options.readForm(submission.form.id, submission.form.locale)
+    : null;
   const checked = options.readForm
-    ? verifySubmission(
-        submission,
-        await options.readForm(submission.form.id, submission.form.locale),
-      )
+    ? verifySubmission(submission, published)
     : null;
   if (checked?.teamMismatch)
     throw new FormSubmissionRejectedError(
       "The published form belongs to another team",
     );
   const answers = checked?.answers ?? submission.answers;
+  // What was submitted for the contact, kept with the submission whatever
+  // happens to the contact (filled, proposed, or already the same), with the
+  // labels the form showed.
+  const contactAnswers: FormContactAnswer[] = FORM_CONTACT_FIELDS.flatMap(
+    (field) => {
+      const value = submission.contact[field]?.trim();
+      if (!value) return [];
+      const label =
+        published?.questions.find((q) => q.contactField === field)?.label ??
+        FORM_CONTACT_FIELD_LABELS[field];
+      return [{ field, label, value }];
+    },
+  );
 
   return prisma.$transaction(async (tx) => {
     const existing = await tx.formSubmission.findUnique({
@@ -114,6 +130,7 @@ export const createFormSubmission = async (
         submittedAt: new Date(submission.submittedAt),
         receivedAt,
         email,
+        contactAnswers: JSON.parse(JSON.stringify(contactAnswers)),
         createdContact: created,
         confirmationRequested,
         ...(checked

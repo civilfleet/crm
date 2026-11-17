@@ -144,16 +144,18 @@ const run = (
     ...overrides,
   });
 
-test("one e-mail per address and form, with a link back to the website", async () => {
+test("every submission gets its own e-mail, at most three a day per address", async () => {
   const team = await createTeam();
+  // Signing again needs its own confirmation: nothing else proves it.
   await sign(team.id, "giulia@example.org");
   await sign(team.id, "Giulia@Example.org");
   await sign(team.id, "marco@example.org", { confirmation: false });
 
   const sent: Mail[] = [];
   const result = await run(sent);
-  assert.deepEqual(result, { sent: 1, skipped: 1, waiting: 0 });
-  assert.equal(sent[0].to, "giulia@example.org");
+  assert.deepEqual(result, { sent: 2, skipped: 0, waiting: 0 });
+  assert.ok(sent.every((mail) => mail.to === "giulia@example.org"));
+  assert.notEqual(sent[0].text, sent[1].text, "each with its own link");
   assert.match(
     sent[0].text,
     /https:\/\/sea-watch\.org\/it\/form-confirmation#/,
@@ -161,6 +163,12 @@ test("one e-mail per address and form, with a link back to the website", async (
   assert.equal(sent[0].subject, "Conferma il tuo indirizzo e-mail");
   // Nothing is sent twice.
   assert.deepEqual(await run(sent), { sent: 0, skipped: 0, waiting: 0 });
+
+  // A flood with one address: three a day, the rest is not mailed.
+  for (let index = 0; index < 3; index++)
+    await sign(team.id, "giulia@example.org");
+  const flood = await run(sent);
+  assert.deepEqual(flood, { sent: 1, skipped: 2, waiting: 0 });
 });
 
 test("the hourly limit holds the rest back; an unreadable form waits", async () => {

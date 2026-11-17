@@ -1422,6 +1422,9 @@ model FormSubmission {
   receivedAt            DateTime  @db.Timestamptz(6)
   // The address it was sent with, which the confirmation e-mail goes to.
   email                 String?   @db.VarChar(255)
+  // The contact details as submitted ({field, label, value}[]), kept even
+  // where the contact already had them or they became a proposal.
+  contactAnswers        Json?
   // Whether this submission made the contact (for removing unconfirmed ones).
   createdContact        Boolean   @default(false)
   // E-mail confirmation (docs/PUBLIC_FORMS_INTAKE.md, "Confirmation").

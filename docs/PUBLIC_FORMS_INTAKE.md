@@ -197,6 +197,11 @@ with one column per question, linking to each contact. Like every contact
 list, it shows only submissions of contacts the user may see (group
 visibility), trashed contacts included.
 
+Each submission keeps the contact details as submitted (`contactAnswers`,
+with the form's own labels), whatever happened to the contact: filled,
+proposed for review, or already the same. The submissions table shows them
+as columns marked "→ contact", next to one column per other question.
+
 **Public counter.** The website can show how many people sent a form,
 without the CRM taking requests from the internet:
 
@@ -280,10 +285,12 @@ website page ──POST /v1/forms/confirmations {"token"}──▶ bridge (check
   in a fixed layout with the button, the link and a footer
   (`src/lib/public-forms/confirmation-email.ts`). If the site cannot be read,
   the e-mail waits and is retried.
-- **Limits** (`src/services/form-confirmations`): one e-mail per address and
-  form per day (a second submission is not mailed again), three per address
-  per day across forms, 300 per hour in total, 25 per round. A flood waits
-  in the queue and expires instead of reaching inboxes.
+- **Limits** (`src/services/form-confirmations`): every submission that
+  asks for confirmation gets its own e-mail, since only its own link proves
+  it came from the address's owner (signing again included). Against
+  e-mail bombing: three per address per day across forms, 300 per hour in
+  total, 25 per round; beyond the per-address limit nothing is sent and the
+  submission expires.
 - **The token** is `<submissionId>.<HMAC-SHA256>`, signed with
   `FORM_CONFIRMATION_KEY`, which the CRM and the bridge share. It sits in the
   URL fragment, so it reaches no server log. The bridge answers `202` for a

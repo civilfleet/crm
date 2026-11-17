@@ -7,7 +7,6 @@ import {
   CircleUserRound,
   Globe,
   Inbox,
-  Mail,
   MessageSquareText,
   ShieldCheck,
 } from "lucide-react";
@@ -16,7 +15,6 @@ import useSWR from "swr";
 import { EmptyState } from "@/components/design/empty-state";
 import {
   DateCell,
-  EmailCell,
   RecordNameCell,
   TextCell,
 } from "@/components/records/record-cells";
@@ -31,7 +29,10 @@ import {
   useRecordList,
 } from "@/components/records/use-record-list";
 import { useToast } from "@/hooks/use-toast";
-import type { FormSubmissionAnswer } from "@/lib/public-forms/submission";
+import type {
+  FormContactAnswer,
+  FormSubmissionAnswer,
+} from "@/lib/public-forms/submission";
 
 /** A submission as GET /api/forms/[formId]/submissions sends it. */
 type FormSubmissionRow = {
@@ -42,6 +43,7 @@ type FormSubmissionRow = {
   submittedAt: string;
   receivedAt: string;
   answers: FormSubmissionAnswer[];
+  contactAnswers: FormContactAnswer[];
   confirmationRequested: boolean;
   confirmedAt: string | null;
   verification: { status: string; issues: string[] } | null;
@@ -65,6 +67,31 @@ const formatAnswer = (answer?: FormSubmissionAnswer) => {
   if (Array.isArray(shown)) return shown.join(", ");
   if (typeof shown === "boolean") return shown ? "Yes" : "No";
   return String(shown);
+};
+
+/**
+ * One column per contact detail the submissions on the page carry, labelled
+ * as the form asked it and marked as saved to the contact.
+ */
+const getContactAnswerColumns = (
+  rows: FormSubmissionRow[],
+): ColumnDef<FormSubmissionRow, unknown>[] => {
+  const fields = new Map<string, string>();
+  for (const row of rows)
+    for (const answer of row.contactAnswers)
+      if (!fields.has(answer.field)) fields.set(answer.field, answer.label);
+  return [...fields].map(([field, label]) => ({
+    id: `contact:${field}`,
+    meta: { label: `${label} → contact`, icon: CircleUserRound, width: 200 },
+    cell: ({ row }) => (
+      <TextCell
+        value={
+          row.original.contactAnswers.find((answer) => answer.field === field)
+            ?.value
+        }
+      />
+    ),
+  }));
 };
 
 /** One column per question of the newest submission on the page. */
@@ -122,11 +149,6 @@ export const FormSubmissionsTable = ({
             href={`/teams/${teamId}/crm/contacts/${row.original.contact.id}`}
           />
         ),
-      },
-      {
-        id: "email",
-        meta: { label: "Email", icon: Mail, width: 240 },
-        cell: ({ row }) => <EmailCell email={row.original.contact.email} />,
       },
       {
         id: "receivedAt",
@@ -209,7 +231,11 @@ export const FormSubmissionsTable = ({
     [data],
   );
   const columns = useMemo(
-    () => [...baseColumns, ...getAnswerColumns(rows)],
+    () => [
+      ...baseColumns,
+      ...getContactAnswerColumns(rows),
+      ...getAnswerColumns(rows),
+    ],
     [baseColumns, rows],
   );
 

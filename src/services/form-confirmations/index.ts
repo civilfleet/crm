@@ -54,10 +54,11 @@ const greetingName = (name: string, email: string) =>
 
 /**
  * Sends the confirmation e-mails that are due, within the limits:
- * - one per address and form per day (a second submission is not mailed
- *   again; its sender confirms with the first e-mail);
  * - `perAddressPerDay` per address, all forms together;
  * - `perHour` in total.
+ * Every submission is confirmed by its own e-mail: a second submission of
+ * the same form gets one too, since nothing else proves it came from the
+ * address's owner.
  * A submission skipped by a per-address limit is marked handled; one held
  * back by the hourly limit, or whose form file cannot be read, waits.
  */
@@ -122,21 +123,13 @@ export const sendDueConfirmations = async ({
       result.skipped++;
       continue;
     }
-    const since = new Date(now.getTime() - DAY);
-    const [sameForm, toAddress] = await Promise.all([
-      prisma.formSubmission.count({
-        where: {
-          teamId: submission.teamId,
-          formId: submission.formId,
-          email,
-          confirmationSentAt: { gt: since },
-        },
-      }),
-      prisma.formSubmission.count({
-        where: { email, confirmationSentAt: { gt: since } },
-      }),
-    ]);
-    if (sameForm > 0 || toAddress >= limits.perAddressPerDay) {
+    const toAddress = await prisma.formSubmission.count({
+      where: {
+        email,
+        confirmationSentAt: { gt: new Date(now.getTime() - DAY) },
+      },
+    });
+    if (toAddress >= limits.perAddressPerDay) {
       await markHandled();
       result.skipped++;
       continue;

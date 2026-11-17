@@ -115,6 +115,32 @@ export const formSubmissionMessage = z.object({
   submission: formSubmissionPayload,
 });
 
+/** The contact fields a submission can carry, in display order. */
+export const FORM_CONTACT_FIELDS = [
+  "name",
+  "email",
+  "phone",
+  "postalCode",
+  "city",
+  "country",
+] as const;
+export type FormContactField = (typeof FORM_CONTACT_FIELDS)[number];
+export const FORM_CONTACT_FIELD_LABELS: Record<FormContactField, string> = {
+  name: "Name",
+  email: "E-mail",
+  phone: "Phone",
+  postalCode: "Postal code",
+  city: "City",
+  country: "Country",
+};
+
+/** One contact detail as submitted, with the form's own label for it. */
+export type FormContactAnswer = {
+  field: FormContactField;
+  label: string;
+  value: string;
+};
+
 export type FormSubmissionPayload = z.infer<typeof formSubmissionPayload>;
 export type FormSubmissionAnswer = z.infer<typeof formSubmissionAnswer>;
 export type FormSubmissionMessage = z.infer<typeof formSubmissionMessage>;
