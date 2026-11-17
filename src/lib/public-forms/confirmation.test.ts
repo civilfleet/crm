@@ -72,6 +72,15 @@ test("the editor's text is escaped, with only {{name}} filled in", () => {
   assert.ok(
     mail.text.includes("https://sea-watch.org/it/form-confirmation#tok"),
   );
+  // sea-watch.org's look: the logo as PNG (mail clients skip SVG), the
+  // yellow button, the warm page background; the first words as preview.
+  assert.match(
+    mail.html,
+    /<img src="https:\/\/res\.cloudinary\.com\/[^"]+\.png"/,
+  );
+  assert.match(mail.html, /background:#FFE601/);
+  assert.match(mail.html, /background:#FAF4EF/);
+  assert.match(mail.html, /display:none[^>]*>Ciao Giulia/);
 });
 
 test("without the editor's text, the default for the language", () => {

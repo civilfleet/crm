@@ -33,6 +33,10 @@ const FOOTERS: Record<string, string> = {
   en: "You received this e-mail because your address was entered in a form on sea-watch.org. The link expires after 7 days.",
 };
 
+/** The Sea-Watch logo as PNG (mail clients do not show SVG), from the CMS. */
+const LOGO_URL =
+  "https://res.cloudinary.com/sea-watch/image/upload/w_192,f_png/v1721663330/sea_watch_logo_2db5145c0f.png";
+
 const language = (locale: string) => locale.slice(0, 2).toLowerCase();
 
 const escapeHtml = (value: string) =>
@@ -76,24 +80,37 @@ export const renderConfirmationEmail = ({
   const subject = fillName(content.subject, name.trim()).replace(/\s+/g, " ");
   const footer = FOOTERS[lang] ?? FOOTERS.en;
 
+  // sea-watch.org's look (sea-watch-nuxt tailwind.config.js): warm light
+  // grey page, dark blue text in Inter, square buttons with a heavy border,
+  // Sea-Watch yellow. Inline styles and tables only, for mail clients.
+  const font =
+    "Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Helvetica,Arial,sans-serif";
+  const ink = "#001F29";
   const paragraphs = body
     .split(/\n{2,}/)
     .map(
       (paragraph) =>
-        `<p style="margin:0 0 16px">${escapeHtml(paragraph).replaceAll("\n", "<br>")}</p>`,
+        `<p style="margin:0 0 18px;font-family:${font};font-size:17px;line-height:1.6;color:${ink}">${escapeHtml(paragraph).replaceAll("\n", "<br>")}</p>`,
     )
     .join("");
+  // Shown as the inbox preview, never in the message.
+  const preheader = escapeHtml(body.replace(/\s+/g, " ").slice(0, 140));
   const html = `<!doctype html>
-<html lang="${escapeHtml(lang)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${escapeHtml(subject)}</title></head>
-<body style="margin:0;padding:24px;background:#f4f5f7;font-family:Arial,Helvetica,sans-serif;color:#1d2433">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:8px">
-<tr><td style="padding:28px 28px 8px;font-size:20px;font-weight:bold">Sea-Watch</td></tr>
-<tr><td style="padding:8px 28px 8px;font-size:16px;line-height:1.5">${paragraphs}</td></tr>
-<tr><td style="padding:8px 28px 28px"><a href="${escapeHtml(link)}" style="display:inline-block;background:#0b4f8a;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:6px">${escapeHtml(content.button)}</a>
-<p style="margin:16px 0 0;font-size:12px;color:#5b6475;word-break:break-all">${escapeHtml(link)}</p></td></tr>
+<html lang="${escapeHtml(lang)}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;background:#FAF4EF;color:${ink}">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0">${preheader}</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FAF4EF"><tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px">
+<tr><td style="padding:0 0 24px"><a href="https://sea-watch.org" style="text-decoration:none"><img src="${LOGO_URL}" width="96" height="87" alt="Sea-Watch" style="display:block;border:0;width:96px;height:auto;font-family:${font};font-size:22px;font-weight:bold;color:#17AFFA"></a></td></tr>
+<tr><td style="background:#FFFFFF;border-top:6px solid #17AFFA;padding:36px 32px 32px">
+${paragraphs}
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 0"><tr><td style="background:#FFE601;border:4px solid ${ink}">
+<a href="${escapeHtml(link)}" style="display:inline-block;padding:16px 26px;font-family:${font};font-size:19px;font-weight:bold;line-height:1.2;color:${ink};text-decoration:none">${escapeHtml(content.button)}</a>
+</td></tr></table>
+<p style="margin:24px 0 0;font-family:${font};font-size:13px;line-height:1.5;color:#036B9D;word-break:break-all">${escapeHtml(link)}</p>
+</td></tr>
+<tr><td style="padding:20px 4px 0;font-family:${font};font-size:13px;line-height:1.5;color:#003A56">${escapeHtml(footer)}<br><a href="https://sea-watch.org" style="color:#036B9D;text-decoration:underline">sea-watch.org</a></td></tr>
 </table>
-<p style="max-width:560px;margin:16px auto 0;font-size:12px;color:#5b6475;line-height:1.4">${escapeHtml(footer)}</p>
 </td></tr></table>
 </body></html>`;
   const text = `${body}\n\n${content.button}: ${link}\n\n${footer}\n`;
