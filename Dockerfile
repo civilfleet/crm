@@ -17,8 +17,13 @@ FROM base AS deps
 COPY package.json yarn.lock .yarnrc.yml prisma.config.ts ./
 COPY .yarn ./.yarn
 COPY prisma ./prisma
+# onnxruntime-node's native binaries (536 MB, every platform) are dropped in
+# the same layer: @huggingface/transformers only needs them in Node, and the
+# CRM uses it only in the browser (contact paste worker), where it runs
+# onnxruntime-web and leaves onnxruntime-node out of the bundle.
 RUN --mount=type=cache,target=/root/.yarn/berry/cache,sharing=locked \
-  yarn install --immutable
+  yarn install --immutable \
+  && rm -rf node_modules/onnxruntime-node/bin
 
 FROM deps AS test
 
