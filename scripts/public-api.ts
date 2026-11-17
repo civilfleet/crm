@@ -224,8 +224,12 @@ async function main() {
         storage: StorageType.File,
         max_age: 2 * CAPTCHA_LIFETIME_MS * 1e6,
         duplicate_window: 2 * CAPTCHA_LIFETIME_MS * 1e6,
-        max_msg_size: 64,
+        // NATS counts headers too, and the message id (the puzzle's 64-hex
+        // signature) is one: 64 bytes refused every message (2026-11-17).
+        max_msg_size: 512,
         max_bytes: 8 * 1024 ** 2,
+        // Applied to the existing stream too.
+        update: true,
       },
     ] as Array<Record<string, unknown> & { name: string; update?: boolean }>) {
       const { update, ...config } = stream;

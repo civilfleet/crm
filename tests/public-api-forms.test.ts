@@ -766,11 +766,18 @@ test("--initialize leaves existing streams, but updates the form rate limit", as
   await done;
   assert.deepEqual(added, []);
   assert.deepEqual(updated.map(([name]) => name).sort(), [
+    "SEAWATCH_CAPTCHA_USED",
     "SEAWATCH_FORM_RATE_LIMIT",
     "SEAWATCH_REGISTRATION_RATE_LIMIT",
   ]);
-  for (const [, config] of updated)
-    assert.equal(config.max_msgs_per_subject, 30);
+  const updates = Object.fromEntries(updated);
+  assert.equal(updates.SEAWATCH_FORM_RATE_LIMIT.max_msgs_per_subject, 30);
+  assert.equal(
+    updates.SEAWATCH_REGISTRATION_RATE_LIMIT.max_msgs_per_subject,
+    30,
+  );
+  // NATS counts headers; the message id alone is 64 characters.
+  assert.equal(updates.SEAWATCH_CAPTCHA_USED.max_msg_size, 512);
 });
 
 test("NATS authorization example grants the form subjects and consumer", async () => {
