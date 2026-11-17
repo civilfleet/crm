@@ -275,14 +275,18 @@ route answers 503 until it is set).
 
 ## Enabling a team
 
-Teams are opted out by default. After the migration is deployed:
+Teams are opted out by default. A team admin switches it on in **Team
+Settings → Integrations → Website forms** ("Accept submissions from website
+forms"); the card also shows the team id that a form's CRM destination in
+Strapi needs. Each change is written to the team's system log
+(`WEBSITE_FORMS`). While it is off, submissions for the team are moved to the
+failed stream for review instead of being added.
+
+The same by SQL, for teams without an admin at hand:
 
 ```sql
 UPDATE "Teams" SET "publicFormsEnabled" = true WHERE id = '<team uuid>';
 ```
-
-Then configure the Strapi form's CRM destination with that `teamId`. Disable by
-setting the flag back to `false`; later submissions land in the failed stream.
 
 ## Operator rollout
 

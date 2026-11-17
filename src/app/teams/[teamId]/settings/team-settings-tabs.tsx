@@ -15,6 +15,7 @@ import ScalewayEmailIntegration from "@/components/forms/scaleway-email-integrat
 import StrategicPrioritiesForm from "@/components/forms/strategic-priorities";
 import TeamModulesForm from "@/components/forms/team-modules";
 import TeamSsoSettings from "@/components/forms/team-sso-settings";
+import WebsiteFormsSettings from "@/components/forms/website-forms-settings";
 import ZammadIntegration from "@/components/forms/zammad-integration";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -202,6 +203,7 @@ export default function TeamSettingsTabs({
       </TabsContent>
 
       <TabsContent value="integrations" className="space-y-8">
+        <WebsiteFormsSettings teamId={teamId} />
         <InboundEmailInboxes teamId={teamId} />
         <KlaviyoIntegration teamId={teamId} />
         <ScalewayEmailIntegration teamId={teamId} />
