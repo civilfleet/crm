@@ -155,8 +155,9 @@ references it. Applying it writes a normal `UPDATED` entry with
 `proposalId = <proposal id>` and the value at apply time as `oldValue`;
 declining writes a `PROPOSAL_REJECTED` entry with `proposalId`. A partial
 unique index allows one resolution per proposal. The change history shows
-proposals as pending, applied or rejected. The review UI and the apply/reject
-actions are not part of this change.
+proposals as pending, applied or rejected. They are reviewed on the contact
+("Pending changes") and for the whole team under CRM → Pending changes; see
+`docs/DATA_RULES.md`, "Proposed changes".
 
 Migration: `prisma/migrations/20261112120000_public_form_submissions`.
 

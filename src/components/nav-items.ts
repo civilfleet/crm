@@ -7,6 +7,7 @@ import {
   FilePenLine,
   Files,
   FolderOpen,
+  GitPullRequestArrow,
   HandCoins,
   HandHeart,
   Hash,
@@ -127,6 +128,12 @@ const navItems: {
       title: "Contacts",
       url: "crm/contacts",
       icon: Users,
+      module: "CRM",
+    },
+    {
+      title: "Pending changes",
+      url: "crm/pending-changes",
+      icon: GitPullRequestArrow,
       module: "CRM",
     },
     {

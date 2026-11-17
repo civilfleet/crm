@@ -176,6 +176,34 @@ merge loses a row (`tests/db/contacts-merge.test.ts`).
 A merge is all or nothing, and every contact in it must be visible to the
 person merging.
 
+### Proposed changes
+
+Website forms and event registrations never overwrite a value an existing
+contact already has. A different value is recorded as a proposal
+(`PROPOSED` in the change history) and waits for a person:
+
+- **Where:** on the contact ("Pending changes", above its consents) and for
+  the whole team under CRM → Pending changes, oldest first.
+- **Apply** sets the field and writes an `UPDATED` entry pointing at the
+  proposal, with the value it replaced and who decided. Postal code and
+  country update the coordinates as an edit does. For an e-mail address:
+  **Make primary address** (the old primary stays as an alias) or **Add as
+  additional address**. An address of another contact is refused, as in an
+  edit.
+- **Decline** writes a `PROPOSAL_REJECTED` entry; nothing else changes.
+- **Once:** a proposal is decided at most once; the database allows one
+  resolution per proposal, so two people deciding at the same moment cannot
+  both win.
+- **Who:** anyone with the CRM who can see the contact; others neither see
+  nor decide its proposals.
+- **Not before confirmation:** a proposal from a submission still waiting for
+  its e-mail confirmation is not listed (anyone can type someone's address);
+  it appears once the address is confirmed, and is removed with the
+  submission otherwise.
+
+Code: `src/services/contact-proposals`. Tests:
+`tests/db/contact-proposals.test.ts`.
+
 ### Website forms
 
 The Forms page lists a form's submissions only for contacts the user may

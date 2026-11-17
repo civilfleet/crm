@@ -211,6 +211,10 @@ straight away (changes to filled ones are only proposed), even when it asks
 for confirmation and is never confirmed. Someone could add a phone number or
 city to a real person's record by typing their e-mail address.
 
+Changes to filled fields are already safe: their proposals only show up for
+review once the submission is confirmed, and go with it otherwise. The fills
+of empty fields still happen straight away.
+
 **How.** For submissions that ask for confirmation, record the fills as
 proposals too, or apply them only on confirmation.
 

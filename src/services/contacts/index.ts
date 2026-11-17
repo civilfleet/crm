@@ -3941,6 +3941,7 @@ const exportContacts = async (
 };
 
 export {
+  assertIdentityEmailsAvailable,
   createContact,
   deleteContactFile,
   deleteContacts,
@@ -3957,4 +3958,5 @@ export {
   updateContact,
   exportContacts,
   findContactByIdentityEmail,
+  resolvePostalCentroid,
 };

@@ -19,6 +19,7 @@ import { auth } from "@/auth";
 import ContactChangeHistory from "@/components/contact-change-history";
 import ContactConsents from "@/components/contact-consents";
 import ContactEngagementHistory from "@/components/contact-engagement-history";
+import { ContactPendingChanges } from "@/components/contact-proposals";
 import ContactResponsiveTabs from "@/components/contact-responsive-tabs";
 import DeleteContactButton from "@/components/forms/delete-contact-button";
 import DeleteContactFileButton from "@/components/forms/delete-contact-file-button";
@@ -847,6 +848,7 @@ export default async function ContactDetailPage({
             </div>
 
             <div className="space-y-6 lg:col-span-4 lg:col-start-9">
+              <ContactPendingChanges teamId={teamId} contactId={id} />
               <ContactConsents consents={consents} />
               <ContactChangeHistory contactId={id} />
             </div>
