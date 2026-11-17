@@ -208,6 +208,10 @@ export type FormSubmissionRow = {
   /** The contact details as submitted, with the form's labels. */
   contactAnswers: FormContactAnswer[];
   confirmationRequested: boolean;
+  /** When the confirmation e-mail was handled: sent, or skipped (below). */
+  confirmationSentAt: Date | null;
+  /** Why no e-mail went out: "address-limit", "no-address". */
+  confirmationSkipped: string | null;
   confirmedAt: Date | null;
   verification: { status: string; issues: string[] } | null;
 };
@@ -266,6 +270,8 @@ export const getFormSubmissionsPage = async (
         email: true,
         contactAnswers: true,
         confirmationRequested: true,
+        confirmationSentAt: true,
+        confirmationSkipped: true,
         confirmedAt: true,
         verification: true,
         contact: { select: { id: true, name: true, primaryEmail: true } },

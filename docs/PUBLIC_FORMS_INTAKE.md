@@ -304,8 +304,11 @@ website page ──POST /v1/forms/confirmations {"token"}──▶ bridge (check
   - `PER_HOUR` (default 1000) in total and `BATCH` (100) per round, every
     `FORM_CONFIRMATION_INTERVAL_MS` (10 s), `CONCURRENCY` (5) at a time.
     Raise them for a campaign, within the Scaleway quota.
-  - `PER_ADDRESS_PER_DAY` (3) across forms, against e-mail bombing; beyond
-    it nothing is sent and the submission expires.
+  - `PER_ADDRESS_PER_DAY` (3) e-mails actually sent per address across
+    forms, against e-mail bombing; beyond it nothing is sent, the submission
+    records why (`confirmationSkipped`) and expires. The Forms page's
+    "E-mail confirmation" column shows each submission's state: confirmed,
+    sent and waiting for the click, waiting to be sent, or not sent and why.
   - `PER_SOURCE_PER_HOUR` (30): per sender as the bridge counts it (the
     envelope's `source`, a keyed hash of the IPv4 address or IPv6 `/64`,
     never the address), so one machine cannot use up the hourly budget.

@@ -187,6 +187,30 @@ test("every submission gets its own e-mail, at most three a day per address", as
   assert.deepEqual(flood, { sent: 1, skipped: 2, waiting: 0 });
 });
 
+test("only e-mails actually sent count toward the per-address limit", async () => {
+  const team = await createTeam();
+  for (let index = 0; index < 4; index++)
+    await sign(team.id, "giulia@example.org");
+
+  const sent: Mail[] = [];
+  assert.deepEqual(await run(sent), { sent: 3, skipped: 1, waiting: 0 });
+  const skipped = await db.formSubmission.findFirstOrThrow({
+    where: { confirmationSkipped: { not: null } },
+  });
+  assert.equal(skipped.confirmationSkipped, "address-limit");
+
+  // A day later: three new e-mails are allowed again, and the skipped one
+  // (handled, not sent) took none of them.
+  for (let index = 0; index < 3; index++)
+    await sign(team.id, "giulia@example.org", {
+      at: "2026-11-18T11:00:00.000Z",
+    });
+  const nextDay = await run(sent, {
+    now: new Date("2026-11-18T11:05:00.000Z"),
+  });
+  assert.equal(nextDay.sent, 3);
+});
+
 test("the hourly limit holds the rest back; an unreadable form waits", async () => {
   const team = await createTeam();
   for (const name of ["a", "b", "c"])

@@ -196,7 +196,7 @@ export const sendDueConfirmations = async ({
   const hourAgo = new Date(now.getTime() - 60 * 60_000);
   const dayAgo = new Date(now.getTime() - DAY);
   const sentLastHour = await prisma.formSubmission.count({
-    where: { confirmationSentAt: { gt: hourAgo } },
+    where: { confirmationSentAt: { gt: hourAgo }, confirmationSkipped: null },
   });
   let budget = Math.min(limits.batch, limits.perHour - sentLastHour);
   if (budget <= 0) return result;
@@ -237,7 +237,11 @@ export const sendDueConfirmations = async ({
     emails.length
       ? prisma.formSubmission.groupBy({
           by: ["email"],
-          where: { email: { in: emails }, confirmationSentAt: { gt: dayAgo } },
+          where: {
+            email: { in: emails },
+            confirmationSentAt: { gt: dayAgo },
+            confirmationSkipped: null,
+          },
           _count: { _all: true },
         })
       : [],
@@ -247,6 +251,7 @@ export const sendDueConfirmations = async ({
           where: {
             sourceKey: { in: sources },
             confirmationSentAt: { gt: hourAgo },
+            confirmationSkipped: null,
           },
           _count: { _all: true },
         })
@@ -260,16 +265,18 @@ export const sendDueConfirmations = async ({
   );
 
   // Decide first (one by one, so the counts hold), then send in parallel.
-  const markHandled = (id: string) =>
+  // Only e-mails actually sent count toward the limits; a skipped one
+  // records why.
+  const markHandled = (id: string, skipped?: "address-limit" | "no-address") =>
     prisma.formSubmission.update({
       where: { id },
-      data: { confirmationSentAt: now },
+      data: { confirmationSentAt: now, confirmationSkipped: skipped ?? null },
     });
   const toSend: typeof due = [];
   for (const submission of due) {
     const email = submission.email?.toLowerCase();
     if (!email || (toAddress.get(email) ?? 0) >= limits.perAddressPerDay) {
-      await markHandled(submission.id);
+      await markHandled(submission.id, email ? "address-limit" : "no-address");
       result.skipped++;
       continue;
     }

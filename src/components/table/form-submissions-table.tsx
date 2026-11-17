@@ -33,6 +33,7 @@ import type {
   FormContactAnswer,
   FormSubmissionAnswer,
 } from "@/lib/public-forms/submission";
+import { cn } from "@/lib/utils";
 
 /** A submission as GET /api/forms/[formId]/submissions sends it. */
 type FormSubmissionRow = {
@@ -45,6 +46,8 @@ type FormSubmissionRow = {
   answers: FormSubmissionAnswer[];
   contactAnswers: FormContactAnswer[];
   confirmationRequested: boolean;
+  confirmationSentAt: string | null;
+  confirmationSkipped: string | null;
   confirmedAt: string | null;
   verification: { status: string; issues: string[] } | null;
 };
@@ -58,6 +61,50 @@ const VERIFICATION_LABELS: Record<string, string> = {
 
 /** Every column starts visible. */
 const COLUMN_DEFAULTS: Record<string, boolean> = {};
+
+const time = (value: string) =>
+  new Date(value).toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+/** Where a submission's e-mail confirmation stands, in words. */
+const confirmationState = (
+  row: FormSubmissionRow,
+): { label: string; hint?: string; tone: "plain" | "muted" | "warning" } => {
+  if (row.confirmedAt)
+    return { label: `Confirmed ${time(row.confirmedAt)}`, tone: "plain" };
+  if (!row.confirmationRequested)
+    return {
+      label: "Not asked",
+      hint: "The form does not ask for confirmation, and no marketing consent was ticked.",
+      tone: "muted",
+    };
+  if (row.confirmationSkipped === "address-limit")
+    return {
+      label: "Not sent: daily limit for this address",
+      hint: "This address already got three confirmation e-mails in 24 hours (protection against e-mail bombing). The submission expires unconfirmed after 7 days.",
+      tone: "warning",
+    };
+  if (row.confirmationSkipped)
+    return {
+      label: "Not sent: no address",
+      hint: "The submission has no e-mail address to confirm.",
+      tone: "warning",
+    };
+  if (row.confirmationSentAt)
+    return {
+      label: `E-mail sent ${time(row.confirmationSentAt)}, waiting for click`,
+      tone: "muted",
+    };
+  return {
+    label: "Waiting to be sent",
+    hint: "Queued: sent within moments, or later if the hourly limits are reached or the form's published file cannot be read.",
+    tone: "muted",
+  };
+};
 
 const getRowId = (row: FormSubmissionRow) => row.id;
 
@@ -162,15 +209,22 @@ export const FormSubmissionsTable = ({
       },
       {
         id: "confirmed",
-        meta: { label: "E-mail confirmed", icon: CircleCheck, width: 160 },
-        cell: ({ row }) =>
-          row.original.confirmedAt ? (
-            <DateCell value={row.original.confirmedAt} />
-          ) : row.original.confirmationRequested ? (
-            <TextCell value="Waiting" muted />
-          ) : (
-            <TextCell value="Not asked" muted />
-          ),
+        meta: { label: "E-mail confirmation", icon: CircleCheck, width: 240 },
+        cell: ({ row }) => {
+          const state = confirmationState(row.original);
+          return (
+            <span
+              title={state.hint}
+              className={cn(
+                "block truncate",
+                state.tone === "muted" && "text-muted-foreground",
+                state.tone === "warning" && "text-warning-strong",
+              )}
+            >
+              {state.label}
+            </span>
+          );
+        },
       },
       {
         id: "verification",

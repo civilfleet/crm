@@ -1435,7 +1435,10 @@ model FormSubmission {
   // (src/lib/public-forms/verify.ts); null when it could not be checked.
   verification          Json?
   confirmationRequested Boolean   @default(false)
+  // When it was handled: the e-mail sent, or (with a reason) not sent.
   confirmationSentAt    DateTime? @db.Timestamptz(6)
+  // Why no e-mail went out: "address-limit" or "no-address"; null when sent.
+  confirmationSkipped   String?   @db.VarChar(32)
   confirmedAt           DateTime? @db.Timestamptz(6)
   createdAt             DateTime  @default(now()) @db.Timestamptz(6)
 
