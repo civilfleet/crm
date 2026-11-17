@@ -39,8 +39,9 @@ spec:
               valueFrom: { secretKeyRef: { name: seawatch-api-env, key: FORM_CONFIRMATION_KEY, optional: true } }
             # Captcha per intake route: off, optional (checked when sent) or
             # required. Switch to required once that website form sends it.
+            # Forms: required, the website sends it (sea-watch-nuxt #631).
             - name: CAPTCHA_MODE_FORMS
-              value: "off"
+              value: "required"
             - name: CAPTCHA_MODE_EVENTS
               value: "off"
             - name: CAPTCHA_KEY
