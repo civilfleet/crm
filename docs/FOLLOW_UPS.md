@@ -14,7 +14,6 @@ done, remove it here and update `docs/DATA_RULES.md` if a rule changed.
 - [8. Test the distance filter](#8-test-the-distance-filter)
 - [9. Production checks](#9-production-checks)
 - [10. Send marketing consent to Klaviyo](#10-send-marketing-consent-to-klaviyo)
-- [11. Check submissions against the published form](#11-check-submissions-against-the-published-form)
 - [12. Unconfirmed submissions still fill existing contacts](#12-unconfirmed-submissions-still-fill-existing-contacts)
 
 ## 1. Protect `Contact.primaryEmail`
@@ -187,22 +186,6 @@ does not see them yet. Unsubscribes in Klaviyo do not reach the CRM either.
 - Decide which team's consents go to which Klaviyo list.
 
 **Size.** Medium; needs a Klaviyo API key in the CRM's secrets.
-
-## 11. Check submissions against the published form
-
-**What.** The CRM reads each form's published file
-(`/forms/<formId>/<locale>.json`) for the confirmation text, but does not yet
-compare the submission with it. A forged submission can claim a marketing
-consent the form never had; it still needs the address confirmed, but the
-recorded wording is whatever was sent.
-
-**How.** Before recording consents, read the file (cached) and keep a
-purpose only when the form has a consent question with that id and purpose;
-take the wording from the file when the revisions match. Check option
-answers against `options`, and allow missing `conditional` questions. The
-bridge could reject unknown forms the same way, before queueing.
-
-**Size.** Small to medium.
 
 ## 12. Unconfirmed submissions still fill existing contacts
 

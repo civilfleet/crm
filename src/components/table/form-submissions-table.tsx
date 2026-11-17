@@ -9,6 +9,7 @@ import {
   Inbox,
   Mail,
   MessageSquareText,
+  ShieldCheck,
 } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import useSWR from "swr";
@@ -43,6 +44,14 @@ type FormSubmissionRow = {
   answers: FormSubmissionAnswer[];
   confirmationRequested: boolean;
   confirmedAt: string | null;
+  verification: { status: string; issues: string[] } | null;
+};
+
+const VERIFICATION_LABELS: Record<string, string> = {
+  verified: "Matches the form",
+  mismatch: "Differs from the form",
+  "other-revision": "Older version of the form",
+  unpublished: "Form not published",
 };
 
 /** Every column starts visible. */
@@ -140,6 +149,31 @@ export const FormSubmissionsTable = ({
           ) : (
             <TextCell value="Not asked" muted />
           ),
+      },
+      {
+        id: "verification",
+        meta: { label: "Checked", icon: ShieldCheck, width: 200 },
+        cell: ({ row }) => {
+          const verification = row.original.verification;
+          if (!verification) return <TextCell value="Not checked" muted />;
+          const label =
+            VERIFICATION_LABELS[verification.status] ?? verification.status;
+          return (
+            <span
+              title={verification.issues.join("\n") || undefined}
+              className={
+                verification.status === "verified"
+                  ? "block truncate"
+                  : "block truncate text-warning-strong"
+              }
+            >
+              {label}
+              {verification.issues.length
+                ? ` (${verification.issues.length})`
+                : ""}
+            </span>
+          );
+        },
       },
       {
         id: "locale",

@@ -161,6 +161,33 @@ proposals as pending, applied or rejected. They are reviewed on the contact
 
 Migration: `prisma/migrations/20261112120000_public_form_submissions`.
 
+## Checking against the published form
+
+The browser sends the submission, so anyone can change it. Before writing
+anything, the intake consumer reads the form's published file
+(`<PUBLIC_WEBSITE_URL>/forms/<formId>/<locale>.json`, cached 5 minutes) and
+checks the submission against it (`src/lib/public-forms/verify.ts`):
+
+- **Another team's form:** the file names a different team than the
+  submission; it is refused and moved to the failed stream.
+- **Consent purposes** hold only when the published form has a consent
+  question with that id and purpose (in today's file, whatever version the
+  person saw). Otherwise the answer stays an answer and no consent is
+  recorded, and the submission does not ask for confirmation because of it.
+- **Wording:** for the published version, the stored labels (and so the
+  consent wording) are the published ones.
+- **Everything else is recorded, not refused**, so a real person's
+  submission is never lost: unknown questions, options the form does not
+  offer, and missing required answers (questions shown only after certain
+  answers may be missing) make the result `mismatch`, with notes.
+
+The result is stored on the submission (`verification`: `verified`,
+`mismatch`, `other-revision` when sent with another version, `unpublished`
+when there is no file) and shown in the Forms page's "Checked" column, with
+the notes as a tooltip. If the website cannot be read, the submission waits
+and is retried (up to 10 deliveries, then the failed stream). Without
+`PUBLIC_WEBSITE_URL` nothing is checked.
+
 ## Forms page and public counter
 
 **Forms page** (CRM → Forms, `src/services/forms`): one row per form id the

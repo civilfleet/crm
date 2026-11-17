@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as registrationModule from "../src/lib/public-events/registration";
 import * as confirmationModule from "../src/lib/public-forms/confirmation";
+import * as publishedFormModule from "../src/lib/public-forms/published-form";
 import * as submissionModule from "../src/lib/public-forms/submission";
 import {
   ensureConsumer,
@@ -232,6 +233,7 @@ test("intake pipelines keep the event and form streams and rejection rules", () 
       "@/lib/prisma": {},
       "@/lib/public-events/registration": registrationModule,
       "@/lib/public-forms/submission": submissionModule,
+      "@/lib/public-forms/published-form": publishedFormModule,
       "@/services/form-submissions": {
         FormSubmissionRejectedError: class extends Error {},
       },

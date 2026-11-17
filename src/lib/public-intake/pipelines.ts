@@ -12,6 +12,7 @@ import {
   type FormConfirmationMessage,
   formConfirmationMessage,
 } from "@/lib/public-forms/confirmation";
+import { createPublishedFormReader } from "@/lib/public-forms/published-form";
 import {
   FORM_SUBMISSION_CONSUMER,
   FORM_SUBMISSION_FAILURE_SUBJECT,
@@ -54,6 +55,12 @@ export const eventRegistrationPipeline: IntakePipeline<RegistrationMessage> = {
     error.message === "Event not found or not accepting registrations",
 };
 
+// Submissions are checked against the form the website published
+// (src/lib/public-forms/verify.ts); without the website address, they are not.
+const readPublishedForm = process.env.PUBLIC_WEBSITE_URL
+  ? createPublishedFormReader({ websiteUrl: process.env.PUBLIC_WEBSITE_URL })
+  : undefined;
+
 export const formSubmissionPipeline: IntakePipeline<FormSubmissionMessage> = {
   name: "Form submissions",
   stream: FORM_SUBMISSION_STREAM,
@@ -68,7 +75,8 @@ export const formSubmissionPipeline: IntakePipeline<FormSubmissionMessage> = {
         select: { id: true },
       }),
     ),
-  process: (data) => createFormSubmission(data),
+  process: (data) =>
+    createFormSubmission(data, { readForm: readPublishedForm }),
   isRejection: (error) => error instanceof FormSubmissionRejectedError,
 };
 

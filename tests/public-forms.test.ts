@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as registrationModule from "../src/lib/public-events/registration";
 import * as confirmationModule from "../src/lib/public-forms/confirmation";
+import * as publishedFormModule from "../src/lib/public-forms/published-form";
 import * as submissionModule from "../src/lib/public-forms/submission";
 import {
   FORM_SUBMISSION_FAILURE_SUBJECT,
@@ -10,6 +11,7 @@ import {
   formSubmissionMessage,
   formSubmissionPayload,
 } from "../src/lib/public-forms/submission";
+import * as verifyModule from "../src/lib/public-forms/verify";
 import {
   handleMessage,
   type IntakeJetStream,
@@ -323,11 +325,16 @@ function formHarness(options: { enabled?: boolean } = {}) {
     "@/types": types,
   });
   const service = loadModule<{
-    createFormSubmission: (input: unknown) => Promise<Row>;
+    createFormSubmission: (
+      input: unknown,
+      options?: { readForm?: (id: string, locale: string) => Promise<unknown> },
+    ) => Promise<Row>;
     FormSubmissionRejectedError: new () => Error;
   }>("src/services/form-submissions/index.ts", {
     "@/lib/prisma": prisma,
     "@/lib/public-forms/submission": submissionModule,
+    "@/lib/public-forms/verify": verifyModule,
+    "@/lib/public-forms/published-form": publishedFormModule,
     "@/services/contact-intake": intake,
     "@/types": types,
   });
@@ -470,6 +477,95 @@ test("confirmation is asked for by the form, or by a marketing consent", async (
   await notAsked.service.createFormSubmission(message());
   assert.equal(notAsked.state().submissions[0].confirmationRequested, false);
   assert.equal(notAsked.state().consents.length, 0);
+});
+
+const publishedForm = (overrides: Row = {}) => ({
+  version: 1,
+  formId: "abc123documentid",
+  locale: "de",
+  revision: "2026-11-10T09:00:00.000Z",
+  teamId: TEAM_ID,
+  title: "Volunteer interest",
+  confirmation: null,
+  questions: [
+    { id: "motivation", label: "Warum?", type: "textarea", required: false },
+    {
+      id: "updates",
+      label: "Updates von Sea-Watch",
+      type: "consent",
+      required: false,
+      purpose: "marketing",
+    },
+  ],
+  ...overrides,
+});
+const withMarketing = () => [
+  ...validPayload().answers,
+  {
+    id: "updates",
+    label: "Something else",
+    type: "consent",
+    value: true,
+    purpose: "marketing",
+  },
+];
+
+test("checked against the published form: wording from the file, result stored", async () => {
+  const harness = formHarness();
+  await harness.service.createFormSubmission(
+    message({ answers: withMarketing() }),
+    { readForm: async () => publishedForm() },
+  );
+  const state = harness.state();
+  assert.equal(state.consents[0].wording, "Updates von Sea-Watch");
+  const verification = state.submissions[0].verification as Row;
+  // The sample answers include questions the file lacks.
+  assert.equal(verification.status, "mismatch");
+});
+
+test("a purpose the published form lacks records no consent", async () => {
+  const harness = formHarness();
+  await harness.service.createFormSubmission(
+    message({ answers: withMarketing() }),
+    {
+      readForm: async () =>
+        publishedForm({
+          questions: [
+            {
+              id: "updates",
+              label: "Updates",
+              type: "consent",
+              required: false,
+            },
+          ],
+        }),
+    },
+  );
+  assert.equal(harness.state().consents.length, 0);
+  assert.equal(harness.state().submissions[0].confirmationRequested, false);
+});
+
+test("a form published for another team is refused; an unreachable site retries", async () => {
+  const foreign = formHarness();
+  await assert.rejects(
+    foreign.service.createFormSubmission(message(), {
+      readForm: async () =>
+        publishedForm({ teamId: "22222222-2222-4222-8222-222222222222" }),
+    }),
+    (error: Error) => error.name === "FormSubmissionRejectedError",
+  );
+  assert.equal(foreign.state().submissions.length, 0);
+
+  const down = formHarness();
+  await assert.rejects(
+    down.service.createFormSubmission(message(), {
+      readForm: async () => {
+        throw new publishedFormModule.PublishedFormUnavailableError("down");
+      },
+    }),
+    (error: Error) => error.name === "PublishedFormUnavailableError",
+  );
+  assert.equal(down.state().submissions.length, 0);
 });
 
 test("existing contact only gets empty fields filled, never overwritten", async () => {
@@ -700,6 +796,8 @@ function formPipeline(
     "@/lib/prisma": harness.prisma,
     "@/lib/public-events/registration": registrationModule,
     "@/lib/public-forms/submission": submissionModule,
+    "@/lib/public-forms/verify": verifyModule,
+    "@/lib/public-forms/published-form": publishedFormModule,
     "@/services/form-submissions": {
       ...harness.service,
       createFormSubmission: create ?? harness.service.createFormSubmission,

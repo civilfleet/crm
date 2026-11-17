@@ -203,6 +203,7 @@ export type FormSubmissionRow = {
   answers: FormSubmissionAnswer[];
   confirmationRequested: boolean;
   confirmedAt: Date | null;
+  verification: { status: string; issues: string[] } | null;
 };
 
 /** One form's submissions, newest first unless asked otherwise. */
@@ -258,6 +259,7 @@ export const getFormSubmissionsPage = async (
         answers: true,
         confirmationRequested: true,
         confirmedAt: true,
+        verification: true,
         contact: { select: { id: true, name: true, primaryEmail: true } },
       },
     }),
@@ -266,6 +268,7 @@ export const getFormSubmissionsPage = async (
   const data: FormSubmissionRow[] = rows.map(({ contact, ...row }) => ({
     ...row,
     answers: (row.answers ?? []) as FormSubmissionAnswer[],
+    verification: row.verification as FormSubmissionRow["verification"],
     contact: {
       id: contact.id,
       name: contact.name,

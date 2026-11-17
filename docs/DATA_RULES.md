@@ -234,6 +234,10 @@ What a person agreed to beyond a single form, for example to receive updates
 - **An unticked box never withdraws.** Signing again without the tick leaves
   an earlier consent as it is; only an explicit unsubscribe or a change by
   hand writes `WITHDRAWN`.
+- **Only consents the published form asks for.** A purpose holds only when
+  the form the website published has a consent question with that id and
+  purpose, and the recorded wording is the published one
+  (`src/lib/public-forms/verify.ts`); a forged purpose records nothing.
 - **The purposes are a fixed list**, `CONSENT_PURPOSES` in
   `src/lib/public-forms/submission.ts`, mirrored in the website's shared forms
   contract.

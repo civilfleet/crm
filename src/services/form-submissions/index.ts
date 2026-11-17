@@ -1,9 +1,11 @@
 import prisma from "@/lib/prisma";
+import type { PublishedFormReader } from "@/lib/public-forms/published-form";
 import {
   FORM_ENGAGEMENT_EXTERNAL_SOURCE,
   type FormSubmissionMessage,
   formatFormAnswers,
 } from "@/lib/public-forms/submission";
+import { verifySubmission } from "@/lib/public-forms/verify";
 import { resolveIntakeContact } from "@/services/contact-intake";
 import { EngagementDirection, EngagementSource } from "@/types";
 
@@ -22,9 +24,30 @@ export class FormSubmissionRejectedError extends Error {
  * Persist one queued website form submission. Idempotent on submissionId:
  * a redelivered message returns the committed row without further writes.
  */
-export const createFormSubmission = async (input: FormSubmissionMessage) => {
+export const createFormSubmission = async (
+  input: FormSubmissionMessage,
+  options: {
+    /** Reads the published form; without it nothing is checked. */
+    readForm?: PublishedFormReader;
+  } = {},
+) => {
   const { submissionId, submission } = input;
   const receivedAt = new Date(input.receivedAt);
+
+  // Checked against the published form before anything is written. An
+  // unreachable website throws, so the message is retried later rather than
+  // stored unchecked.
+  const checked = options.readForm
+    ? verifySubmission(
+        submission,
+        await options.readForm(submission.form.id, submission.form.locale),
+      )
+    : null;
+  if (checked?.teamMismatch)
+    throw new FormSubmissionRejectedError(
+      "The published form belongs to another team",
+    );
+  const answers = checked?.answers ?? submission.answers;
 
   return prisma.$transaction(async (tx) => {
     const existing = await tx.formSubmission.findUnique({
@@ -70,7 +93,7 @@ export const createFormSubmission = async (input: FormSubmissionMessage) => {
     // A ticked consent question with a purpose becomes that consent. It
     // needs the e-mail confirmed first, so it asks for confirmation whatever
     // the form says (docs/DATA_RULES.md, "Consent").
-    const consents = submission.answers.filter(
+    const consents = answers.filter(
       (answer) =>
         answer.type === "consent" && answer.purpose && answer.value === true,
     );
@@ -87,12 +110,15 @@ export const createFormSubmission = async (input: FormSubmissionMessage) => {
         formRevision: form.revision,
         locale: form.locale,
         page: submission.page,
-        answers: JSON.parse(JSON.stringify(submission.answers)),
+        answers: JSON.parse(JSON.stringify(answers)),
         submittedAt: new Date(submission.submittedAt),
         receivedAt,
         email,
         createdContact: created,
         confirmationRequested,
+        ...(checked
+          ? { verification: JSON.parse(JSON.stringify(checked.verification)) }
+          : {}),
       },
     });
 
@@ -123,7 +149,7 @@ export const createFormSubmission = async (input: FormSubmissionMessage) => {
         source: EngagementSource.FORM,
         subject: `Form: ${form.title}`.slice(0, 500),
         message: [
-          formatFormAnswers(submission.answers) ||
+          formatFormAnswers(answers) ||
             "Form submitted without additional answers.",
           proposedChanges
             ? `${proposedChanges} contact ${proposedChanges === 1 ? "change" : "changes"} pending review (see change history).`

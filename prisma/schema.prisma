@@ -1425,6 +1425,9 @@ model FormSubmission {
   // Whether this submission made the contact (for removing unconfirmed ones).
   createdContact        Boolean   @default(false)
   // E-mail confirmation (docs/PUBLIC_FORMS_INTAKE.md, "Confirmation").
+  // Checked against the published form: {status, issues}
+  // (src/lib/public-forms/verify.ts); null when it could not be checked.
+  verification          Json?
   confirmationRequested Boolean   @default(false)
   confirmationSentAt    DateTime? @db.Timestamptz(6)
   confirmedAt           DateTime? @db.Timestamptz(6)
