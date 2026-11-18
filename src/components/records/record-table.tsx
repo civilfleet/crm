@@ -384,20 +384,46 @@ export const RecordTable = <TData,>({
                         <tr
                           key={row.id}
                           data-state={isSelected ? "selected" : undefined}
-                          onClick={(event) =>
-                            handleRowClick(event, row.original)
-                          }
+                          onClick={(event) => {
+                            // Next to the box, inside its cell: select, not open.
+                            const target = event.target as HTMLElement;
+                            if (target.closest("[data-select-cell]")) {
+                              if (target.closest("[role='checkbox']")) return;
+                              let ranged = false;
+                              handleSelectClick(
+                                {
+                                  shiftKey: event.shiftKey,
+                                  preventDefault: () => {
+                                    ranged = true;
+                                  },
+                                },
+                                row.id,
+                              );
+                              if (!ranged) row.toggleSelected(!isSelected);
+                              return;
+                            }
+                            handleRowClick(event, row.original);
+                          }}
                           className={cn("group", href && "cursor-pointer")}
                         >
                           {selectable ? (
-                            <td className={cn(cellClass, "sticky left-0 z-10")}>
+                            <td
+                              // The whole cell selects the row (the row's
+                              // click handler): a near miss must not open it.
+                              data-select-cell=""
+                              className={cn(
+                                cellClass,
+                                "sticky left-0 z-10 cursor-default",
+                              )}
+                              // No text selection on a shift-click (cell or box).
+                              onMouseDown={(event) => {
+                                if (event.shiftKey) event.preventDefault();
+                              }}
+                            >
                               <Checkbox
                                 aria-label="Select row"
                                 checked={isSelected}
                                 // Shift-click: from the last row clicked to here.
-                                onMouseDown={(event) => {
-                                  if (event.shiftKey) event.preventDefault();
-                                }}
                                 onClick={(event) =>
                                   handleSelectClick(event, row.id)
                                 }
