@@ -1,8 +1,7 @@
-import { GalleryVerticalEnd } from "lucide-react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { BrandHomeLink, BrandPanel } from "@/components/brand";
 import { LoginForm } from "@/components/login-form";
-import { APP_NAME } from "@/constants/app";
 import { getPublicLoginOptions } from "@/lib/auth-routing";
 import { getUserCurrent } from "@/services/users";
 import { Roles } from "@/types";
@@ -50,12 +49,7 @@ export default async function LoginPage() {
     <div className="grid min-h-svh lg:grid-cols-2">
       <div className="flex min-h-svh min-w-0 flex-col gap-4 px-4 py-5 sm:px-8 sm:py-7 lg:p-10">
         <div className="flex justify-center gap-2 sm:justify-start">
-          <a href="/" className="flex items-center gap-2 font-medium">
-            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
-              <GalleryVerticalEnd className="size-4" />
-            </div>
-            {APP_NAME}
-          </a>
+          <BrandHomeLink />
         </div>
         <div className="flex flex-1 items-center justify-center py-6 sm:py-10">
           <div className="w-full min-w-0 max-w-sm rounded-xl border bg-card/95 p-5 shadow-sm sm:p-8">
@@ -63,6 +57,7 @@ export default async function LoginPage() {
           </div>
         </div>
       </div>
+      <BrandPanel />
     </div>
   );
 }

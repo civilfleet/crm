@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
 
@@ -15,6 +15,9 @@ export const metadata: Metadata = {
   title: APP_NAME,
   description: "A funding manager application.",
 };
+
+// Sea-Watch navy, as in the logo (docs/BRAND.md).
+export const viewport: Viewport = { themeColor: "#001F29" };
 
 export default function RootLayout({
   children,
