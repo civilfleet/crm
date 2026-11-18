@@ -20,6 +20,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { languageName } from "@/lib/languages";
 import { ChangeAction, type ContactChangeLog } from "@/types";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -101,6 +102,10 @@ const getProposalStatus = (
 
 const formatFieldName = (fieldName?: string) => {
   if (!fieldName) return "";
+  // One entry per language: "language.ar" → "Language: Arabic".
+  if (fieldName.startsWith("language.")) {
+    return `Language: ${languageName(fieldName.slice("language.".length))}`;
+  }
   // Convert camelCase to Title Case
   return fieldName
     .replace(/[_-]+/g, " ")

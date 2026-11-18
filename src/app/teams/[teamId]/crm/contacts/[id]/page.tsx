@@ -6,6 +6,7 @@ import {
   FileText,
   Globe,
   Hash,
+  Languages,
   Mail,
   MapPin,
   MessageCircle,
@@ -35,6 +36,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { formatSpokenLanguages } from "@/lib/languages";
 import { getContactConsents } from "@/services/contact-consents";
 import {
   getAllowedContactSubmodules,
@@ -290,6 +292,11 @@ export default async function ContactDetailPage({
       icon: MapPin,
       label: "Address",
       value: formattedAddress,
+    },
+    contact.languages.length > 0 && {
+      icon: Languages,
+      label: "Languages",
+      value: formatSpokenLanguages(contact.languages),
     },
     ...socialItems,
   ].filter(Boolean) as Array<{

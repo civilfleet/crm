@@ -9,6 +9,7 @@ import {
   Download,
   FileText,
   Globe,
+  Languages,
   Mail,
   MapPin,
   Phone,
@@ -41,6 +42,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatLanguageCodes } from "@/lib/languages";
 import type { FundingRequest, Organization } from "@/types";
 import DetailItem from "./helper/detail-item";
 
@@ -182,6 +184,15 @@ export default function OrganizationDetails({
                       label="Website"
                       value={organization.website}
                       type="link"
+                      className="flex-1"
+                    />
+                  </div>
+
+                  <div className="flex items-start space-x-2">
+                    <Languages className="h-4 w-4 mt-1 text-muted-foreground" />
+                    <DetailItem
+                      label="Languages"
+                      value={formatLanguageCodes(organization.languages ?? [])}
                       className="flex-1"
                     />
                   </div>

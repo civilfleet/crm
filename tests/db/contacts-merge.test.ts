@@ -178,6 +178,10 @@ const createMergeSetup = async () => {
   await db.contactSocialLink.create({
     data: { contactId: source.id, platform: "mastodon", handle: "@g" },
   });
+  // A language only the source speaks; it moves to the target.
+  await db.contactLanguage.create({
+    data: { contactId: source.id, language: "ar", level: "NATIVE" },
+  });
   await db.file.create({
     data: {
       url: "contacts/g-conti/cv.pdf",

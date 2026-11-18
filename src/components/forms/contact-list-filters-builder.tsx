@@ -20,7 +20,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  LANGUAGE_LEVEL_LABELS,
+  LANGUAGE_LEVELS,
+  LANGUAGE_OPTIONS,
+  type LanguageLevel,
+} from "@/lib/languages";
 import type { ContactFilter, ContactFilterType } from "@/types";
+
+/** The level select's "any level" choice (a Select item cannot be empty). */
+const ANY_LEVEL = "any";
 
 type FilterOption = {
   type: ContactFilterType;
@@ -115,6 +124,7 @@ const FILTER_OPTIONS: FilterOption[] = [
     allowMultiple: true,
   },
   { type: "attribute", label: "Profile attribute", allowMultiple: true },
+  { type: "language", label: "Speaks a language", allowMultiple: true },
   { type: "group", label: "Group membership", allowMultiple: true },
   { type: "eventRole", label: "Event role participation", allowMultiple: true },
   {
@@ -247,6 +257,8 @@ export function ContactListFiltersBuilder({
           operator: "contains",
           value: "",
         };
+      case "language":
+        return { type: "language", language: "" };
       case "group":
         return {
           type: "group",
@@ -475,6 +487,62 @@ export function ContactListFiltersBuilder({
                           })
                         }
                       />
+                    </div>
+                  </div>
+                );
+              case "language":
+                return (
+                  <div key={filterKey} className="rounded-md border p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Badge variant="outline">Language</Badge>
+                        <span>Speaks</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeFilter(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="sr-only">Remove filter</span>
+                      </Button>
+                    </div>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <Combobox
+                        value={filter.language}
+                        onChange={(language) =>
+                          updateFilter(index, { ...filter, language })
+                        }
+                        placeholder="Select language"
+                        searchPlaceholder="Search language..."
+                        emptyStateText="No language found."
+                        options={LANGUAGE_OPTIONS}
+                      />
+                      <Select
+                        value={filter.minLevel ?? ANY_LEVEL}
+                        onValueChange={(value) =>
+                          updateFilter(index, {
+                            ...filter,
+                            minLevel:
+                              value === ANY_LEVEL
+                                ? undefined
+                                : (value as LanguageLevel),
+                          })
+                        }
+                      >
+                        <SelectTrigger aria-label="Level">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={ANY_LEVEL}>Any level</SelectItem>
+                          {LANGUAGE_LEVELS.map((level) => (
+                            <SelectItem key={level} value={level}>
+                              {LANGUAGE_LEVEL_LABELS[level]} or better
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 );

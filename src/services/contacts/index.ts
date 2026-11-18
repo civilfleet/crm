@@ -17,6 +17,14 @@ import { normalizeCountryCode } from "@/lib/countries";
 import { parseCsv, stringifyCsv } from "@/lib/csv";
 import { normalizePostalCode } from "@/lib/geo";
 import { chainOrderBy, type RecordSort } from "@/lib/list-request";
+import {
+  higherLevel,
+  LANGUAGE_LEVEL_LABELS,
+  type LanguageLevel,
+  levelsFrom,
+  normalizeSpokenLanguages,
+  type SpokenLanguage,
+} from "@/lib/languages";
 import prisma from "@/lib/prisma";
 import { parseVCardContacts } from "@/lib/vcard";
 import { getContactVisibility } from "@/services/contacts/access";
@@ -40,6 +48,7 @@ import {
   type ContactLocationValue,
   type ContactProfileAttribute,
   type ContactRequestPreference,
+  type ContactLanguage,
   type ContactSocialLink,
   type Contact as ContactType,
   Roles,
@@ -103,6 +112,7 @@ type CreateContactInput = {
   website?: string;
   notes?: string;
   socialLinks?: ContactSocialLink[];
+  languages?: SpokenLanguage[];
   organizationIds?: string[];
   groupId?: string;
   groupIds?: string[];
@@ -139,6 +149,7 @@ type UpdateContactInput = {
   website?: string;
   notes?: string;
   socialLinks?: ContactSocialLink[];
+  languages?: SpokenLanguage[];
   organizationIds?: string[];
   groupId?: string;
   groupIds?: string[];
@@ -208,6 +219,7 @@ type ContactWithAttributes = Prisma.ContactGetPayload<{
     attributes: true;
     emails: true;
     socialLinks: true;
+    languages: true;
     group: {
       include: {
         modulePermissions: true;
@@ -256,6 +268,7 @@ const contactInclude = {
   attributes: true,
   emails: true,
   socialLinks: true,
+  languages: { orderBy: { createdAt: "asc" } },
   group: {
     include: {
       modulePermissions: true,
@@ -899,6 +912,9 @@ const mapContact = (contact: ContactWithAttributes): ContactType => ({
     platform: link.platform,
     handle: link.handle,
   })),
+  languages: contact.languages.map(
+    ({ language, level }): ContactLanguage => ({ language, level }),
+  ),
   organizations: contact.organizations.map(({ organization }) => ({
     id: organization.id,
     name: organization.name,
@@ -1569,6 +1585,21 @@ async function getTeamContacts(
     });
   }
 
+  // Each "speaks" filter must hold: Arabic and English means both.
+  for (const filter of resolvedFilters) {
+    if (filter.type !== "language" || !filter.language) continue;
+    andConditions.push({
+      languages: {
+        some: {
+          language: filter.language,
+          ...(filter.minLevel
+            ? { level: { in: levelsFrom(filter.minLevel) } }
+            : {}),
+        },
+      },
+    });
+  }
+
   const contactIdsFilters = resolvedFilters.filter(
     (filter): filter is Extract<ContactFilter, { type: "contactIds" }> =>
       filter.type === "contactIds" &&
@@ -1815,6 +1846,7 @@ const createContact = async (
     website,
     notes,
     socialLinks,
+    languages,
     organizationIds,
     groupId,
     groupIds,
@@ -1824,6 +1856,7 @@ const createContact = async (
   const normalizedGroupIds = normalizeGroupIds(groupIds, groupId);
   const normalizedAttributes = normalizeAttributes(profileAttributes);
   const normalizedSocialLinks = normalizeSocialLinks(socialLinks);
+  const normalizedLanguages = normalizeSpokenLanguages(languages);
   const normalizedOrganizationIds = Array.from(new Set(organizationIds ?? []));
   const trimmedName = name?.trim() ?? "";
   if (!trimmedName) {
@@ -1940,6 +1973,15 @@ const createContact = async (
           contactId: contact.id,
           platform: link.platform,
           handle: link.handle,
+        })),
+      });
+    }
+
+    if (normalizedLanguages.length > 0) {
+      await tx.contactLanguage.createMany({
+        data: normalizedLanguages.map((entry) => ({
+          contactId: contact.id,
+          ...entry,
         })),
       });
     }
@@ -2352,6 +2394,7 @@ const updateContact = async (
     groupIds,
     profileAttributes,
     socialLinks,
+    languages,
     organizationIds,
     files,
   } = sanitizedInput;
@@ -2532,6 +2575,10 @@ const updateContact = async (
   const normalizedSocialLinks = socialLinksProvided
     ? normalizeSocialLinks(socialLinks)
     : [];
+  const languagesProvided = Object.hasOwn(sanitizedInput, "languages");
+  const normalizedLanguages = languagesProvided
+    ? normalizeSpokenLanguages(languages)
+    : [];
   const organizationIdsProvided = Object.hasOwn(sanitizedInput, "organizationIds");
   const normalizedOrganizationIds = organizationIdsProvided
     ? Array.from(new Set(organizationIds ?? []))
@@ -2555,6 +2602,7 @@ const updateContact = async (
         attributes: true,
         emails: true,
         socialLinks: true,
+        languages: true,
         groups: true,
         organizations: {
           include: {
@@ -2994,6 +3042,54 @@ const updateContact = async (
             data: { handle: link.handle },
           });
         }
+      }
+    }
+
+    if (languagesProvided) {
+      // One history entry per language added, removed or re-levelled; the
+      // value is the level ("Spoken" when none was given).
+      const shown = (level: LanguageLevel | null) =>
+        level ? LANGUAGE_LEVEL_LABELS[level] : "Spoken";
+      const existingLanguages = new Map(
+        existing.languages.map((entry) => [entry.language, entry]),
+      );
+      const nextLanguages = new Map(
+        normalizedLanguages.map((entry) => [entry.language, entry]),
+      );
+      for (const [language, entry] of existingLanguages) {
+        if (nextLanguages.has(language)) continue;
+        await logFieldUpdate(
+          contactId,
+          `language.${language}`,
+          shown(entry.level),
+          null,
+          userId,
+          userName,
+          tx,
+        );
+        await tx.contactLanguage.delete({ where: { id: entry.id } });
+      }
+      for (const [language, entry] of nextLanguages) {
+        const before = existingLanguages.get(language);
+        if (before && before.level === entry.level) continue;
+        await logFieldUpdate(
+          contactId,
+          `language.${language}`,
+          before ? shown(before.level) : null,
+          shown(entry.level),
+          userId,
+          userName,
+          tx,
+        );
+        if (before)
+          await tx.contactLanguage.update({
+            where: { id: before.id },
+            data: { level: entry.level },
+          });
+        else
+          await tx.contactLanguage.create({
+            data: { contactId, language, level: entry.level },
+          });
       }
     }
 
@@ -3702,6 +3798,34 @@ const mergeContacts = async (
             handle: link.handle,
           },
         });
+      }
+    }
+
+    // Languages of all of them; one spoken by several keeps the higher level.
+    const targetLanguages = new Map(
+      target.languages.map((entry) => [entry.language, entry]),
+    );
+    for (const source of sources) {
+      for (const entry of source.languages) {
+        const current = targetLanguages.get(entry.language);
+        if (!current) {
+          const created = await tx.contactLanguage.create({
+            data: {
+              contactId: input.targetContactId,
+              language: entry.language,
+              level: entry.level,
+            },
+          });
+          targetLanguages.set(entry.language, created);
+          continue;
+        }
+        const level = higherLevel(current.level, entry.level);
+        if (level === current.level) continue;
+        const updated = await tx.contactLanguage.update({
+          where: { id: current.id },
+          data: { level },
+        });
+        targetLanguages.set(entry.language, updated);
       }
     }
 

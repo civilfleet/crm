@@ -1,13 +1,17 @@
 import { type Prisma, Roles } from "@prisma/client";
 import { auth } from "@/auth";
 import { chainOrderBy, type RecordSort } from "@/lib/list-request";
+import { normalizeLanguageCodes } from "@/lib/languages";
 import logger from "@/lib/logger";
 import prisma from "@/lib/prisma";
 import {
   getPrimaryEmail,
   primaryContactEmailSelect,
 } from "@/services/contact-emails";
-import type { OrganizationFieldFilter } from "@/validations/organization-filters";
+import type {
+  OrganizationFieldFilter,
+  OrganizationFilter,
+} from "@/validations/organization-filters";
 
 type Organization = {
   name?: string;
@@ -24,6 +28,7 @@ type Organization = {
   taxID?: string;
   orgTypeId?: string;
   profileData?: Prisma.InputJsonValue;
+  languages?: string[];
   contactPersonId?: string;
   teamId?: string;
   isFilledByOrg: boolean;
@@ -227,6 +232,9 @@ const createOrUpdateOrganization = async (formData: Organization) => {
       isFilledByOrg: formData.isFilledByOrg,
       portalAccessEnabled,
       profileData,
+      ...(Array.isArray(formData.languages) && {
+        languages: normalizeLanguageCodes(formData.languages),
+      }),
       ...(bankDetail && { bankDetails: { connect: { id: bankDetail.id } } }),
       ...(orgUser && {
         users: { connect: { id: orgUser.id } },
@@ -350,6 +358,9 @@ const updateOrganization = async (formData: Organization, id: string) => {
       isFilledByOrg: formData.isFilledByOrg,
       portalAccessEnabled: formData.portalAccessEnabled,
       profileData: formData.profileData ?? undefined,
+      ...(Array.isArray(formData.languages) && {
+        languages: normalizeLanguageCodes(formData.languages),
+      }),
       orgType: formData.orgTypeId
         ? { connect: { id: formData.orgTypeId } }
         : { disconnect: true },
@@ -614,7 +625,7 @@ const organizationOrderBy = (
 const getOrganizations = async (
   searchQuery: string,
   teamId: string,
-  filters: OrganizationFieldFilter[] = [],
+  filters: OrganizationFilter[] = [],
   pagination?: {
     page: number;
     pageSize: number;
@@ -623,8 +634,15 @@ const getOrganizations = async (
   /** The list itself, or the trash. */
   deleted: "active" | "trashed" = "active",
 ) => {
-  const fieldFilters = filters.filter((filter) => filter.type === "field");
+  const fieldFilters = filters.filter(
+    (filter): filter is OrganizationFieldFilter => filter.type === "field",
+  );
   const andClauses: Prisma.OrganizationWhereInput[] = [];
+  // Each language filter must hold: Arabic and English means both.
+  for (const filter of filters) {
+    if (filter.type === "language")
+      andClauses.push({ languages: { has: filter.language } });
+  }
 
   fieldFilters.forEach((filter) => {
     const key = filter.key.trim();

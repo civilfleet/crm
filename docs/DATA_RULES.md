@@ -15,6 +15,7 @@ Known open points are in [FOLLOW_UPS.md](FOLLOW_UPS.md).
   - [Editing a contact](#editing-a-contact)
   - [E-mail addresses](#e-mail-addresses)
   - [Merging contacts](#merging-contacts)
+  - [Languages](#languages)
   - [Trash, restore and permanent delete](#trash-restore-and-permanent-delete)
   - [Organizations in the trash](#organizations-in-the-trash)
 - [Lists and saved views](#lists-and-saved-views)
@@ -165,8 +166,9 @@ sources). Before removing them it moves **everything** that pointed at them
 onto the target: e-mail addresses (as chosen), groups, organizations, list
 memberships, files, engagements and tasks (with their assignee), inbox
 messages, e-mail recipients, event participation and roles, registrations,
-form submissions, consents, attributes, social links, access reviews, the
-organization contact-person link, and the history. Duplicates are kept once.
+form submissions, consents, attributes, social links, languages, access
+reviews, the organization contact-person link, and the history. Duplicates
+are kept once; a language several of them speak keeps the higher level.
 
 Removing a source contact deletes whatever still points at it, so **every
 new table that references `Contact` must be handled in `mergeContacts`**.
@@ -176,6 +178,24 @@ merge loses a row (`tests/db/contacts-merge.test.ts`).
 
 A merge is all or nothing, and every contact in it must be visible to the
 person merging.
+
+### Languages
+
+A contact has a list of languages it speaks, each with an optional level
+(Basic, Conversational, Fluent, Native); an organization has a list of the
+languages it works in, without levels. Both are stored as ISO 639-1 codes
+(`src/lib/languages.ts`) and shown by their English names; unknown codes are
+dropped, and a language is listed once (with the higher level).
+
+- An edit replaces a contact's languages with the list sent; leaving them
+  out keeps them. Each language added, removed or given another level is
+  one history entry (`language.<code>`, the level or "Spoken").
+- The "Speaks" filter (contacts and smart lists) takes a language and an
+  optional minimum level; "Uses language" filters organizations. Several
+  language filters must all hold.
+- Languages are not a restricted field: whoever sees the contact sees them.
+
+(`tests/db/languages.test.ts`)
 
 ### Which contact a website submission belongs to
 

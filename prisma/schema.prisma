@@ -38,6 +38,8 @@ model Organization {
   engagements         OrganizationEngagement[]
   fieldValues         OrganizationFieldValue[]
   tags                String[]                 @default([])
+  // ISO 639-1 codes of the languages it works in (src/lib/languages.ts).
+  languages           String[]                 @default([])
   // In the trash since then (docs/DATA_RULES.md, "Organizations in the trash").
   deletedAt           DateTime?                @db.Timestamptz(6)
 
@@ -48,6 +50,7 @@ model Organization {
   fileDownloadAudits FileDownloadAudit[]
 
   @@index([tags], type: Gin)
+  @@index([languages], type: Gin)
   @@index([teamId, deletedAt])
 }
 
@@ -593,6 +596,7 @@ model Contact {
   emails                       ContactEmail[]
   attributes                   ContactAttribute[]
   socialLinks                  ContactSocialLink[]
+  languages                    ContactLanguage[]
   events                       EventContact[]
   registrations                EventRegistration[]
   formSubmissions              FormSubmission[]
@@ -1028,6 +1032,28 @@ model PostalCodeCentroid {
 
   @@id([countryCode, postalCode])
   @@index([postalCode])
+}
+
+// How well a contact speaks a language (src/lib/languages.ts).
+enum LanguageLevel {
+  BASIC
+  CONVERSATIONAL
+  FLUENT
+  NATIVE
+}
+
+// A language a contact speaks: an ISO 639-1 code, and how well if known.
+model ContactLanguage {
+  id        String         @id @unique @default(uuid())
+  contactId String
+  contact   Contact        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  language  String         @db.VarChar(8)
+  level     LanguageLevel?
+  createdAt DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime       @updatedAt @db.Timestamptz(6)
+
+  @@unique([contactId, language])
+  @@index([language])
 }
 
 model ContactSocialLink {

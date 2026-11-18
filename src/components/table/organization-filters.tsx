@@ -3,6 +3,7 @@
 import { DebouncedInput } from "@/components/records/list-filters";
 import type { FilterDefinition } from "@/components/records/record-list-toolbar";
 import type { FilterModel } from "@/components/records/use-record-list";
+import { Combobox } from "@/components/ui/combobox";
 import {
   Select,
   SelectContent,
@@ -10,12 +11,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  isLanguageCode,
+  LANGUAGE_OPTIONS,
+  languageName,
+} from "@/lib/languages";
 
 /*
   Organization filters: a custom field of the team's organization types,
   compared by an operator that fits the field's type ("Founded before
-  2010", "Members greater than 50"). Each chip is one condition; several
-  are combined with AND by the server (services/organizations).
+  2010", "Members greater than 50"), or a language it works in. Each chip
+  is one condition; several are combined with AND by the server
+  (services/organizations).
 */
 
 export const ORGANIZATION_FIELD_OPERATORS = [
@@ -30,13 +37,22 @@ export const ORGANIZATION_FIELD_OPERATORS = [
 ] as const;
 type Operator = (typeof ORGANIZATION_FIELD_OPERATORS)[number];
 
-export type OrganizationListFilter = {
-  key: string;
-  kind: "field";
-  field: string;
-  operator: Operator;
-  value?: string;
-};
+export type OrganizationListFilter =
+  | {
+      key: string;
+      kind: "field";
+      field: string;
+      operator: Operator;
+      value?: string;
+    }
+  | {
+      key: string;
+      kind: "language";
+      /** ISO 639-1 code; empty until one is chosen. */
+      language: string;
+    };
+
+type FieldListFilter = Extract<OrganizationListFilter, { kind: "field" }>;
 
 export type OrganizationFieldOption = {
   key: string;
@@ -75,18 +91,23 @@ const isOperator = (value: unknown): value is Operator =>
   (ORGANIZATION_FIELD_OPERATORS as readonly string[]).includes(value);
 
 export const organizationFilterModel: FilterModel<OrganizationListFilter> = {
-  create: (kind) => ({
-    key: kind,
-    kind: "field",
-    field: "",
-    operator: "contains",
-  }),
+  create: (kind) =>
+    kind === "language"
+      ? { key: kind, kind: "language", language: "" }
+      : { key: kind, kind: "field", field: "", operator: "contains" },
   isActive: (filter) =>
-    Boolean(filter.field) &&
-    (!needsValue(filter.operator) || Boolean(filter.value?.trim())),
+    filter.kind === "language"
+      ? isLanguageCode(filter.language)
+      : Boolean(filter.field) &&
+        (!needsValue(filter.operator) || Boolean(filter.value?.trim())),
   read: (saved) => {
     if (!saved || typeof saved !== "object") return null;
     const item = saved as Record<string, unknown>;
+    if (item.kind === "language") {
+      return typeof item.key === "string" && typeof item.language === "string"
+        ? { key: item.key, kind: "language", language: item.language }
+        : null;
+    }
     if (
       typeof item.key !== "string" ||
       typeof item.field !== "string" ||
@@ -109,21 +130,50 @@ export const organizationFilterModel: FilterModel<OrganizationListFilter> = {
 
 /** The conditions as the organizations API reads them (`filters=`). */
 export const toOrganizationApiFilters = (filters: OrganizationListFilter[]) =>
-  filters.map(({ field, operator, value }) => ({
-    type: "field" as const,
-    key: field,
-    operator,
-    ...(needsValue(operator) ? { value: value?.trim() } : {}),
-  }));
+  filters.map((filter) =>
+    filter.kind === "language"
+      ? { type: "language" as const, language: filter.language }
+      : {
+          type: "field" as const,
+          key: filter.field,
+          operator: filter.operator,
+          ...(needsValue(filter.operator)
+            ? { value: filter.value?.trim() }
+            : {}),
+        },
+  );
 
 export const organizationFilterDefinitions = (
   fields: OrganizationFieldOption[],
 ): FilterDefinition<OrganizationListFilter>[] => [
   {
+    key: "language",
+    label: "Uses language",
+    summary: (filter) =>
+      filter.kind === "language" && filter.language
+        ? `Uses ${languageName(filter.language)}`
+        : "Uses language…",
+    editor: (filter, onChange) =>
+      filter.kind === "language" ? (
+        <div className="w-64 p-1">
+          <Combobox
+            value={filter.language}
+            onChange={(language) => onChange({ ...filter, language })}
+            placeholder="Choose a language"
+            searchPlaceholder="Search language..."
+            emptyStateText="No language found."
+            options={LANGUAGE_OPTIONS}
+          />
+        </div>
+      ) : null,
+  },
+  {
     key: "field",
     label: "Field",
     disabled: fields.length === 0,
-    summary: (filter) => {
+    summary: (item) => {
+      if (item.kind !== "field") return "Field";
+      const filter = item;
       const field = fields.find((option) => option.key === filter.field);
       const label = field?.label ?? (filter.field || "Field");
       if (!needsValue(filter.operator)) {
@@ -133,7 +183,9 @@ export const organizationFilterDefinitions = (
         ? `${label} ${OPERATOR_LABELS[filter.operator]} “${filter.value.trim()}”`
         : `${label} ${OPERATOR_LABELS[filter.operator]}…`;
     },
-    editor: (filter, onChange) => {
+    editor: (item, onChange) => {
+      if (item.kind !== "field") return null;
+      const filter: FieldListFilter = item;
       const field = fields.find((option) => option.key === filter.field);
       const operators = operatorsFor(field?.type);
       const inputType =

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isLanguageCode } from "@/lib/languages";
 
 const bankDetailsSchema = z
   .object({
@@ -137,6 +138,15 @@ const createOrganizationSchema = z.object({
     .optional()
     .or(z.literal("")),
   profileData: z.record(z.string(), z.unknown()).optional(),
+  // ISO 639-1 codes (src/lib/languages.ts); left out means unchanged.
+  languages: z
+    .array(
+      z.string().trim().toLowerCase().refine(isLanguageCode, {
+        message: "Unknown language",
+      }),
+    )
+    .max(50)
+    .optional(),
   contactPersonId: z
     .uuid("Contact id must be a valid UUID")
     .optional()

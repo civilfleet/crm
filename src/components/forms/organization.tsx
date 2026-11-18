@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import useSWR from "swr";
 import type { z } from "zod";
 import { AddressAutocomplete } from "@/components/forms/address-autocomplete";
+import { LanguageMultiSelect } from "@/components/language-multi-select";
 import {
   Form,
   FormControl,
@@ -78,6 +79,7 @@ type Organization = {
   portalAccessEnabled?: boolean;
   orgTypeId?: string;
   profileData?: Record<string, unknown>;
+  languages?: string[];
   contactPersonId?: string;
   contactPerson?: { id: string; name?: string; email?: string };
   logo?: string;
@@ -154,6 +156,7 @@ export default function OrganizationForm({ data }: { data: Organization }) {
       website: data?.website || "",
       orgTypeId: data?.orgTypeId || "",
       profileData: (data?.profileData as Record<string, unknown>) || {},
+      languages: data?.languages ?? [],
       contactPersonId: data?.contactPersonId || "",
       taxExemptionCertificate:
         data?.Files?.find((file) => file.type === "TAX_EXEMPTION_CERTIFICATE")
@@ -425,6 +428,25 @@ export default function OrganizationForm({ data }: { data: Organization }) {
                   name="website"
                   placeholder="Website"
                   isFilled={isFieldFilled(data?.website)}
+                />
+                <FormField
+                  control={form.control}
+                  name="languages"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>Languages</FormLabel>
+                      <FormControl>
+                        <LanguageMultiSelect
+                          value={field.value ?? []}
+                          onChange={field.onChange}
+                        />
+                      </FormControl>
+                      <CardDescription>
+                        The languages the organization works in.
+                      </CardDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
               </div>
               {selectedType?.schema && selectedType.schema.length > 0 && (

@@ -52,6 +52,11 @@ import { useToast } from "@/hooks/use-toast";
 import type { ContactPasteField } from "@/lib/contact-paste";
 import { EUROPEAN_COUNTRY_OPTIONS } from "@/lib/countries";
 import {
+  LANGUAGE_LEVEL_LABELS,
+  LANGUAGE_LEVELS,
+  LANGUAGE_OPTIONS,
+} from "@/lib/languages";
+import {
   type Contact,
   ContactAttributeType,
   ContactEmailKind,
@@ -62,6 +67,9 @@ import {
   createContactSchema,
   updateContactSchema,
 } from "@/validations/contacts";
+
+/** The level select's "no level" choice (a Select item cannot be empty). */
+const NO_LEVEL = "none";
 
 type CreateContactFormValues = z.infer<typeof createContactSchema>;
 type UpdateContactFormValues = z.infer<typeof updateContactSchema>;
@@ -231,6 +239,11 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
               platform: link.platform,
               handle: link.handle,
             })) ?? [],
+          languages:
+            contact?.languages?.map(({ language, level }) => ({
+              language,
+              level,
+            })) ?? [],
           organizationIds:
             contact?.organizations?.map((organization) => organization.id) ??
             [],
@@ -269,6 +282,7 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
           website: "",
           notes: "",
           socialLinks: [],
+          languages: [],
           organizationIds: [],
           groupIds: [],
           profileAttributes: [] as CreateContactFormValues["profileAttributes"],
@@ -295,6 +309,14 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
   } = useFieldArray({
     control,
     name: "socialLinks",
+  });
+  const {
+    fields: languageFields,
+    append: appendLanguage,
+    remove: removeLanguage,
+  } = useFieldArray({
+    control,
+    name: "languages",
   });
   const {
     fields: emailFields,
@@ -391,6 +413,13 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
       platform: "",
       handle: "",
     } as CreateContactFormValues["socialLinks"][number]);
+  };
+
+  const addLanguage = () => {
+    appendLanguage({
+      language: "",
+      level: null,
+    } as CreateContactFormValues["languages"][number]);
   };
 
   const addEmail = () => {
@@ -1418,6 +1447,116 @@ export default function ContactForm({ teamId, contact }: ContactFormProps) {
                       );
                     }}
                   />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-semibold">Languages</h3>
+                      <p className="text-sm text-muted-foreground">
+                        The languages this person speaks, and how well if you
+                        know.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addLanguage}
+                    >
+                      <PlusCircle className="mr-2 h-4 w-4" /> Add language
+                    </Button>
+                  </div>
+
+                  {languageFields.length === 0 ? (
+                    <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+                      No languages added yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {languageFields.map((languageField, index) => (
+                        <div
+                          key={languageField.id}
+                          className="flex items-start gap-3"
+                        >
+                          <div className="grid flex-1 gap-3 sm:grid-cols-2">
+                            <FormField
+                              control={typedControl}
+                              name={`languages.${index}.language`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="sr-only">
+                                    Language
+                                  </FormLabel>
+                                  <FormControl>
+                                    <Combobox
+                                      value={
+                                        typeof field.value === "string"
+                                          ? field.value
+                                          : ""
+                                      }
+                                      onChange={field.onChange}
+                                      onBlur={field.onBlur}
+                                      placeholder="Select language"
+                                      searchPlaceholder="Search language..."
+                                      emptyStateText="No language found."
+                                      options={LANGUAGE_OPTIONS}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={typedControl}
+                              name={`languages.${index}.level`}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="sr-only">
+                                    Level
+                                  </FormLabel>
+                                  <Select
+                                    value={field.value ?? NO_LEVEL}
+                                    onValueChange={(value) =>
+                                      field.onChange(
+                                        value === NO_LEVEL ? null : value,
+                                      )
+                                    }
+                                  >
+                                    <FormControl>
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Level" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      <SelectItem value={NO_LEVEL}>
+                                        Level not known
+                                      </SelectItem>
+                                      {LANGUAGE_LEVELS.map((level) => (
+                                        <SelectItem key={level} value={level}>
+                                          {LANGUAGE_LEVEL_LABELS[level]}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeLanguage(index)}
+                            aria-label="Remove language"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">

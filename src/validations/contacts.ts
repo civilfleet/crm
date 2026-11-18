@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isLanguageCode, LANGUAGE_LEVELS } from "@/lib/languages";
 import type { ContactFilter } from "@/types";
 import {
   ContactAttributeType,
@@ -103,6 +104,16 @@ const contactAttributeSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
+// docs/DATA_RULES.md, "Languages"; codes from src/lib/languages.ts.
+const contactLanguageSchema = z.object({
+  language: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .refine(isLanguageCode, "Unknown language"),
+  level: z.enum(LANGUAGE_LEVELS).nullable().optional(),
+});
+
 const contactSocialLinkSchema = z.object({
   platform: z.string().trim().min(1, "Platform is required").max(50),
   handle: z.string().trim().min(1, "Handle is required").max(255),
@@ -198,6 +209,13 @@ export const contactFilterSchema: z.ZodType<ContactFilter> =
       eventRoleId: z.uuid("Event role id must be a valid UUID"),
     }),
     distanceFilterSchema,
+    z.object({
+      type: z.literal("language"),
+      language: z.string().trim().toLowerCase().refine(isLanguageCode, {
+        message: "Unknown language",
+      }),
+      minLevel: z.enum(LANGUAGE_LEVELS).optional(),
+    }),
     z
       .object({
         type: z.literal("createdAt"),
@@ -242,6 +260,7 @@ export const createContactSchema = z.object({
   website: optionalWebsite,
   notes: optionalText(z.string()),
   socialLinks: z.array(contactSocialLinkSchema).default([]),
+  languages: z.array(contactLanguageSchema).max(50).default([]),
   organizationIds: z
     .array(z.uuid("Organization id must be a valid UUID"))
     .default([]),
@@ -296,6 +315,7 @@ export const updateContactSchema = z.object({
   website: optionalWebsite,
   notes: optionalText(z.string()),
   socialLinks: z.array(contactSocialLinkSchema).optional(),
+  languages: z.array(contactLanguageSchema).max(50).optional(),
   organizationIds: z
     .array(z.uuid("Organization id must be a valid UUID"))
     .optional(),

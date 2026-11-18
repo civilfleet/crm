@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import * as languages from "@/lib/languages";
 import * as contactValidations from "@/validations/contacts";
 import { loadModule } from "./helpers/load-module";
 
@@ -11,6 +12,7 @@ import { loadModule } from "./helpers/load-module";
 
 const Component = () => null;
 const ui = {
+  "@/components/ui/combobox": { Combobox: Component },
   "@/components/ui/input": { Input: Component },
   "@/components/ui/label": { Label: Component },
   "@/components/ui/select": {
@@ -47,6 +49,7 @@ const contactFilters = loadModule<{
 }>("src/components/table/contact-filters.tsx", {
   ...ui,
   "@/components/records/list-filters": listFilters,
+  "@/lib/languages": languages,
   "@/validations/contacts": contactValidations,
 });
 
@@ -56,6 +59,7 @@ const organizationFilters = loadModule<{
 }>("src/components/table/organization-filters.tsx", {
   ...ui,
   "@/components/records/list-filters": listFilters,
+  "@/lib/languages": languages,
 });
 
 test("list filters: options, text and dates read back only when valid", () => {
@@ -142,8 +146,35 @@ test("contact filters: only filters the API accepts are active or restored", () 
     null,
   );
 
+  // "Speaks" needs a known language; the level is optional.
+  const speaks = model.create("language");
+  assert.equal(model.isActive(speaks), false);
+  assert.equal(model.multiple?.("language"), true);
+  const arabic = {
+    ...speaks,
+    filter: { type: "language", language: "ar", minLevel: "FLUENT" },
+  };
+  assert.equal(model.isActive(arabic), true);
+  assert.equal(
+    model.read({
+      key: "x",
+      filter: { type: "language", language: "klingon" },
+    }),
+    null,
+  );
+  assert.equal(
+    model.read({
+      key: "x",
+      filter: { type: "language", language: "ar", minLevel: "GOOD" },
+    }),
+    null,
+  );
+
   // The API gets the filters themselves, without the chips' keys.
-  assert.deepEqual(toContactApiFilters([berlin]), [berlin.filter]);
+  assert.deepEqual(toContactApiFilters([berlin, arabic]), [
+    berlin.filter,
+    arabic.filter,
+  ]);
 });
 
 test("organization filters: a field, an operator that fits, and a value", () => {
@@ -167,8 +198,18 @@ test("organization filters: a field, an operator that fits, and a value", () => 
   assert.equal(model.read({ ...members, field: "" }), null);
   assert.deepEqual(model.read(members), members);
 
-  assert.deepEqual(toOrganizationApiFilters([members, active]), [
+  // A language: active once a known one is chosen, restored as saved.
+  const uses = model.create("language");
+  assert.deepEqual(uses, { key: "language", kind: "language", language: "" });
+  assert.equal(model.isActive(uses), false);
+  const italian = { ...uses, language: "it" };
+  assert.equal(model.isActive(italian), true);
+  assert.equal(model.isActive({ ...uses, language: "klingon" }), false);
+  assert.deepEqual(model.read(italian), italian);
+
+  assert.deepEqual(toOrganizationApiFilters([members, active, italian]), [
     { type: "field", key: "members", operator: "gt", value: "50" },
     { type: "field", key: "active", operator: "isTrue" },
+    { type: "language", language: "it" },
   ]);
 });

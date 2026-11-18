@@ -3,6 +3,7 @@
 import { DebouncedInput } from "@/components/records/list-filters";
 import type { FilterDefinition } from "@/components/records/record-list-toolbar";
 import type { FilterModel } from "@/components/records/use-record-list";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -11,13 +12,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  LANGUAGE_LEVEL_LABELS,
+  LANGUAGE_LEVELS,
+  LANGUAGE_OPTIONS,
+  type LanguageLevel,
+  languageName,
+} from "@/lib/languages";
 import type { ContactFilter } from "@/types";
 import { contactFilterSchema } from "@/validations/contacts";
 
 /*
   The contact filters, as chips: a field that is present, missing or
-  contains a text; an attribute; a group; an event role; a distance from a
-  postal code; the created date. Each chip holds one filter exactly as the
+  contains a text; an attribute; a language spoken; a group; an event role;
+  a distance from a postal code; the created date. Each chip holds one filter exactly as the
   contacts API reads it (`filters=`, validations/contacts), so a saved view
   is checked by the same schema the server uses.
 */
@@ -50,6 +58,9 @@ export type ContactListFilter = {
 
 const FIELD_KIND_PREFIX = "field:";
 
+/** The level select's "any level" choice (a Select item cannot be empty). */
+const ANY_LEVEL = "any";
+
 /** The Filter menu, in its order. */
 const CONTACT_FILTER_KINDS: Array<{ kind: string; label: string }> = [
   ...CONTACT_FIELDS.map((field) => ({
@@ -57,6 +68,7 @@ const CONTACT_FILTER_KINDS: Array<{ kind: string; label: string }> = [
     label: CONTACT_FIELD_LABELS[field],
   })),
   { kind: "attribute", label: "Attribute" },
+  { kind: "language", label: "Speaks" },
   { kind: "group", label: "Group" },
   { kind: "eventRole", label: "Event role" },
   { kind: "distance", label: "Within distance of postal code" },
@@ -77,6 +89,8 @@ const createFilter = (kind: string): ContactFilter => {
   switch (kind) {
     case "attribute":
       return { type: "attribute", key: "", operator: "contains", value: "" };
+    case "language":
+      return { type: "language", language: "" };
     case "group":
       return { type: "group", groupId: "" };
     case "eventRole":
@@ -141,6 +155,13 @@ const summarize = (
       return filter.value?.trim()
         ? `${keyLabel} ${operator} “${filter.value.trim()}”`
         : `${keyLabel} ${operator}…`;
+    }
+    case "language": {
+      if (!filter.language) return "Speaks…";
+      const level = filter.minLevel
+        ? ` (${LANGUAGE_LEVEL_LABELS[filter.minLevel].toLowerCase()} or better)`
+        : "";
+      return `Speaks ${languageName(filter.language)}${level}`;
     }
     case "group": {
       const name = names.groups.get(filter.groupId);
@@ -269,6 +290,41 @@ const ContactFilterEditor = ({
             onCommit={(value) => onChange({ ...filter, value })}
             className="h-8"
           />
+        </div>
+      );
+    case "language":
+      return (
+        <div className="flex w-64 flex-col gap-2 p-1">
+          <Combobox
+            value={filter.language}
+            onChange={(language) => onChange({ ...filter, language })}
+            placeholder="Choose a language"
+            searchPlaceholder="Search language..."
+            emptyStateText="No language found."
+            options={LANGUAGE_OPTIONS}
+          />
+          <Select
+            value={filter.minLevel ?? ANY_LEVEL}
+            onValueChange={(value) =>
+              onChange({
+                ...filter,
+                minLevel:
+                  value === ANY_LEVEL ? undefined : (value as LanguageLevel),
+              })
+            }
+          >
+            <SelectTrigger aria-label="Level" className="h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY_LEVEL}>Any level</SelectItem>
+              {LANGUAGE_LEVELS.map((level) => (
+                <SelectItem key={level} value={level}>
+                  {LANGUAGE_LEVEL_LABELS[level]} or better
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       );
     case "group":

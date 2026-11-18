@@ -5,11 +5,13 @@ import { format } from "date-fns";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import { formatSpokenLanguages } from "@/lib/languages";
 import {
   ContactAttributeType,
   type ContactEmail,
   type ContactEvent,
   type ContactGender,
+  type ContactLanguage,
   type ContactProfileAttribute,
   type ContactRequestPreference,
 } from "@/types";
@@ -40,6 +42,7 @@ export type ContactRow = {
   website?: string | null;
   notes?: string | null;
   profileAttributes: ContactProfileAttribute[];
+  languages?: ContactLanguage[];
   events?: ContactEvent[];
   createdAt: string | Date;
   updatedAt: string | Date;
@@ -234,6 +237,16 @@ export const contactColumns: ColumnDef<ContactRow, unknown>[] = [
       ].filter(Boolean);
       return <ContactTextCell value={parts.join(", ")} />;
     },
+  },
+  {
+    id: "languages",
+    enableSorting: false,
+    meta: { label: "Languages", width: 260 },
+    cell: ({ row }) => (
+      <ContactTextCell
+        value={formatSpokenLanguages(row.original.languages ?? [])}
+      />
+    ),
   },
   {
     accessorKey: "profileAttributes",

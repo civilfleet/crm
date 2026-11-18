@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isLanguageCode } from "@/lib/languages";
 
 export const organizationFieldFilterSchema = z.object({
   type: z.literal("field"),
@@ -16,10 +17,25 @@ export const organizationFieldFilterSchema = z.object({
   value: z.string().optional(),
 });
 
+/** Works in this language (ISO 639-1). */
+export const organizationLanguageFilterSchema = z.object({
+  type: z.literal("language"),
+  language: z.string().trim().toLowerCase().refine(isLanguageCode, {
+    message: "Unknown language",
+  }),
+});
+
+export const organizationFilterSchema = z.discriminatedUnion("type", [
+  organizationFieldFilterSchema,
+  organizationLanguageFilterSchema,
+]);
+
 export const organizationFiltersSchema = z
-  .array(organizationFieldFilterSchema)
+  .array(organizationFilterSchema)
   .default([]);
 
 export type OrganizationFieldFilter = z.infer<
   typeof organizationFieldFilterSchema
 >;
+
+export type OrganizationFilter = z.infer<typeof organizationFilterSchema>;

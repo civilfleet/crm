@@ -253,6 +253,7 @@ export interface Contact {
   website?: string;
   notes?: string;
   socialLinks: ContactSocialLink[];
+  languages: ContactLanguage[];
   organizations?: Array<{
     id: string;
     name?: string | null;
@@ -276,6 +277,12 @@ export interface ContactEmail {
   email: string;
   kind: ContactEmailKind;
   label?: string;
+}
+
+/** A language a contact speaks (src/lib/languages.ts). */
+export interface ContactLanguage {
+  language: string;
+  level: "BASIC" | "CONVERSATIONAL" | "FLUENT" | "NATIVE" | null;
 }
 
 export interface ContactSocialLink {
@@ -320,6 +327,12 @@ export type ContactFilter =
       type: "createdAt";
       from?: string;
       to?: string;
+    }
+  | {
+      // Speaks this language (ISO 639-1), at least this well if given.
+      type: "language";
+      language: string;
+      minLevel?: "BASIC" | "CONVERSATIONAL" | "FLUENT" | "NATIVE";
     }
   | {
       type: "distance";
@@ -576,6 +589,8 @@ export interface Organization {
   city?: string;
   country?: string;
   website?: string;
+  /** ISO 639-1 codes of the languages it works in. */
+  languages?: string[];
   taxID?: string;
   isFilledByOrg: boolean;
   portalAccessEnabled: boolean;

@@ -16,11 +16,14 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { formatLanguageCodes } from "@/lib/languages";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 
 export type OrganizationColumns = {
   id: string;
+  /** ISO 639-1 codes. */
+  languages?: string[];
   name?: string;
   email?: string;
   phone?: string;
@@ -407,6 +410,16 @@ export const columns = (
         </div>
       );
     },
+  },
+  {
+    id: "languages",
+    enableSorting: false,
+    meta: { label: "Languages", width: 180 },
+    cell: ({ row }) => (
+      <div className="truncate text-left font-medium">
+        {formatLanguageCodes(row.original.languages ?? []) || "N/A"}
+      </div>
+    ),
   },
   {
     accessorKey: "createdAt",
