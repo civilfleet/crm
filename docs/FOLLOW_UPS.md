@@ -15,6 +15,7 @@ done, remove it here and update `docs/DATA_RULES.md` if a rule changed.
 - [9. Production checks](#9-production-checks)
 - [10. Send marketing consent to Klaviyo](#10-send-marketing-consent-to-klaviyo)
 - [12. Unconfirmed submissions still fill existing contacts](#12-unconfirmed-submissions-still-fill-existing-contacts)
+- [13. Expired and repeated confirmation links](#13-expired-and-repeated-confirmation-links)
 
 ## 1. Protect `Contact.primaryEmail`
 
@@ -202,3 +203,31 @@ of empty fields still happen straight away.
 proposals too, or apply them only on confirmation.
 
 **Size.** Small.
+
+## 13. Expired and repeated confirmation links
+
+**What.** The website's confirmation page posts the token to the public
+bridge, which checks only its signature and answers "confirmed". It cannot
+know what the CRM (behind the VPN) knows, so:
+- a link used **after the 7 days** still says "confirmed", although the
+  CRM has removed the unconfirmed submission and the click does nothing;
+  the person believes their signature counts;
+- a link used **again** says "confirmed" again (harmless: the CRM confirms
+  once and ignores repeats, but the page could say "already confirmed").
+
+**How.**
+- Sign an expiry into the token: `<submissionId>.<expiresAt>.<signature>`,
+  `expiresAt` = 7 days (`FORM_CONFIRMATION_DAYS`) after sending. The bridge
+  answers `400` "expired" after it. The website passes the token through
+  unchanged, so it needs no change; the bridge accepts the old format
+  (no expiry) during the transition, until links already sent run out.
+- Repeats within 24 hours: the bridge already publishes each confirmation
+  with message id `confirm:<submissionId>`, and NATS reports a repeat as a
+  duplicate (`PubAck.duplicate`). Answer `202 {"status":"already-confirmed"}`
+  then; the website shows its own text for it (one line for the website
+  agent). After 24 hours it falls back to "confirmed".
+- Not: asking the CRM from the bridge. That would open a way from the public
+  side into the CRM, which the setup avoids.
+
+**Size.** Small: `src/lib/public-forms/confirmation.ts`, the bridge route in
+`scripts/public-api.ts`, tests; a bridge build and an Argo sync.
