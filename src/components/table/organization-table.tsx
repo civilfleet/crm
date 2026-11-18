@@ -34,6 +34,7 @@ import {
 import { RichEmailEditor } from "@/components/rich-email-editor";
 import {
   columns,
+  ORGANIZATION_DELETE_WARNING,
   type OrganizationColumns,
 } from "@/components/table/organization-columns";
 import {
@@ -43,6 +44,17 @@ import {
   organizationFilterModel,
   toOrganizationApiFilters,
 } from "@/components/table/organization-filters";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -492,16 +504,43 @@ export default function OrganizationTable({
               >
                 <Mail /> Email linked contacts
               </BulkActionButton>
-              <BulkActionButton
-                tone="destructive"
-                disabled={isDeleting}
-                onClick={() =>
-                  handleDeleteSelected(selectedRows, clearSelection)
-                }
-              >
-                {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
-                Delete
-              </BulkActionButton>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <BulkActionButton tone="destructive" disabled={isDeleting}>
+                    {isDeleting ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <Trash2 />
+                    )}
+                    Delete
+                  </BulkActionButton>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      Delete {selectedRows.length}{" "}
+                      {selectedRows.length === 1
+                        ? "organization"
+                        : "organizations"}
+                      ?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {ORGANIZATION_DELETE_WARNING}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() =>
+                        handleDeleteSelected(selectedRows, clearSelection)
+                      }
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               <OrganizationContactsEmailDialog
                 open={isEmailDialogOpen}
                 organizations={emailOrganizations}

@@ -3,6 +3,17 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import Link from "next/link";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -50,6 +61,10 @@ export type OrganizationColumns = {
   createdAt: string;
   updatedAt: string;
 };
+
+/** What deleting an organization takes with it (deleteOrganization). */
+export const ORGANIZATION_DELETE_WARNING =
+  "Its funding requests, donation agreements and files are deleted with it, and its users lose access. This cannot be undone.";
 
 function OrganizationActions({
   organization,
@@ -100,9 +115,30 @@ function OrganizationActions({
           Edit
         </Button>
       </Link>
-      <Button variant="destructive" size="sm" onClick={handleDelete}>
-        Delete
-      </Button>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button variant="destructive" size="sm">
+            Delete
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {organization.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {ORGANIZATION_DELETE_WARNING}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -299,7 +335,7 @@ export const columns = (
   },
   {
     id: "actions",
-    meta: { label: "Actions", width: 80, alwaysVisible: true },
+    meta: { label: "Actions", width: 170, alwaysVisible: true },
     cell: ({ row }) => {
       return (
         <OrganizationActions
