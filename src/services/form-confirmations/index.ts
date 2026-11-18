@@ -428,11 +428,61 @@ const hasOtherHistory = async (
   return counts.some((count) => count > 0);
 };
 
+type RemovableSubmission = {
+  id: string;
+  submissionId: string;
+  contactId: string;
+  createdContact: boolean;
+};
+
 /**
- * Removes submissions never confirmed within FORM_CONFIRMATION_DAYS: the
- * submission, its pending consents, its engagement and its open proposals,
- * and the contact too when this submission made it and nothing else refers
- * to it.
+ * Removes one submission and what it made: its consents, its engagement,
+ * its proposals nobody acted on, and the contact when this submission made
+ * it and nothing else refers to it. Returns whether the contact went too.
+ */
+const removeSubmission = async (
+  tx: Prisma.TransactionClient,
+  submission: RemovableSubmission,
+) => {
+  await tx.contactConsent.deleteMany({
+    where: { submissionId: submission.submissionId },
+  });
+  await tx.contactEngagement.deleteMany({
+    where: {
+      externalId: submission.submissionId,
+      externalSource: FORM_ENGAGEMENT_EXTERNAL_SOURCE,
+    },
+  });
+  // Proposals this submission made that nobody acted on.
+  await tx.$executeRaw`
+    DELETE FROM "ContactChangeLog" p
+    WHERE p."contactId" = ${submission.contactId}
+      AND p."action" = 'PROPOSED'
+      AND p."metadata"->>'submissionId' = ${submission.submissionId}
+      AND NOT EXISTS (
+        SELECT 1 FROM "ContactChangeLog" r WHERE r."proposalId" = p."id"
+      )
+  `;
+  await tx.formSubmission.delete({ where: { id: submission.id } });
+  if (
+    !submission.createdContact ||
+    (await hasOtherHistory(tx, submission.contactId))
+  )
+    return false;
+  await tx.contact.delete({ where: { id: submission.contactId } });
+  return true;
+};
+
+const removableSelect = {
+  id: true,
+  submissionId: true,
+  contactId: true,
+  createdContact: true,
+} as const;
+
+/**
+ * Removes submissions never confirmed within FORM_CONFIRMATION_DAYS, with
+ * what they made (removeSubmission).
  */
 export const removeExpiredUnconfirmed = async (
   now = new Date(),
@@ -448,44 +498,37 @@ export const removeExpiredUnconfirmed = async (
     },
     orderBy: { receivedAt: "asc" },
     take: batch,
-    select: {
-      id: true,
-      submissionId: true,
-      contactId: true,
-      createdContact: true,
-    },
+    select: removableSelect,
   });
   let contactsRemoved = 0;
   for (const submission of expired) {
-    await prisma.$transaction(async (tx) => {
-      await tx.contactConsent.deleteMany({
-        where: { submissionId: submission.submissionId, status: "PENDING" },
-      });
-      await tx.contactEngagement.deleteMany({
-        where: {
-          externalId: submission.submissionId,
-          externalSource: FORM_ENGAGEMENT_EXTERNAL_SOURCE,
-        },
-      });
-      // Proposals this submission made that nobody acted on.
-      await tx.$executeRaw`
-        DELETE FROM "ContactChangeLog" p
-        WHERE p."contactId" = ${submission.contactId}
-          AND p."action" = 'PROPOSED'
-          AND p."metadata"->>'submissionId' = ${submission.submissionId}
-          AND NOT EXISTS (
-            SELECT 1 FROM "ContactChangeLog" r WHERE r."proposalId" = p."id"
-          )
-      `;
-      await tx.formSubmission.delete({ where: { id: submission.id } });
-      if (
-        submission.createdContact &&
-        !(await hasOtherHistory(tx, submission.contactId))
-      ) {
-        await tx.contact.delete({ where: { id: submission.contactId } });
-        contactsRemoved++;
-      }
-    });
+    if (await prisma.$transaction((tx) => removeSubmission(tx, submission)))
+      contactsRemoved++;
   }
   return { submissionsRemoved: expired.length, contactsRemoved };
+};
+
+/**
+ * Deletes chosen submissions of one form for good (team admins, mostly to
+ * clear out tests), with what they made (removeSubmission), confirmed
+ * consents included. Newest first, so a contact the oldest one made goes
+ * once its later submissions are gone too. Ids of other teams or forms are
+ * ignored.
+ */
+export const deleteFormSubmissions = async (
+  teamId: string,
+  formId: string,
+  ids: string[],
+) => {
+  const chosen = await prisma.formSubmission.findMany({
+    where: { teamId, formId, id: { in: ids } },
+    orderBy: { receivedAt: "desc" },
+    select: removableSelect,
+  });
+  let contactsRemoved = 0;
+  for (const submission of chosen) {
+    if (await prisma.$transaction((tx) => removeSubmission(tx, submission)))
+      contactsRemoved++;
+  }
+  return { submissionsRemoved: chosen.length, contactsRemoved };
 };

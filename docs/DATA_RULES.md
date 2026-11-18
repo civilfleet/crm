@@ -274,6 +274,18 @@ refers to it: no other submission, registration, engagement, consent, list,
 group, event, organization, file, e-mail, attribute or change by a person
 (`removeExpiredUnconfirmed`, `tests/db/form-confirmation.test.ts`).
 
+### Deleting website submissions
+
+Team admins can delete submissions on a form's page, mostly to clear out
+tests. Deleting is for good, and works like the 7-day removal, with one
+difference: consents the submission gave go too, confirmed ones included.
+Proposals already decided stay in the contact's history. A contact goes
+under the same rule as above; the newest submissions are deleted first, so a
+contact that only test submissions made goes once they all are. The team's
+system log records who deleted how many, without the answers
+(`deleteFormSubmissions`, `DELETE /api/forms/[formId]/submissions`,
+`tests/db/form-confirmation.test.ts`).
+
 ### Trash, restore and permanent delete
 
 - **Trash** sets `deletedAt`; the contact and everything linked to it stay.

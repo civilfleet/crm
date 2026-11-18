@@ -9,8 +9,10 @@ import {
   Inbox,
   MessageSquareText,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { EmptyState } from "@/components/design/empty-state";
 import {
@@ -22,12 +24,26 @@ import {
   NoMatchState,
   RecordListToolbar,
 } from "@/components/records/record-list-toolbar";
-import { RecordTable } from "@/components/records/record-table";
+import {
+  BulkActionButton,
+  RecordTable,
+} from "@/components/records/record-table";
 import {
   getSortFields,
   recordListFetcher,
   useRecordList,
 } from "@/components/records/use-record-list";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import type {
   FormContactAnswer,
@@ -166,6 +182,8 @@ type FormSubmissionsTableProps = {
   teamId: string;
   formId: string;
   initialPageSize: number;
+  /** Team admins may delete submissions (mostly to clear out tests). */
+  canDelete?: boolean;
 };
 
 /** What people sent through one website form, newest first. */
@@ -173,8 +191,11 @@ export const FormSubmissionsTable = ({
   teamId,
   formId,
   initialPageSize,
+  canDelete = false,
 }: FormSubmissionsTableProps) => {
   const { toast } = useToast();
+  const router = useRouter();
+  const [isDeleting, setIsDeleting] = useState(false);
   const contactHref = (contactId: string) =>
     `/teams/${teamId}/crm/contacts/${contactId}`;
   const baseColumns = useMemo<ColumnDef<FormSubmissionRow, unknown>[]>(
@@ -274,7 +295,7 @@ export const FormSubmissionsTable = ({
   });
 
   const params = list.getSearchParams({ teamId });
-  const { data, error, isLoading, isValidating } = useSWR(
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
     `/api/forms/${encodeURIComponent(formId)}/submissions?${params.toString()}`,
     recordListFetcher,
     { keepPreviousData: true },
@@ -301,6 +322,44 @@ export const FormSubmissionsTable = ({
       variant: "destructive",
     });
   }, [error, toast]);
+
+  const handleDeleteSelected = async (
+    selectedRows: FormSubmissionRow[],
+    clearSelection: () => void,
+  ) => {
+    setIsDeleting(true);
+    try {
+      const response = await fetch(
+        `/api/forms/${encodeURIComponent(formId)}/submissions?teamId=${encodeURIComponent(teamId)}`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: selectedRows.map((row) => row.id) }),
+        },
+      );
+      if (!response.ok) throw new Error(await response.text());
+      const { data: result } = (await response.json()) as {
+        data: { submissionsRemoved: number; contactsRemoved: number };
+      };
+      clearSelection();
+      await mutate();
+      router.refresh();
+      toast({
+        title: `${result.submissionsRemoved} ${result.submissionsRemoved === 1 ? "submission" : "submissions"} deleted`,
+        description: result.contactsRemoved
+          ? `${result.contactsRemoved} ${result.contactsRemoved === 1 ? "contact" : "contacts"} only they had made removed too.`
+          : undefined,
+      });
+    } catch {
+      toast({
+        title: "Unable to delete the submissions",
+        description: "Nothing was changed for the ones that failed.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <div className="flex min-h-0 flex-col">
@@ -332,6 +391,41 @@ export const FormSubmissionsTable = ({
         onSortsChange={list.setSorts}
         columnVisibility={list.columnVisibility.visibility}
         pagination={{ ...list.pagination, total }}
+        selectable={canDelete}
+        renderBulkActions={({ selectedRows, clearSelection }) => (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <BulkActionButton tone="destructive" disabled={isDeleting}>
+                <Trash2 />
+                Delete
+              </BulkActionButton>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Delete {selectedRows.length}{" "}
+                  {selectedRows.length === 1 ? "submission" : "submissions"}?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Their answers, the consents they gave and the changes they
+                  proposed go too, and so does any contact only they made.
+                  Contacts with other history stay. This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() =>
+                    handleDeleteSelected(selectedRows, clearSelection)
+                  }
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       />
     </div>
   );

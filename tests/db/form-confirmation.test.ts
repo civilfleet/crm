@@ -34,6 +34,11 @@ type ConfirmationsService = {
   removeExpiredUnconfirmed: (
     now?: Date,
   ) => Promise<{ submissionsRemoved: number; contactsRemoved: number }>;
+  deleteFormSubmissions: (
+    teamId: string,
+    formId: string,
+    ids: string[],
+  ) => Promise<{ submissionsRemoved: number; contactsRemoved: number }>;
 };
 type FormSubmissionsService = {
   createFormSubmission: (input: unknown) => Promise<{
@@ -480,5 +485,62 @@ test("after 7 days, unconfirmed submissions go, and contacts only they made", as
     await db.contactEngagement.count({ where: { contactId: known.id } }),
     0,
     "the engagement of the unconfirmed submission is gone",
+  );
+});
+
+test("deleting submissions takes what they made, even confirmed consents", async () => {
+  const team = await createTeam();
+  const other = await db.teams.create({
+    data: {
+      name: "Other",
+      email: "other@example.org",
+      publicFormsEnabled: true,
+    },
+  });
+  // A test entry, sent twice and confirmed: everything goes.
+  const first = await sign(team.id, "test@example.org", { marketing: true });
+  const second = await sign(team.id, "test@example.org", {
+    marketing: true,
+    at: "2026-11-17T11:00:00.000Z",
+  });
+  await confirmations.confirmFormSubmission({
+    version: 1,
+    submissionId: first.submissionId,
+    confirmedAt: "2026-11-17T12:00:00.000Z",
+  });
+  // A real signature on the same form: untouched.
+  const real = await sign(team.id, "real@example.org", { marketing: true });
+  // Another team's submission cannot be picked through this team.
+  const foreign = await sign(other.id, "foreign@example.org");
+
+  const rows = await db.formSubmission.findMany({
+    where: {
+      submissionId: {
+        in: [first.submissionId, second.submissionId, foreign.submissionId],
+      },
+    },
+    select: { id: true },
+  });
+  const result = await confirmations.deleteFormSubmissions(
+    team.id,
+    "petition",
+    rows.map(({ id }) => id),
+  );
+  assert.deepEqual(result, { submissionsRemoved: 2, contactsRemoved: 1 });
+  assert.equal(
+    await db.contact.count({ where: { id: first.contactId } }),
+    0,
+    "the contact the test made is gone",
+  );
+  assert.equal(
+    await db.contactConsent.count({ where: { contactId: real.contactId } }),
+    1,
+  );
+  assert.equal(await db.contactConsent.count(), 1, "only the real one's");
+  assert.deepEqual(
+    (await db.formSubmission.findMany({ select: { submissionId: true } }))
+      .map(({ submissionId }) => submissionId)
+      .sort(),
+    [real.submissionId, foreign.submissionId].sort(),
   );
 });

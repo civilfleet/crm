@@ -19,6 +19,7 @@ import {
   TABLE_PAGE_SIZE_COOKIE,
 } from "@/lib/table-page-size";
 import { getForm } from "@/services/forms";
+import { getTeamAdminAccess } from "@/services/teams/access";
 import type { Roles } from "@/types";
 
 export default async function FormDetailPage({
@@ -34,6 +35,15 @@ export default async function FormDetailPage({
     roles: (session?.user?.roles ?? []) as Roles[],
   });
   if (!form) notFound();
+  const canDelete = session?.user?.userId
+    ? (
+        await getTeamAdminAccess(
+          session.user.userId,
+          teamId,
+          session.user.roles,
+        )
+      ).allowed
+    : false;
   const initialPageSize = parseTablePageSize(
     cookieStore.get(TABLE_PAGE_SIZE_COOKIE)?.value,
     RECORDS_PAGE_SIZE,
@@ -106,6 +116,7 @@ export default async function FormDetailPage({
           teamId={teamId}
           formId={form.formId}
           initialPageSize={initialPageSize}
+          canDelete={canDelete}
         />
       </div>
     </>
