@@ -567,8 +567,10 @@ export const BulkActionButton = React.forwardRef<
     size="sm"
     className={cn(
       "h-8 text-background hover:bg-background/15 hover:text-background focus-visible:ring-background/60 focus-visible:ring-offset-0",
+      // The bar's own ink at rest (it flips with the theme: near-white text
+      // vanished on the light bar of the dark theme), red only on hover.
       tone === "destructive" &&
-        "text-destructive-foreground hover:bg-destructive hover:text-destructive-foreground",
+        "hover:bg-destructive hover:text-destructive-foreground",
       className,
     )}
     {...props}
