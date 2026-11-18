@@ -183,7 +183,7 @@ test("every submission gets its own e-mail, at most three a day per address", as
   assert.notEqual(sent[0].text, sent[1].text, "each with its own link");
   assert.match(
     sent[0].text,
-    /https:\/\/sea-watch\.org\/it\/form-confirmation#/,
+    /https:\/\/sea-watch\.org\/it\/form-confirmation\/\?form=petition#[0-9a-f-]{36}\./,
   );
   assert.equal(sent[0].subject, "Conferma il tuo indirizzo e-mail");
   // Nothing is sent twice.

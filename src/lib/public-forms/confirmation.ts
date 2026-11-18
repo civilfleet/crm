@@ -57,10 +57,20 @@ export const formConfirmationMessage = z.object({
 });
 export type FormConfirmationMessage = z.infer<typeof formConfirmationMessage>;
 
-/** The website page the e-mail links to; the token stays in the fragment. */
+/**
+ * The website page the e-mail links to: the form's own confirmation page
+ * (sea-watch-nuxt), with the token in the fragment so no server sees it.
+ */
 export const confirmationLink = (
   websiteUrl: string,
   locale: string,
   token: string,
-) =>
-  `${websiteUrl.replace(/\/+$/, "")}/${encodeURIComponent(locale)}/form-confirmation#${token}`;
+  formId: string,
+) => {
+  // German is the website's default language and has no path prefix.
+  const language = locale.toLowerCase();
+  const prefix = language === "de" ? "" : `/${encodeURIComponent(language)}`;
+  // The page is a prerendered directory, hence the slash before the query;
+  // the form id picks its own after-confirmation content (not secret).
+  return `${websiteUrl.replace(/\/+$/, "")}${prefix}/form-confirmation/?form=${encodeURIComponent(formId)}#${token}`;
+};

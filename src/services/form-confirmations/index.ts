@@ -306,6 +306,7 @@ export const sendDueConfirmations = async ({
           websiteUrl,
           submission.locale,
           createConfirmationToken(submission.submissionId, key),
+          submission.formId,
         ),
       });
       await send({

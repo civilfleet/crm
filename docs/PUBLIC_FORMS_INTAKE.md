@@ -289,7 +289,9 @@ confirmed, and everything that depends on confirmation filters on
 ```
 CRM intake consumer ──every 30 s──▶ confirmation e-mail (SMTP)
   text: <PUBLIC_WEBSITE_URL>/forms/<formId>/<locale>.json  (published by the website build)
-  link: <PUBLIC_WEBSITE_URL>/<locale>/form-confirmation#<submissionId>.<signature>
+  link: <PUBLIC_WEBSITE_URL>/<locale>/form-confirmation/?form=<formId>#<submissionId>.<signature>
+        (German without the /de prefix; the form id picks the form's own
+        after-confirmation page on the website)
 website page ──POST /v1/forms/confirmations {"token"}──▶ bridge (checks the signature)
   ──JetStream seawatch.forms.confirmations.v1──▶ CRM consumer: confirmedAt, consents GRANTED
 ```

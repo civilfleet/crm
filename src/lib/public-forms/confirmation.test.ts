@@ -31,10 +31,19 @@ test("a token confirms its submission, and only with our key", () => {
   assert.throws(() => createConfirmationToken(ID, ""));
 });
 
-test("the link puts the token in the fragment, never the query", () => {
+test("the link names the form and keeps the token in the fragment", () => {
   assert.equal(
-    confirmationLink("https://sea-watch.org/", "it", "tok"),
-    "https://sea-watch.org/it/form-confirmation#tok",
+    confirmationLink("https://sea-watch.org", "it", "tok", "abc123"),
+    "https://sea-watch.org/it/form-confirmation/?form=abc123#tok",
+  );
+  // German is the website's default: no prefix.
+  assert.equal(
+    confirmationLink("https://sea-watch.org/", "de", "tok", "abc123"),
+    "https://sea-watch.org/form-confirmation/?form=abc123#tok",
+  );
+  assert.equal(
+    confirmationLink("https://staging.example", "EN", "tok", "a b/c"),
+    "https://staging.example/en/form-confirmation/?form=a%20b%2Fc#tok",
   );
 });
 
