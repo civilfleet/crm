@@ -61,6 +61,7 @@ export async function GET(req: Request) {
             sorts: list.sorts as RecordSort<OrganizationSortField>[],
           }
         : undefined,
+      searchParams.get("deleted") === "true" ? "trashed" : "active",
     );
     const page = list?.page ?? 1;
     const pageSize = list?.pageSize ?? Math.max(total, 1);

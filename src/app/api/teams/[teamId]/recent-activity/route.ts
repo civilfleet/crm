@@ -32,8 +32,9 @@ export async function GET(
     const [organizations, fundingRequests, transactions, files] =
       await Promise.all([
         // Organizations belonging to this team
+        // Nothing of an organization in the trash.
         prisma.organization.findMany({
-          where: { teamId },
+          where: { teamId, deletedAt: null },
           select: {
             id: true,
             name: true,
@@ -50,6 +51,7 @@ export async function GET(
           where: {
             organization: {
               teamId: teamId,
+              deletedAt: null,
             },
           },
           select: {
@@ -70,7 +72,7 @@ export async function GET(
 
         // Transactions for this team
         prisma.transaction.findMany({
-          where: { teamId },
+          where: { teamId, organization: { deletedAt: null } },
           select: {
             id: true,
             amount: true,
@@ -91,6 +93,7 @@ export async function GET(
           where: {
             organization: {
               teamId: teamId,
+              deletedAt: null,
             },
           },
           select: {

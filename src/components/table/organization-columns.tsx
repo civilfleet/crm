@@ -3,6 +3,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,51 +63,149 @@ export type OrganizationColumns = {
   updatedAt: string;
 };
 
-/** What deleting an organization takes with it (deleteOrganization). */
-export const ORGANIZATION_DELETE_WARNING =
-  "Its funding requests, donation agreements and files are deleted with it, and its users lose access. This cannot be undone.";
+/*
+  Delete moves an organization to the trash; from there it is restored or
+  deleted for good (docs/DATA_RULES.md, "Organizations in the trash").
+*/
+
+export type OrganizationAction = "trash" | "restore" | "delete";
+
+/** What each action says before it runs, and after. */
+export const ORGANIZATION_ACTIONS: Record<
+  OrganizationAction,
+  { label: string; warning: string; done: string; destructive: boolean }
+> = {
+  trash: {
+    label: "Move to trash",
+    warning:
+      "It leaves every list, and its users lose access, together with its funding requests, agreements and payments. Nothing is deleted: you can restore it from the trash.",
+    done: "moved to the trash",
+    destructive: true,
+  },
+  restore: {
+    label: "Restore",
+    warning:
+      "It comes back as it was, with its funding requests, agreements, payments and users.",
+    done: "restored",
+    destructive: false,
+  },
+  delete: {
+    label: "Delete permanently",
+    warning:
+      "Its funding requests, donation agreements and files are deleted with it. This cannot be undone.",
+    done: "deleted permanently",
+    destructive: true,
+  },
+};
+
+export const requestOrganizationAction = (
+  id: string,
+  action: OrganizationAction,
+) =>
+  fetch(
+    action === "trash"
+      ? `/api/organizations/${id}`
+      : `/api/organizations/${id}/trash`,
+    { method: action === "restore" ? "PATCH" : "DELETE" },
+  );
+
+/** A button that asks before it runs an organization action. */
+export const ConfirmOrganizationAction = ({
+  action,
+  title,
+  trigger,
+  onConfirm,
+}: {
+  action: OrganizationAction;
+  title: string;
+  trigger: ReactNode;
+  onConfirm: () => void;
+}) => {
+  const { label, warning, destructive } = ORGANIZATION_ACTIONS[action];
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{warning}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className={
+              destructive
+                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                : undefined
+            }
+            onClick={onConfirm}
+          >
+            {label}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+};
 
 function OrganizationActions({
   organization,
   mutate,
   basePath,
+  inTrash,
 }: {
   organization: OrganizationColumns;
   mutate: () => void;
   basePath: string;
+  inTrash: boolean;
 }) {
   const { toast } = useToast();
+  const name = organization.name || organization.email || "this organization";
 
-  const handleDelete = async () => {
+  const handleAction = async (action: OrganizationAction) => {
     try {
-      const response = await fetch(`/api/organizations/${organization.id}`, {
-        method: "DELETE",
-      });
-
-      const data = await response.json();
-
+      const response = await requestOrganizationAction(organization.id, action);
       if (!response.ok) {
-        throw new Error(data.error || "Failed to delete organization");
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "The organization could not be changed.");
       }
-
-      toast({
-        title: "Success",
-        description: "Organization deleted successfully",
-      });
-
-      // Revalidate the organizations data
+      toast({ title: `${name} ${ORGANIZATION_ACTIONS[action].done}` });
       mutate();
     } catch (error) {
       toast({
-        title: "Error",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Failed to delete organization",
+        title: `Unable to ${ORGANIZATION_ACTIONS[action].label.toLowerCase()}`,
+        description: error instanceof Error ? error.message : undefined,
         variant: "destructive",
       });
     }
   };
+
+  if (inTrash) {
+    return (
+      <div className="flex gap-2">
+        <ConfirmOrganizationAction
+          action="restore"
+          title={`Restore ${name}?`}
+          trigger={
+            <Button variant="outline" size="sm">
+              Restore
+            </Button>
+          }
+          onConfirm={() => handleAction("restore")}
+        />
+        <ConfirmOrganizationAction
+          action="delete"
+          title={`Delete ${name} permanently?`}
+          trigger={
+            <Button variant="destructive" size="sm">
+              Delete
+            </Button>
+          }
+          onConfirm={() => handleAction("delete")}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex gap-2">
@@ -115,30 +214,16 @@ function OrganizationActions({
           Edit
         </Button>
       </Link>
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
+      <ConfirmOrganizationAction
+        action="trash"
+        title={`Move ${name} to the trash?`}
+        trigger={
           <Button variant="destructive" size="sm">
             Delete
           </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {organization.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {ORGANIZATION_DELETE_WARNING}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={handleDelete}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        }
+        onConfirm={() => handleAction("trash")}
+      />
     </div>
   );
 }
@@ -146,6 +231,7 @@ function OrganizationActions({
 export const columns = (
   mutate: () => void,
   basePath: string,
+  inTrash = false,
 ): ColumnDef<OrganizationColumns, unknown>[] => [
   {
     accessorKey: "name",
@@ -342,6 +428,7 @@ export const columns = (
           organization={row.original}
           mutate={mutate}
           basePath={basePath}
+          inTrash={inTrash}
         />
       );
     },

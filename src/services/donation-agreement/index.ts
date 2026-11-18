@@ -9,6 +9,11 @@ import {
 import { assertStoredFileExists } from "@/services/file/s3-service";
 import { FundingStatus } from "@/types";
 
+/** No agreement of an organization in the trash: in lists or reminders. */
+const ACTIVE_ORGANIZATION = {
+  OR: [{ organizationId: null }, { organization: { deletedAt: null } }],
+} satisfies Prisma.DonationAgreementWhereInput;
+
 type DonationAgreement = {
   agreement: string;
   file: string;
@@ -205,7 +210,7 @@ const getDonationAgreements = async (
     pagination?: ListRequest<DonationAgreementSortField>;
   } = {},
 ) => {
-  const and: Prisma.DonationAgreementWhereInput[] = [];
+  const and: Prisma.DonationAgreementWhereInput[] = [ACTIVE_ORGANIZATION];
   if (orgId) {
     and.push({ organizationId: orgId });
   }
@@ -503,6 +508,7 @@ const getDonationAgreementPastSevenDays = async () => {
 
   const donationAgreements = await prisma.donationAgreement.findMany({
     where: {
+      ...ACTIVE_ORGANIZATION,
       createdAt: {
         gte: sevenDaysAgo, // 7 days ago, 00:00:00
         lt: nextDay, // 6 days ago, 00:00:00 (exclusive)
@@ -544,6 +550,7 @@ const getDonationAgreementPastEightWeeks = async () => {
 
   const donationAgreements = await prisma.donationAgreement.findMany({
     where: {
+      ...ACTIVE_ORGANIZATION,
       createdAt: {
         gte: eightWeeksAgo, // 56 days ago, 00:00:00
         lt: nextDay, // 55 days ago, 00:00:00 (exclusive)

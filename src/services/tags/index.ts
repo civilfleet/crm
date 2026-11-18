@@ -252,6 +252,7 @@ export const getTagResults = async (
   } satisfies Prisma.ContactWhereInput;
   const organizationWhere = {
     teamId: context.teamId,
+    deletedAt: null,
     tags: tagFilter,
   } satisfies Prisma.OrganizationWhereInput;
   const listWhere = {

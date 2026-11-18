@@ -285,7 +285,9 @@ const contactInclude = {
       event: true,
     },
   },
+  // Not an organization in the trash.
   organizations: {
+    where: { organization: { deletedAt: null } },
     include: {
       organization: {
         select: {
@@ -1947,6 +1949,7 @@ const createContact = async (
         where: {
           id: { in: normalizedOrganizationIds },
           teamId,
+          deletedAt: null,
         },
         select: { id: true },
       });
@@ -2999,6 +3002,7 @@ const updateContact = async (
         where: {
           id: { in: normalizedOrganizationIds },
           teamId,
+          deletedAt: null,
         },
         select: { id: true },
       });

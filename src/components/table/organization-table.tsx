@@ -6,6 +6,7 @@ import {
   Loader2,
   Mail,
   Plus,
+  RotateCcw,
   Send,
   Trash2,
 } from "lucide-react";
@@ -14,6 +15,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { EmptyState } from "@/components/design/empty-state";
+import { Switcher } from "@/components/design/switcher";
 import {
   NoMatchState,
   RecordListToolbar,
@@ -33,9 +35,12 @@ import {
 } from "@/components/records/use-record-list";
 import { RichEmailEditor } from "@/components/rich-email-editor";
 import {
+  ConfirmOrganizationAction,
   columns,
-  ORGANIZATION_DELETE_WARNING,
+  ORGANIZATION_ACTIONS,
+  type OrganizationAction,
   type OrganizationColumns,
+  requestOrganizationAction,
 } from "@/components/table/organization-columns";
 import {
   type OrganizationFieldOption,
@@ -44,17 +49,6 @@ import {
   organizationFilterModel,
   toOrganizationApiFilters,
 } from "@/components/table/organization-filters";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -146,6 +140,7 @@ export default function OrganizationTable({
   const pathname = usePathname();
   const basePath = (basePathProp ?? pathname).replace(/\/$/, "");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
   const [emailOrganizations, setEmailOrganizations] = useState<
@@ -180,8 +175,8 @@ export default function OrganizationTable({
   // Column actions (delete one) refresh the list once it has loaded.
   const mutateRef = useRef<() => unknown>(() => undefined);
   const tableColumns = useMemo(
-    () => columns(() => void mutateRef.current(), basePath),
-    [basePath],
+    () => columns(() => void mutateRef.current(), basePath, showTrash),
+    [basePath, showTrash],
   );
   const list = useRecordList<OrganizationListFilter, "table" | "cards">({
     viewKey:
@@ -197,6 +192,7 @@ export default function OrganizationTable({
   const params = list.getSearchParams(
     scope === "admin" || !teamId ? {} : { teamId },
   );
+  if (showTrash) params.set("deleted", "true");
   if (list.activeFilters.length) {
     params.set(
       "filters",
@@ -224,57 +220,57 @@ export default function OrganizationTable({
     });
   }, [error, toast]);
 
-  const handleDeleteSelected = async (
+  const handleOrganizationAction = async (
+    action: OrganizationAction,
     selectedRows: OrganizationColumns[],
     clearSelection: () => void,
   ) => {
-    if (!selectedRows.length) {
-      return;
-    }
-
+    if (!selectedRows.length) return;
+    const { done } = ORGANIZATION_ACTIONS[action];
     setIsDeleting(true);
     try {
       const results = await Promise.allSettled(
         selectedRows.map((organization) =>
-          fetch(`/api/organizations/${organization.id}`, {
-            method: "DELETE",
-          }),
+          requestOrganizationAction(organization.id, action),
         ),
       );
-
-      const failed = results.filter((result) => {
-        if (result.status !== "fulfilled") {
-          return true;
-        }
-        return !result.value.ok;
-      }).length;
-
+      const failed = results.filter(
+        (result) => result.status !== "fulfilled" || !result.value.ok,
+      ).length;
       await mutate();
       clearSelection();
-
+      const plural = (count: number) =>
+        `${count} organization${count === 1 ? "" : "s"}`;
       if (failed > 0) {
         toast({
-          title: "Organizations partially deleted",
-          description: `${selectedRows.length - failed} deleted, ${failed} failed.`,
+          title: "Not all organizations changed",
+          description: `${plural(selectedRows.length - failed)} ${done}, ${failed} failed.`,
           variant: "destructive",
         });
         return;
       }
-
       toast({
-        title: "Organizations deleted",
-        description: `${selectedRows.length} organization${selectedRows.length === 1 ? "" : "s"} deleted.`,
-      });
-    } catch (_deleteError) {
-      toast({
-        title: "Unable to delete organizations",
+        title: `${plural(selectedRows.length)} ${done}`,
         description:
-          "An unexpected error occurred while deleting organizations.",
+          action === "trash"
+            ? "You can restore them from the trash."
+            : undefined,
+      });
+    } catch {
+      toast({
+        title: "Unable to change the organizations",
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  // Switching between the list and the trash starts on the first page.
+  const handleShowTrash = (nextShowTrash: boolean) => {
+    setShowTrash(nextShowTrash);
+    list.pagination.onPageChange(1);
   };
 
   const openEmailDialog = (selectedRows: OrganizationColumns[]) => {
@@ -446,17 +442,40 @@ export default function OrganizationTable({
         filters={filterDefinitions}
         searchLabel="Search organizations"
         isRefreshing={isValidating && !isLoading}
+        start={
+          <Switcher
+            label="Which organizations"
+            size="sm"
+            value={showTrash ? "trash" : "all"}
+            onValueChange={(value) => handleShowTrash(value === "trash")}
+            options={[
+              { value: "all", label: "All organizations" },
+              { value: "trash", label: "Trash", icon: Trash2 },
+            ]}
+          />
+        }
       />
 
       <RecordTable
         columns={tableColumns}
         data={organizations}
         getRowId={getOrganizationRowId}
-        getRowHref={(organization) => `${basePath}/${organization.id}`}
+        getRowHref={
+          showTrash
+            ? undefined
+            : (organization) => `${basePath}/${organization.id}`
+        }
         isLoading={isLoading}
         emptyState={
           list.isSearching ? (
             <NoMatchState noun="organizations" onClear={list.handleClearAll} />
+          ) : showTrash ? (
+            <EmptyState
+              size="page"
+              icon={Trash2}
+              title="Trash is empty"
+              description="Organizations you delete stay here until you restore them or delete them for good."
+            />
           ) : (
             <EmptyState
               size="page"
@@ -496,6 +515,44 @@ export default function OrganizationTable({
             isSendingEmail ||
             selectedTeamIds.length !== 1 ||
             recipientsWithEmail.length === 0;
+          const selection = `${selectedRows.length} ${selectedRows.length === 1 ? "organization" : "organizations"}`;
+          if (showTrash)
+            return (
+              <>
+                <ConfirmOrganizationAction
+                  action="restore"
+                  title={`Restore ${selection}?`}
+                  trigger={
+                    <BulkActionButton disabled={isDeleting}>
+                      <RotateCcw /> Restore
+                    </BulkActionButton>
+                  }
+                  onConfirm={() =>
+                    handleOrganizationAction(
+                      "restore",
+                      selectedRows,
+                      clearSelection,
+                    )
+                  }
+                />
+                <ConfirmOrganizationAction
+                  action="delete"
+                  title={`Delete ${selection} permanently?`}
+                  trigger={
+                    <BulkActionButton tone="destructive" disabled={isDeleting}>
+                      <Trash2 /> Delete permanently
+                    </BulkActionButton>
+                  }
+                  onConfirm={() =>
+                    handleOrganizationAction(
+                      "delete",
+                      selectedRows,
+                      clearSelection,
+                    )
+                  }
+                />
+              </>
+            );
           return (
             <>
               <BulkActionButton
@@ -504,8 +561,10 @@ export default function OrganizationTable({
               >
                 <Mail /> Email linked contacts
               </BulkActionButton>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
+              <ConfirmOrganizationAction
+                action="trash"
+                title={`Move ${selection} to the trash?`}
+                trigger={
                   <BulkActionButton tone="destructive" disabled={isDeleting}>
                     {isDeleting ? (
                       <Loader2 className="animate-spin" />
@@ -514,33 +573,15 @@ export default function OrganizationTable({
                     )}
                     Delete
                   </BulkActionButton>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      Delete {selectedRows.length}{" "}
-                      {selectedRows.length === 1
-                        ? "organization"
-                        : "organizations"}
-                      ?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {ORGANIZATION_DELETE_WARNING}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      onClick={() =>
-                        handleDeleteSelected(selectedRows, clearSelection)
-                      }
-                    >
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                }
+                onConfirm={() =>
+                  handleOrganizationAction(
+                    "trash",
+                    selectedRows,
+                    clearSelection,
+                  )
+                }
+              />
               <OrganizationContactsEmailDialog
                 open={isEmailDialogOpen}
                 organizations={emailOrganizations}

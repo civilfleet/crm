@@ -118,7 +118,10 @@ const getTransactions = async ({
   receipts = [],
   pagination,
 }: GetTransactionsParams = {}) => {
-  const and: Prisma.TransactionWhereInput[] = [];
+  // None of an organization in the trash.
+  const and: Prisma.TransactionWhereInput[] = [
+    { organization: { deletedAt: null } },
+  ];
 
   if (organizationId) {
     and.push({ organizationId });

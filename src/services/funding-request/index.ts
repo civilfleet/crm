@@ -469,7 +469,10 @@ const getFundingRequests = async (
   status?: FundingStatus[] | null,
   pagination?: ListRequest<FundingRequestSortField>,
 ) => {
-  const where: Prisma.FundingRequestWhereInput = {};
+  // An organization in the trash takes its requests out of every list.
+  const where: Prisma.FundingRequestWhereInput = {
+    organization: { deletedAt: null },
+  };
   if (orgId) {
     where.organizationId = orgId;
   }

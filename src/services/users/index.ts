@@ -50,6 +50,7 @@ const getAdminUser = async (userId: string) => {
   const organizationsPromise = prisma.organization.findMany({
     where: {
       portalAccessEnabled: true,
+      deletedAt: null,
     },
     select: {
       id: true,
@@ -91,7 +92,9 @@ const getUserCurrent = async (userId: string) => {
       city: true,
       country: true,
       roles: true,
+      // Not one in the trash: its users lose access until it is restored.
       organizations: {
+        where: { deletedAt: null },
         select: {
           id: true,
           name: true,

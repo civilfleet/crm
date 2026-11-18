@@ -233,6 +233,23 @@ const createOrUpdateOrganization = async (formData: Organization) => {
       }),
     };
 
+    // An organization in the trash keeps its address so that it can be
+    // restored; a new one cannot take it meanwhile.
+    if (formData.teamId) {
+      const trashed = await prisma.organization.findFirst({
+        where: {
+          email: formData.email.toLowerCase(),
+          deletedAt: { not: null },
+        },
+        select: { id: true },
+      });
+      if (trashed) {
+        throw new Error(
+          `An organization in the trash already uses ${formData.email}. Restore it, or delete it permanently first.`,
+        );
+      }
+    }
+
     // Organization update/create logic
     const organization = formData.teamId
       ? await prisma.organization.create({
@@ -603,6 +620,8 @@ const getOrganizations = async (
     pageSize: number;
     sorts?: RecordSort<OrganizationSortField>[];
   },
+  /** The list itself, or the trash. */
+  deleted: "active" | "trashed" = "active",
 ) => {
   const fieldFilters = filters.filter((filter) => filter.type === "field");
   const andClauses: Prisma.OrganizationWhereInput[] = [];
@@ -693,6 +712,7 @@ const getOrganizations = async (
 
   const where = {
     ...(teamId ? { teamId } : {}),
+    deletedAt: deleted === "trashed" ? { not: null } : null,
     ...(andClauses.length ? { AND: andClauses } : {}),
     OR: [
       { name: { contains: searchQuery, mode: "insensitive" } },
@@ -737,52 +757,54 @@ const getOrganizations = async (
   return { data, total };
 };
 
-const deleteOrganization = async (id: string) => {
+/**
+ * Moves an organization to the trash: it leaves every list and its users
+ * lose access, but nothing of it is deleted (docs/DATA_RULES.md,
+ * "Organizations in the trash").
+ */
+const trashOrganization = async (id: string) => {
+  const { count } = await prisma.organization.updateMany({
+    where: { id, deletedAt: null },
+    data: { deletedAt: new Date() },
+  });
+  if (!count) throw new Error("Organization not found");
+  return true;
+};
+
+/** Brings an organization back from the trash, as it was. */
+const restoreOrganization = async (id: string) => {
+  const { count } = await prisma.organization.updateMany({
+    where: { id, deletedAt: { not: null } },
+    data: { deletedAt: null },
+  });
+  if (!count) throw new Error("Organization is not in the trash");
+  return true;
+};
+
+/**
+ * Deletes an organization in the trash for good, with its donation
+ * agreements, files and funding requests (and what they cascade to).
+ */
+const permanentlyDeleteOrganization = async (id: string) => {
   try {
-    // Get the organization to find associated users
-    const organization = await prisma.organization.findUnique({
-      where: { id },
-      include: {
-        users: true,
-        fundingRequests: true,
-      },
+    await prisma.$transaction(async (tx) => {
+      const organization = await tx.organization.findFirst({
+        where: { id, deletedAt: { not: null } },
+        select: { id: true },
+      });
+      if (!organization) {
+        throw new Error("Only an organization in the trash can be deleted");
+      }
+      await tx.donationAgreement.deleteMany({ where: { organizationId: id } });
+      await tx.file.deleteMany({ where: { organizationId: id } });
+      // Cascades to what hangs off the requests (schema constraints).
+      await tx.fundingRequest.deleteMany({ where: { organizationId: id } });
+      await tx.organization.update({
+        where: { id },
+        data: { users: { set: [] } },
+      });
+      await tx.organization.delete({ where: { id } });
     });
-
-    if (!organization) {
-      throw new Error("Organization not found");
-    }
-
-    // Delete all donation agreements associated with this organization
-    await prisma.donationAgreement.deleteMany({
-      where: { organizationId: id },
-    });
-
-    // Delete all files associated with this organization
-    await prisma.file.deleteMany({
-      where: { organizationId: id },
-    });
-
-    // Delete all funding requests associated with this organization
-    // This will cascade delete related records due to the schema constraints
-    await prisma.fundingRequest.deleteMany({
-      where: { organizationId: id },
-    });
-
-    // Disconnect all users from the organization
-    await prisma.organization.update({
-      where: { id },
-      data: {
-        users: {
-          set: [], // Disconnect all users
-        },
-      },
-    });
-
-    // Finally, delete the organization
-    await prisma.organization.delete({
-      where: { id },
-    });
-
     return true;
   } catch (error) {
     logger.error({ error, organizationId: id }, "Error deleting organization");
@@ -792,9 +814,11 @@ const deleteOrganization = async (id: string) => {
 
 export {
   createOrUpdateOrganization,
-  deleteOrganization,
   getOrganizationByEmail,
   getOrganizationById,
   getOrganizations,
+  permanentlyDeleteOrganization,
+  restoreOrganization,
+  trashOrganization,
   updateOrganization,
 };

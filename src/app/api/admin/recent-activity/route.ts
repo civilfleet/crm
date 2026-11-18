@@ -23,7 +23,9 @@ export async function GET() {
         }),
 
         // Organizations
+        // Nothing of an organization in the trash.
         prisma.organization.findMany({
+          where: { deletedAt: null },
           select: {
             id: true,
             name: true,
@@ -37,6 +39,7 @@ export async function GET() {
 
         // Funding Requests
         prisma.fundingRequest.findMany({
+          where: { organization: { deletedAt: null } },
           select: {
             id: true,
             name: true,
@@ -55,6 +58,7 @@ export async function GET() {
 
         // Transactions
         prisma.transaction.findMany({
+          where: { organization: { deletedAt: null } },
           select: {
             id: true,
             amount: true,

@@ -112,6 +112,8 @@ export const verifyTeamAccess = async (
 };
 
 type OrganizationAccessOptions = {
+  /** Also an organization in the trash (restoring, deleting for good). */
+  allowTrashed?: boolean;
   requireTeamAdmin?: boolean;
   requireTeamMember?: boolean;
   requireModule?: AppModule;
@@ -145,9 +147,10 @@ export const verifyOrganizationAccess = async (
 
   const organization = await prisma.organization.findUnique({
     where: { id: organizationId },
-    select: { id: true, teamId: true },
+    select: { id: true, teamId: true, deletedAt: true },
   });
-  if (!organization) {
+  // An organization in the trash is gone for everyone until restored.
+  if (!organization || (organization.deletedAt && !options.allowTrashed)) {
     throw new ApiError(404, "Organization not found");
   }
 

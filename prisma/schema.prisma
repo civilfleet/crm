@@ -38,6 +38,8 @@ model Organization {
   engagements         OrganizationEngagement[]
   fieldValues         OrganizationFieldValue[]
   tags                String[]                 @default([])
+  // In the trash since then (docs/DATA_RULES.md, "Organizations in the trash").
+  deletedAt           DateTime?                @db.Timestamptz(6)
 
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
@@ -46,6 +48,7 @@ model Organization {
   fileDownloadAudits FileDownloadAudit[]
 
   @@index([tags], type: Gin)
+  @@index([teamId, deletedAt])
 }
 
 model BankDetails {

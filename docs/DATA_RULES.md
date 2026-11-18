@@ -16,6 +16,7 @@ Known open points are in [FOLLOW_UPS.md](FOLLOW_UPS.md).
   - [E-mail addresses](#e-mail-addresses)
   - [Merging contacts](#merging-contacts)
   - [Trash, restore and permanent delete](#trash-restore-and-permanent-delete)
+  - [Organizations in the trash](#organizations-in-the-trash)
 - [Lists and saved views](#lists-and-saved-views)
 - [Rules held by the database](#rules-held-by-the-database)
 - [Tests and CI](#tests-and-ci)
@@ -295,6 +296,26 @@ system log records who deleted how many, without the answers
   e-mail recipients keep their record, without the contact link.
 
 All three act only on contacts the person can see.
+
+### Organizations in the trash
+
+Deleting an organization moves it to the trash (`deletedAt`); nothing of it
+is deleted. While it is there:
+
+- it leaves the organization lists, tags, activity feeds and the links on
+  contact pages, and so do its funding requests, donation agreements and
+  payments; agreement reminders skip it;
+- its pages and API answer "not found" to everyone, so its users lose access
+  (`verifyOrganizationAccess`);
+- its e-mail address stays taken: a new organization with that address is
+  refused until it is restored or deleted for good.
+
+Restoring brings it back as it was. Deleting for good works only from the
+trash and takes its funding requests (with what cascades from them),
+donation agreements and files with it, in one transaction. All three are for
+team admins, and each asks for confirmation in the list
+(`src/services/organizations`, `src/app/api/organizations/[id]/trash`,
+`tests/db/organization-trash.test.ts`).
 
 ## Lists and saved views
 

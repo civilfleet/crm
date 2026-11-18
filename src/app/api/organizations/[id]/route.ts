@@ -3,8 +3,8 @@ import { updateTagAttribute } from "@/app/api/tag-attribute-update";
 import { handleApiError, verifyOrganizationAccess } from "@/lib/api-guard";
 import { handlePrismaError } from "@/lib/utils";
 import {
-  deleteOrganization,
   getOrganizationById,
+  trashOrganization,
   updateOrganization,
 } from "@/services/organizations";
 
@@ -78,9 +78,10 @@ export async function DELETE(
     }
 
     await verifyOrganizationAccess(organizationId, { requireTeamAdmin: true });
-    await deleteOrganization(organizationId);
+    // To the trash; deleting for good is /trash (DELETE).
+    await trashOrganization(organizationId);
     return NextResponse.json(
-      { message: "Organization deleted successfully" },
+      { message: "Organization moved to the trash" },
       { status: 200 },
     );
   } catch (e) {
