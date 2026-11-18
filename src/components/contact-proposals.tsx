@@ -3,6 +3,7 @@
 import { formatDistanceToNow } from "date-fns";
 import { ArrowRight, GitPullRequestArrow } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { Badge } from "@/components/ui/badge";
@@ -216,6 +217,7 @@ export const ContactPendingChanges = ({
   teamId: string;
   contactId: string;
 }) => {
+  const router = useRouter();
   const { mutate } = useSWRConfig();
   const key = `/api/contact-proposals?teamId=${teamId}&contactId=${contactId}`;
   const { data, mutate: refresh } = useSWR(key, fetcher);
@@ -241,6 +243,9 @@ export const ContactPendingChanges = ({
           onDecided={() => {
             void refresh();
             void mutate(`/api/contact-change-logs?contactId=${contactId}`);
+            // The contact's fields are rendered on the server: show the
+            // applied value without a full reload.
+            router.refresh();
           }}
         />
       </CardContent>
