@@ -325,6 +325,56 @@ test("a team with verified Scaleway sends through it; others through SMTP", asyn
   assert.equal(smtpMails[0].to, "b@example.org");
 });
 
+test("a form's own sender from its published file, on the team's domain", async () => {
+  const team = await createTeam();
+  await db.integrationConnection.create({
+    data: {
+      teamId: team.id,
+      provider: "SCALEWAY_TEM",
+      isEnabled: true,
+      apiKey: "enc:v1:test:x:y:z",
+      defaultListId: "project",
+      senderEmail: "crm@sea-watch.org",
+      senderName: "CRM",
+      lastSyncedAt: new Date(),
+    },
+  });
+  await sign(team.id, "a@example.org");
+  scalewayMails.length = 0;
+
+  await confirmations.sendDueConfirmations({
+    readForm: async () => ({
+      version: 1,
+      formId: "petition",
+      locale: "it",
+      revision: "1",
+      teamId: team.id,
+      title: "Firma",
+      confirmation: {
+        required: true,
+        subject: "Conferma",
+        text: "Ciao {{name}}",
+        button: "Conferma",
+        senderName: "Sea-Watch Italia",
+        senderLocalPart: "firma",
+        replyTo: "petizione@sea-watch.org",
+      },
+      questions: [],
+    }),
+    websiteUrl: "https://sea-watch.org",
+    key: KEY,
+    now: new Date("2026-11-17T10:05:00.000Z"),
+    log: quiet,
+  });
+  assert.deepEqual(scalewayMails[0].from, {
+    email: "firma@sea-watch.org",
+    name: "Sea-Watch Italia",
+  });
+  assert.deepEqual(scalewayMails[0].additionalHeaders, [
+    { key: "Reply-To", value: "petizione@sea-watch.org" },
+  ]);
+});
+
 test("confirming grants the marketing consent and counts the person", async () => {
   const team = await createTeam();
   const confirmed = await sign(team.id, "giulia@example.org", {

@@ -187,6 +187,25 @@ test("reads the published file from the configured site, cached", async () => {
   assert.equal(urls.length, 3);
 });
 
+test("a wrong sender value in the file is ignored, not the whole file", async () => {
+  const read = createPublishedFormReader({
+    websiteUrl: "https://sea-watch.org",
+    fetch: async () =>
+      Response.json({
+        ...file,
+        confirmation: {
+          ...file.confirmation,
+          senderLocalPart: 42,
+          replyTo: "x".repeat(300),
+        },
+      }),
+  });
+  const form = await read("petition", "it");
+  assert.equal(form?.confirmation?.subject, "Conferma");
+  assert.equal(form?.confirmation?.senderLocalPart, undefined);
+  assert.equal(form?.confirmation?.replyTo, undefined);
+});
+
 test("an unreachable site or an unexpected file is an error, not a guess", async () => {
   const failing = (response: () => Promise<Response>) =>
     createPublishedFormReader({

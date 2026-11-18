@@ -15,11 +15,21 @@ import { FORM_ANSWER_TYPES } from "@/lib/public-forms/submission";
 const formIdPattern = /^[A-Za-z0-9_-]{1,64}$/;
 const localePattern = /^[a-z]{2}(?:-[A-Za-z]{2})?$/;
 
+// An optional text the file may carry; a wrong one is ignored (the sender
+// falls back to the team's), never a reason to reject the whole file.
+const optionalText = (max: number) =>
+  z.string().max(max).optional().catch(undefined);
+
 export const publishedFormConfirmation = z.object({
   required: z.boolean(),
   subject: z.string().trim().min(1).max(200),
   text: z.string().trim().min(1).max(2000),
   button: z.string().trim().min(1).max(60),
+  // Who it comes from (src/lib/public-forms/sender.ts): a name, the part
+  // before the @ of the team's verified domain, and where replies go.
+  senderName: optionalText(100),
+  senderLocalPart: optionalText(64),
+  replyTo: optionalText(255),
 });
 
 export const publishedFormQuestion = z.object({

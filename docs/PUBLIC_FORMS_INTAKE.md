@@ -305,6 +305,15 @@ website page ──POST /v1/forms/confirmations {"token"}──▶ bridge (check
   in a fixed layout with the button, the link and a footer
   (`src/lib/public-forms/confirmation-email.ts`). If the site cannot be read,
   the e-mail waits and is retried.
+- **Who it comes from:** the form's published file may name a sender next
+  to the text (`confirmation.senderName`, `senderLocalPart`, `replyTo`, set
+  in Strapi). Only the part before the @ comes from the file; the domain is
+  always the one verified in the team's Scaleway integration, so a form
+  cannot send as another domain. A missing or invalid value falls back to the
+  team's sender (`src/lib/public-forms/sender.ts`); a wrong value never
+  rejects the file. Through SMTP, the form's name and reply-to apply but the
+  address stays the SMTP sender's. Changes reach unsent e-mails within the
+  file cache (5 minutes) after a website build.
 - **How it is sent:** through the team's Scaleway Transactional Email when
   it is enabled and its sender verified (Team Settings → Integrations), with
   that sender; otherwise through the CRM's SMTP. Scaleway is built for

@@ -12,6 +12,10 @@ import {
   type PublishedFormReader,
   PublishedFormUnavailableError,
 } from "@/lib/public-forms/published-form";
+import {
+  type FormSenderFields,
+  resolveFormSender,
+} from "@/lib/public-forms/sender";
 import { FORM_ENGAGEMENT_EXTERNAL_SOURCE } from "@/lib/public-forms/submission";
 import { sendScalewayTransactionalEmail } from "@/services/integrations/scaleway-email";
 
@@ -80,6 +84,8 @@ export type ConfirmationMail = {
   subject: string;
   html: string;
   text: string;
+  /** The form's own sender, from its published file. */
+  sender?: FormSenderFields;
 };
 
 /**
@@ -126,8 +132,10 @@ const createSender = () => {
     return sender;
   };
   return async (mail: ConfirmationMail) => {
-    const from = await scalewaySender(mail.teamId);
-    if (from) {
+    const team = await scalewaySender(mail.teamId);
+    if (team) {
+      // The form's sender on the team's verified domain, else the team's.
+      const { from, replyTo } = resolveFormSender(team, mail.sender);
       await sendScalewayTransactionalEmail({
         teamId: mail.teamId,
         from,
@@ -135,11 +143,24 @@ const createSender = () => {
         subject: mail.subject,
         text: mail.text,
         html: mail.html,
+        ...(replyTo
+          ? { additionalHeaders: [{ key: "Reply-To", value: replyTo }] }
+          : {}),
       });
       return;
     }
+    // SMTP sends as its own address; the form's name and reply-to still apply.
+    const smtpFrom = process.env.SMTP_FROM ?? process.env.SMTP_USER ?? "";
+    const { from, replyTo } = resolveFormSender(
+      { email: smtpFrom },
+      {
+        senderName: mail.sender?.senderName,
+        replyTo: mail.sender?.replyTo,
+      },
+    );
     await getTransporter().sendMail({
-      from: process.env.SMTP_FROM ?? process.env.SMTP_USER,
+      from: from.name ? { name: from.name, address: from.email } : from.email,
+      ...(replyTo ? { replyTo } : {}),
       to: mail.to,
       subject: mail.subject,
       html: mail.html,
@@ -315,6 +336,7 @@ export const sendDueConfirmations = async ({
         subject: mail.subject,
         html: mail.html,
         text: mail.text,
+        sender: form?.confirmation ?? undefined,
       });
       await markHandled(submission.id);
       result.sent++;
