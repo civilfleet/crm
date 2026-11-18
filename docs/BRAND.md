@@ -4,7 +4,9 @@ Installed from the designer's kit: the SVGs and app icons are in
 `public/brand/`; the favicon (`favicon.ico`, `icon.svg`) and the Apple touch
 icon (`apple-icon.png`) are in `src/app/`, where Next.js links them itself,
 and the web app manifest is `src/app/manifest.ts`. The kit's PNG exports of
-the logos are not in the repo; the SVGs cover them.
+the logos are not in the repo; the SVGs cover them. The kit's `favicon.ico` still had the old icon
+(no blue centre), so `src/app/favicon.ico` is rendered from `icon.svg`
+(16, 32 and 48 px).
 
 The "Signal" logo: a yellow hexagonal lifebuoy on Sea-Watch navy, with a sky-blue offset shadow.
 
@@ -64,5 +66,5 @@ Copy the `favicon/` files to your web root and add to `<head>`:
 
 - The yellow logo is designed for the navy background. Don't place it on white or light backgrounds.
 - Keep clear space around the logo of at least the height of one lifebuoy band.
-- Minimum size: full mark 24 px; below that use the favicon (simplified, no wave or shadow).
+- Minimum size: full mark 24 px; below that use the favicon (simplified: no wave, sky-blue centre instead of the shadow).
 - Don't rotate, recolour, stretch or add effects to the logo.
