@@ -160,6 +160,15 @@ const run = (
     ...overrides,
   });
 
+// The limits these tests check, set explicitly (the default may change).
+const THREE_A_DAY = {
+  batch: 100,
+  perHour: 1000,
+  perAddressPerDay: 3,
+  perSourcePerHour: 30,
+  concurrency: 5,
+};
+
 test("every submission gets its own e-mail, at most three a day per address", async () => {
   const team = await createTeam();
   // Signing again needs its own confirmation: nothing else proves it.
@@ -168,7 +177,7 @@ test("every submission gets its own e-mail, at most three a day per address", as
   await sign(team.id, "marco@example.org", { confirmation: false });
 
   const sent: Mail[] = [];
-  const result = await run(sent);
+  const result = await run(sent, { limits: THREE_A_DAY });
   assert.deepEqual(result, { sent: 2, skipped: 0, waiting: 0 });
   assert.ok(sent.every((mail) => mail.to === "giulia@example.org"));
   assert.notEqual(sent[0].text, sent[1].text, "each with its own link");
@@ -178,12 +187,16 @@ test("every submission gets its own e-mail, at most three a day per address", as
   );
   assert.equal(sent[0].subject, "Conferma il tuo indirizzo e-mail");
   // Nothing is sent twice.
-  assert.deepEqual(await run(sent), { sent: 0, skipped: 0, waiting: 0 });
+  assert.deepEqual(await run(sent, { limits: THREE_A_DAY }), {
+    sent: 0,
+    skipped: 0,
+    waiting: 0,
+  });
 
   // A flood with one address: three a day, the rest is not mailed.
   for (let index = 0; index < 3; index++)
     await sign(team.id, "giulia@example.org");
-  const flood = await run(sent);
+  const flood = await run(sent, { limits: THREE_A_DAY });
   assert.deepEqual(flood, { sent: 1, skipped: 2, waiting: 0 });
 });
 
@@ -193,7 +206,11 @@ test("only e-mails actually sent count toward the per-address limit", async () =
     await sign(team.id, "giulia@example.org");
 
   const sent: Mail[] = [];
-  assert.deepEqual(await run(sent), { sent: 3, skipped: 1, waiting: 0 });
+  assert.deepEqual(await run(sent, { limits: THREE_A_DAY }), {
+    sent: 3,
+    skipped: 1,
+    waiting: 0,
+  });
   const skipped = await db.formSubmission.findFirstOrThrow({
     where: { confirmationSkipped: { not: null } },
   });

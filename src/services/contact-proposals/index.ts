@@ -77,6 +77,16 @@ export type PendingProposal = {
   formTitle: string | null;
   submissionId: string | null;
   createdAt: Date;
+  /**
+   * Every submission that proposed this same value and may be shown
+   * (confirmed, or not asking for confirmation), oldest first. Deciding the
+   * row decides them all.
+   */
+  proposedBy: Array<{
+    source: string | null;
+    formTitle: string | null;
+    createdAt: Date;
+  }>;
 };
 
 type ContactValues = {
@@ -157,7 +167,10 @@ export const getPendingProposals = async (
       : [],
   );
 
-  const pending: PendingProposal[] = [];
+  // One row per contact, field and proposed value: the same value from
+  // several submissions is one decision. A row shows when at least one of
+  // its submissions may be shown.
+  const groups = new Map<string, PendingProposal>();
   for (const log of logs) {
     if (!isProposalField(log.fieldName)) continue;
     const metadata = metadataOf(log.metadata);
@@ -165,9 +178,22 @@ export const getPendingProposals = async (
       typeof metadata.submissionId === "string" ? metadata.submissionId : null;
     if (submissionId && unconfirmed.has(submissionId)) continue;
     const field = log.fieldName;
-    const currentValue = currentValueOf(log.contact, field);
     const proposedValue = parseValue(log.newValue);
-    pending.push({
+    const by = {
+      source: log.userName,
+      formTitle:
+        typeof metadata.formTitle === "string" ? metadata.formTitle : null,
+      createdAt: log.createdAt,
+    };
+    const key = `${log.contactId}|${field}|${comparable(field, proposedValue)}`;
+    const group = groups.get(key);
+    if (group) {
+      group.proposedBy.push(by);
+      group.createdAt = log.createdAt;
+      continue;
+    }
+    const currentValue = currentValueOf(log.contact, field);
+    groups.set(key, {
       id: log.id,
       contact: { id: log.contact.id, name: log.contact.name },
       field,
@@ -182,13 +208,12 @@ export const getPendingProposals = async (
             )
           : comparable(field, currentValue) ===
             comparable(field, proposedValue),
-      source: log.userName,
-      formTitle:
-        typeof metadata.formTitle === "string" ? metadata.formTitle : null,
+      ...by,
       submissionId,
-      createdAt: log.createdAt,
+      proposedBy: [by],
     });
   }
+  const pending = [...groups.values()];
 
   const page = options.page ?? 1;
   const pageSize = options.pageSize ?? pending.length;
@@ -255,6 +280,40 @@ export const resolveProposal = async (
       const currentValue = currentValueOf(contact, field);
       const by = { userId: viewer.userId, userName: viewer.userName };
 
+      // Equal proposals of other submissions (shown or not) are decided with
+      // this one: the value is now applied or declined for all of them.
+      const resolveSiblings = async (action: ChangeAction) => {
+        const siblings = await tx.contactChangeLog.findMany({
+          where: {
+            contactId: contact.id,
+            action: ChangeAction.PROPOSED,
+            fieldName: field,
+            id: { not: proposal.id },
+            resolutions: { none: {} },
+          },
+          select: { id: true, newValue: true },
+        });
+        const same = siblings.filter(
+          (sibling) =>
+            comparable(field, parseValue(sibling.newValue)) ===
+            comparable(field, proposedValue),
+        );
+        if (same.length)
+          await tx.contactChangeLog.createMany({
+            data: same.map((sibling) => ({
+              contactId: contact.id,
+              action,
+              fieldName: field,
+              oldValue: JSON.stringify(currentValue),
+              newValue: sibling.newValue,
+              proposalId: sibling.id,
+              // Decided with another proposal; the history shows that one.
+              metadata: { decidedWith: proposal.id },
+              ...by,
+            })),
+          });
+      };
+
       if (input.decision === "decline") {
         await tx.contactChangeLog.create({
           data: {
@@ -267,6 +326,7 @@ export const resolveProposal = async (
             ...by,
           },
         });
+        await resolveSiblings(ChangeAction.PROPOSAL_REJECTED);
         return { decision: input.decision, field };
       }
       if (!proposedValue)
@@ -331,6 +391,7 @@ export const resolveProposal = async (
             ...by,
           },
         });
+        await resolveSiblings(ChangeAction.UPDATED);
         return { decision: input.decision, field };
       }
 
@@ -373,6 +434,7 @@ export const resolveProposal = async (
           ...by,
         },
       });
+      await resolveSiblings(ChangeAction.UPDATED);
       return { decision: input.decision, field };
     });
   } catch (error) {

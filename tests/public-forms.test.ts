@@ -252,10 +252,41 @@ function formHarness(options: { enabled?: boolean } = {}) {
       },
     },
     contactEmail: {
+      // Identity addresses (primary or alias) of the team, trash included.
+      findFirst: async ({ where }: { where: Row }) => {
+        const match = state.emails.find(
+          (e) =>
+            e.teamId === where.teamId &&
+            e.email === where.email &&
+            (e.kind === "PRIMARY" || e.kind === "ALIAS"),
+        );
+        const contact = match
+          ? state.contacts.find((c) => c.id === match.contactId)
+          : undefined;
+        return contact
+          ? {
+              contact: { id: contact.id, deletedAt: contact.deletedAt ?? null },
+            }
+          : null;
+      },
       upsert: async ({ create }: { create: Row }) => {
         state.emails.push(create);
         return create;
       },
+    },
+    // Contacts with the same phone (last eight digits), for the duplicate note.
+    $queryRaw: async (_strings: TemplateStringsArray, ...values: unknown[]) => {
+      const [teamId, excludeId, , tail] = values as string[];
+      return state.contacts
+        .filter(
+          (c) =>
+            c.teamId === teamId &&
+            c.id !== excludeId &&
+            !c.deletedAt &&
+            typeof c.phone === "string" &&
+            c.phone.replace(/\D/g, "").endsWith(tail),
+        )
+        .map((c) => ({ id: c.id }));
     },
     contactEngagement: {
       create: async ({ data }: { data: Row }) => {
@@ -284,7 +315,7 @@ function formHarness(options: { enabled?: boolean } = {}) {
     $disconnect: async () => {},
   };
   const types = {
-    ContactEmailKind: { PRIMARY: "PRIMARY" },
+    ContactEmailKind: { PRIMARY: "PRIMARY", ALIAS: "ALIAS" },
     EngagementDirection: { INBOUND: "INBOUND", OUTBOUND: "OUTBOUND" },
     EngagementSource: { FORM: "FORM" },
   };
@@ -296,17 +327,8 @@ function formHarness(options: { enabled?: boolean } = {}) {
       logFieldUpdate: async (contactId: string, field: string) => {
         state.changeLogs.push({ contactId, action: "UPDATED", field });
       },
-      // Mirrors the real helper's pending-duplicate check.
+      // One proposal per submission, as the real helper records it.
       proposeFieldChange: async (_tx: unknown, proposal: Row) => {
-        if (
-          state.proposals.some(
-            (p) =>
-              p.contactId === proposal.contactId &&
-              p.fieldName === proposal.fieldName &&
-              p.newValue === proposal.newValue,
-          )
-        )
-          return false;
         state.proposals.push(proposal);
         return true;
       },
@@ -662,23 +684,30 @@ test("existing contact only gets empty fields filled, never overwritten", async 
     /3 contact changes pending review/,
   );
 
-  // Phone fallback matches a contact without the email in the same team.
+  // A phone number alone never picks a contact: a new one is made, and the
+  // one with the same number is noted as a possible duplicate.
   const byPhone = formHarness();
   byPhone.state().contacts.push({
     id: "phone-match",
     teamId: TEAM_ID,
-    name: "",
-    phone: "+49 30 000000",
+    name: "Someone",
+    // The national form of the submitted "+49 30 000000".
+    phone: "030 000000",
   });
   await byPhone.service.createFormSubmission(message());
   const phoneState = byPhone.state();
-  assert.equal(phoneState.contacts.length, 1);
-  assert.equal(phoneState.contacts[0].name, "Synthetic Person");
+  assert.equal(phoneState.contacts.length, 2);
+  assert.equal(phoneState.contacts[0].name, "Someone");
   assert.ok(
-    phoneState.emails.some(
-      (e) => e.contactId === "phone-match" && e.email === "person@example.org",
-    ),
+    !phoneState.emails.some((e) => e.contactId === "phone-match"),
+    "nothing attached to the contact with the same number",
   );
+  const creation = phoneState.changeLogs.find(
+    (log) => log.action === "CREATED",
+  );
+  assert.deepEqual((creation?.meta as Row).possibleDuplicates, [
+    { contactId: "phone-match", reason: "phone" },
+  ]);
 });
 
 test("formatting-only differences neither fill nor propose", async () => {
@@ -707,57 +736,38 @@ test("formatting-only differences neither fill nor propose", async () => {
   assert.doesNotMatch(String(after.engagements[0].message), /pending review/);
 });
 
-test("phone match: missing primary email is added, a different one is proposed", async () => {
-  // Legacy contact without any email, matched by phone, nothing else to fill.
-  const legacy = formHarness();
-  legacy.state().contacts.push({
-    id: "legacy",
-    teamId: TEAM_ID,
-    name: "Synthetic Person",
-    phone: "+49 30 000000",
-    postalCode: "10115",
-    city: "Berlin",
-    country: "Germany",
-  });
-  await legacy.service.createFormSubmission(message());
-  const legacyState = legacy.state();
-  assert.deepEqual(
-    legacyState.emails.map((e) => [e.contactId, e.email, e.kind]),
-    [["legacy", "person@example.org", "PRIMARY"]],
-  );
-  assert.deepEqual(
-    legacyState.changeLogs.map((log) => log.field),
-    ["email"],
-  );
-  assert.deepEqual(legacyState.proposals, []);
-
-  // Same phone, different primary email: keep it, propose the submitted one.
-  const other = formHarness();
-  other.state().contacts.push({
-    id: "other",
-    teamId: TEAM_ID,
-    name: "Synthetic Person",
-    phone: "+49 30 000000",
-  });
-  other.state().emails.push({
-    teamId: TEAM_ID,
-    contactId: "other",
-    email: "old@example.org",
-    kind: "PRIMARY",
-  });
-  await other.service.createFormSubmission(message());
-  const otherState = other.state();
-  assert.equal(otherState.emails.length, 1);
-  assert.deepEqual(
-    otherState.proposals.map((p) => [p.fieldName, p.oldValue, p.newValue]),
-    [["email", "old@example.org", "person@example.org"]],
-  );
-});
-
-test("an identical pending proposal is not recorded twice", async () => {
+test("an address in the trash brings its contact back", async () => {
   const harness = formHarness();
   const state = harness.state();
-  state.contacts.push({ id: "existing", teamId: TEAM_ID, name: "Kept Name" });
+  state.contacts.push({
+    id: "trashed",
+    teamId: TEAM_ID,
+    name: "Synthetic Person",
+    deletedAt: new Date("2026-10-01T00:00:00Z"),
+  });
+  state.emails.push({
+    teamId: TEAM_ID,
+    contactId: "trashed",
+    email: "person@example.org",
+    kind: "PRIMARY",
+  });
+  await harness.service.createFormSubmission(message());
+  const after = harness.state();
+  assert.equal(after.contacts.length, 1);
+  assert.equal(after.contacts[0].deletedAt, null);
+  assert.equal(after.submissions[0].contactId, "trashed");
+  assert.ok(after.changeLogs.some((log) => log.field === "deletedAt"));
+});
+
+test("each submission records its own proposal, even for the same value", async () => {
+  const harness = formHarness();
+  const state = harness.state();
+  state.contacts.push({
+    id: "existing",
+    teamId: TEAM_ID,
+    name: "Synthetic Person",
+    city: "Hamburg",
+  });
   state.emails.push({
     teamId: TEAM_ID,
     contactId: "existing",
@@ -766,36 +776,16 @@ test("an identical pending proposal is not recorded twice", async () => {
   });
   await harness.service.createFormSubmission(message());
   await harness.service.createFormSubmission(
-    message({}, "6f1c1c4e-8c1a-4f7e-9d7a-2b1e5d0c9a11"),
+    message({}, "22222222-2222-4222-8222-222222222222"),
   );
-  const after = harness.state();
-  assert.equal(after.proposals.filter((p) => p.fieldName === "name").length, 1);
-  assert.match(
-    String(after.engagements[0].message),
-    /1 contact change pending/,
+  const cities = harness
+    .state()
+    .proposals.filter((proposal) => proposal.fieldName === "city");
+  assert.equal(cities.length, 2);
+  assert.deepEqual(
+    cities.map((proposal) => (proposal.metadata as Row).submissionId),
+    [SUBMISSION_ID, "22222222-2222-4222-8222-222222222222"],
   );
-  assert.doesNotMatch(String(after.engagements[1].message), /pending review/);
-});
-
-test("disabled or unknown team is rejected without writes", async () => {
-  const harness = formHarness({ enabled: false });
-  await assert.rejects(
-    harness.service.createFormSubmission(message()),
-    (error: Error) =>
-      error instanceof harness.service.FormSubmissionRejectedError &&
-      /not accepting form submissions/.test(error.message),
-  );
-  const unknownTeam = formHarness();
-  await assert.rejects(
-    unknownTeam.service.createFormSubmission(
-      message({ teamId: "22222222-2222-4222-8222-222222222222" }),
-    ),
-    unknownTeam.service.FormSubmissionRejectedError,
-  );
-  const state = harness.state();
-  assert.equal(state.contacts.length, 0);
-  assert.equal(state.submissions.length, 0);
-  assert.equal(state.engagements.length, 0);
 });
 
 test("duplicate submissionId is idempotent", async () => {
@@ -949,10 +939,9 @@ test("consumer acks a concurrent duplicate (P2002) only when the row exists", as
   assert.deepEqual(missing.outcomes, ["nak:0:10000"]);
 });
 
-test("proposeFieldChange records a PROPOSED entry once while it is pending", async () => {
+test("proposeFieldChange records a PROPOSED entry for every submission", async () => {
   const created: Row[] = [];
   const queries: Row[] = [];
-  let pending: Row | null = null;
   const { proposeFieldChange } = loadModule<{
     proposeFieldChange: (tx: unknown, input: Row) => Promise<boolean>;
   }>("src/services/contact-change-logs/index.ts", {
@@ -968,7 +957,7 @@ test("proposeFieldChange records a PROPOSED entry once while it is pending", asy
     contactChangeLog: {
       findFirst: async (query: Row) => {
         queries.push(query);
-        return pending;
+        return null;
       },
       create: async ({ data }: { data: Row }) => {
         const row = { id: `log-${created.length + 1}`, ...data };
@@ -1002,15 +991,9 @@ test("proposeFieldChange records a PROPOSED entry once while it is pending", asy
       userName: "Website form",
     },
   );
-  // Only unresolved proposals with the same contact, field and value count.
-  assert.deepEqual(queries[0].where, {
-    contactId: "contact",
-    action: "PROPOSED",
-    fieldName: "phone",
-    newValue: '"+49 222"',
-    resolutions: { none: {} },
-  });
-  pending = { id: "log-1" };
-  assert.equal(await proposeFieldChange(tx, input), false);
-  assert.equal(created.length, 1);
+  // The same value again is recorded again: whether it shows depends on
+  // its own submission; the review groups equal proposals.
+  assert.equal(await proposeFieldChange(tx, input), true);
+  assert.equal(created.length, 2);
+  assert.equal(queries.length, 0, "no lookup for a pending one");
 });

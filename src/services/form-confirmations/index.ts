@@ -45,7 +45,7 @@ export type ConfirmationLimits = {
 export const DEFAULT_CONFIRMATION_LIMITS: ConfirmationLimits = {
   batch: 100,
   perHour: 1000,
-  perAddressPerDay: 3,
+  perAddressPerDay: 5,
   perSourcePerHour: 30,
   concurrency: 5,
 };

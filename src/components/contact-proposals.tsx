@@ -27,6 +27,12 @@ export type ProposalRow = {
   source: string | null;
   formTitle: string | null;
   createdAt: string;
+  /** The submissions proposing this same value; deciding decides them all. */
+  proposedBy: Array<{
+    source: string | null;
+    formTitle: string | null;
+    createdAt: string;
+  }>;
 };
 
 type Decision = "apply" | "apply-alias" | "decline";
@@ -127,6 +133,18 @@ export const ProposalList = ({
                 {formatDistanceToNow(new Date(row.createdAt), {
                   addSuffix: true,
                 })}
+                {row.proposedBy.length > 1 ? (
+                  <span
+                    title={row.proposedBy
+                      .map(
+                        (by) =>
+                          `${by.formTitle ?? by.source ?? "Intake"}, ${new Date(by.createdAt).toLocaleString()}`,
+                      )
+                      .join("\n")}
+                  >
+                    {` · proposed by ${row.proposedBy.length} submissions`}
+                  </span>
+                ) : null}
               </span>
             </div>
             <p className="flex flex-wrap items-center gap-2 text-sm">

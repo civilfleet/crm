@@ -153,10 +153,32 @@ test("applying a field changes it once and records who decided", async () => {
   );
 });
 
+/** A pending proposal, as an intake records it. */
+const propose = (
+  contactId: string,
+  fieldName: string,
+  from: string,
+  to: string,
+) =>
+  db.contactChangeLog.create({
+    data: {
+      contactId,
+      action: "PROPOSED",
+      fieldName,
+      oldValue: JSON.stringify(from),
+      newValue: JSON.stringify(to),
+      userName: "Website form",
+    },
+  });
+
 test("an e-mail becomes primary (old one kept) or is added", async () => {
   const { team, contact } = await setup();
-  // Matched by phone with another address: the address is proposed.
-  await submit(team.id, { email: "g.rossi@example.org", phone: "+49 30 1" });
+  await propose(
+    contact.id,
+    "email",
+    "giulia@example.org",
+    "g.rossi@example.org",
+  );
   const [email] = await pendingOf(team.id);
   assert.equal(email.field, "email");
   assert.equal(email.proposedValue, "g.rossi@example.org");
@@ -182,7 +204,12 @@ test("an e-mail becomes primary (old one kept) or is added", async () => {
   assert.equal(primaryEmail, "g.rossi@example.org");
 
   // A further address, added next to the primary one.
-  await submit(team.id, { email: "rossi@work.example", phone: "+49 30 1" });
+  await propose(
+    contact.id,
+    "email",
+    "g.rossi@example.org",
+    "rossi@work.example",
+  );
   const [another] = await pendingOf(team.id);
   await proposals.resolveProposal(
     { teamId: team.id, proposalId: another.id, decision: "apply-alias" },
@@ -192,6 +219,44 @@ test("an e-mail becomes primary (old one kept) or is added", async () => {
     where: { contactId: contact.id, email: "rossi@work.example" },
   });
   assert.equal(kinds[0].kind, "ALIAS");
+});
+
+test("the same value from several submissions is one decision", async () => {
+  const { team, contact } = await setup();
+  // An unconfirmed submission proposes Hamburg, then a confirmed one does.
+  await submit(
+    team.id,
+    { email: "giulia@example.org", city: "Hamburg" },
+    { confirmation: "email" },
+  );
+  assert.deepEqual(await pendingOf(team.id), [], "unconfirmed: not shown");
+  await submit(team.id, { email: "giulia@example.org", city: "hamburg " });
+  const pending = await proposals.getPendingProposals(team.id, admin);
+  assert.equal(pending.total, 1, "shown because of the confirmed one");
+  const [hamburg] = pending.data as Array<Pending & { proposedBy: unknown[] }>;
+  assert.equal(hamburg.proposedBy.length, 1);
+
+  // A third, confirmed: still one row, proposed by two.
+  await submit(team.id, { email: "giulia@example.org", city: "Hamburg" });
+  const [again] = (await proposals.getPendingProposals(team.id, admin))
+    .data as Array<Pending & { proposedBy: unknown[] }>;
+  assert.equal(again.proposedBy.length, 2);
+
+  // Deciding it decides all three, the hidden one included.
+  await proposals.resolveProposal(
+    { teamId: team.id, proposalId: again.id, decision: "decline" },
+    admin,
+  );
+  const open = await db.contactChangeLog.count({
+    where: {
+      contactId: contact.id,
+      action: "PROPOSED",
+      fieldName: "city",
+      resolutions: { none: {} },
+    },
+  });
+  assert.equal(open, 0);
+  assert.deepEqual(await pendingOf(team.id), []);
 });
 
 test("an address of another contact is refused; declining changes nothing", async () => {

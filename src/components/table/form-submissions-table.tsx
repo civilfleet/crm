@@ -85,7 +85,7 @@ const confirmationState = (
   if (row.confirmationSkipped === "address-limit")
     return {
       label: "Not sent: daily limit for this address",
-      hint: "This address already got three confirmation e-mails in 24 hours (protection against e-mail bombing). The submission expires unconfirmed after 7 days.",
+      hint: "This address already reached its daily number of confirmation e-mails (protection against e-mail bombing). The submission expires unconfirmed after 7 days.",
       tone: "warning",
     };
   if (row.confirmationSkipped)

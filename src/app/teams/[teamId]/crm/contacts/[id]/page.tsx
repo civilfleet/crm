@@ -18,6 +18,7 @@ import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import ContactChangeHistory from "@/components/contact-change-history";
 import ContactConsents from "@/components/contact-consents";
+import { ContactDuplicateHints } from "@/components/contact-duplicate-hints";
 import ContactEngagementHistory from "@/components/contact-engagement-history";
 import { ContactPendingChanges } from "@/components/contact-proposals";
 import ContactResponsiveTabs from "@/components/contact-responsive-tabs";
@@ -848,6 +849,7 @@ export default async function ContactDetailPage({
             </div>
 
             <div className="space-y-6 lg:col-span-4 lg:col-start-9">
+              <ContactDuplicateHints teamId={teamId} contactId={id} />
               <ContactPendingChanges teamId={teamId} contactId={id} />
               <ContactConsents consents={consents} />
               <ContactChangeHistory contactId={id} />

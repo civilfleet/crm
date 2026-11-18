@@ -4,7 +4,6 @@ import {
   logFieldUpdate,
   proposeFieldChange,
 } from "@/services/contact-change-logs";
-import { findContactByIdentityEmail } from "@/services/contacts";
 import { ContactEmailKind } from "@/types";
 
 export type IntakeContactInput = {
@@ -63,6 +62,31 @@ const isBlank = (value: string | null | undefined) =>
  * are never overwritten; they are recorded as PROPOSED change-log entries for
  * later review, so the submitted data is not lost.
  */
+/**
+ * Active contacts of the team with the same phone number, compared by the
+ * last eight digits, so the international and the national form of a number
+ * agree ("+49 30 1234567", "0049 30-1234567", "030 1234567"; also mobiles).
+ * Only a hint for review, never a match.
+ */
+const findByPhone = async (
+  tx: Prisma.TransactionClient,
+  teamId: string,
+  phone: string,
+  excludeId: string,
+) => {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 8) return [];
+  const tail = digits.slice(-8);
+  const rows = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT id FROM "Contact"
+    WHERE "teamId" = ${teamId} AND "deletedAt" IS NULL AND id <> ${excludeId}
+      AND phone IS NOT NULL
+      AND right(regexp_replace(phone, '[^0-9]', '', 'g'), ${tail.length}) = ${tail}
+    LIMIT 5
+  `;
+  return rows.map(({ id }) => id);
+};
+
 export const resolveIntakeContact = async (
   tx: Prisma.TransactionClient,
   input: IntakeContactInput,
@@ -70,25 +94,38 @@ export const resolveIntakeContact = async (
 ) => {
   const { teamId, email: trimmedEmail } = input;
 
-  const identityContact = await findContactByIdentityEmail(
-    teamId,
-    trimmedEmail,
-    tx,
-  );
-  let contact = identityContact
+  // Matched by e-mail only: the one detail people prove (by confirming it).
+  // A phone number typed into a public form proves nothing, so it only marks
+  // a new contact as a possible duplicate (below), never picks a contact.
+  // A contact in the trash keeps its addresses; finding it there brings it
+  // back, so the person's history stays in one place.
+  const identity = await tx.contactEmail.findFirst({
+    where: {
+      teamId,
+      email: trimmedEmail,
+      kind: { in: [ContactEmailKind.PRIMARY, ContactEmailKind.ALIAS] },
+    },
+    select: { contact: { select: { id: true, deletedAt: true } } },
+  });
+  let contact = identity
     ? await tx.contact.findUnique({
-        where: { id: identityContact.id },
+        where: { id: identity.contact.id },
         include: { emails: true },
       })
     : null;
-
-  if (!contact && input.phone) {
-    contact = await tx.contact.findFirst({
-      where: {
-        teamId,
-        phone: input.phone,
-        deletedAt: null,
-      },
+  if (contact?.deletedAt) {
+    await logFieldUpdate(
+      contact.id,
+      "deletedAt",
+      contact.deletedAt,
+      null,
+      undefined,
+      source.label,
+      tx,
+    );
+    contact = await tx.contact.update({
+      where: { id: contact.id },
+      data: { deletedAt: null },
       include: { emails: true },
     });
   }
@@ -127,31 +164,17 @@ export const resolveIntakeContact = async (
         });
     }
 
-    // Matched by phone: the submitted email is not one of the contact's
-    // identity emails. A contact without a primary email simply gets it
-    // (filling, not overwriting); a different primary email is proposed.
+    // Matched through an alias with no primary address: it becomes primary.
     const existingPrimaryEmail =
       contact.emails.find((entry) => entry.kind === ContactEmailKind.PRIMARY)
         ?.email ?? null;
-    let addPrimaryEmail = false;
-    if (!existingPrimaryEmail) {
-      addPrimaryEmail = true;
+    const addPrimaryEmail = !existingPrimaryEmail;
+    if (addPrimaryEmail)
       updatedFields.push({
         field: "email",
         oldValue: existingPrimaryEmail,
         newValue: trimmedEmail,
       });
-    } else if (
-      !identityContact &&
-      comparableIntakeValue("email", existingPrimaryEmail) !==
-        comparableIntakeValue("email", trimmedEmail)
-    ) {
-      proposals.push({
-        field: "email",
-        oldValue: existingPrimaryEmail,
-        newValue: trimmedEmail,
-      });
-    }
 
     if (Object.keys(contactUpdates).length > 0) {
       contact = await tx.contact.update({
@@ -233,12 +256,23 @@ export const resolveIntakeContact = async (
       include: { emails: true },
     });
 
+    const possibleDuplicates = input.phone
+      ? await findByPhone(tx, teamId, input.phone, contact.id)
+      : [];
     await logContactCreation(
       contact.id,
       undefined,
       undefined,
       tx,
-      source.metadata,
+      possibleDuplicates.length
+        ? {
+            ...source.metadata,
+            possibleDuplicates: possibleDuplicates.map((id) => ({
+              contactId: id,
+              reason: "phone",
+            })),
+          }
+        : source.metadata,
     );
   }
 

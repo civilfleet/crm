@@ -176,6 +176,16 @@ merge loses a row (`tests/db/contacts-merge.test.ts`).
 A merge is all or nothing, and every contact in it must be visible to the
 person merging.
 
+### Which contact a website submission belongs to
+
+Website forms and event registrations find their contact **by e-mail only**
+(primary or alias address of the team). A phone number never picks a
+contact: a new contact is made, and contacts with the same number are noted
+as possible duplicates on it, for a person to merge or dismiss. An address
+of a contact in the trash brings that contact back. Code:
+`src/services/contact-intake`, `src/services/contact-duplicates`. Tests:
+`tests/db/intake-matching.test.ts`.
+
 ### Proposed changes
 
 Website forms and event registrations never overwrite a value an existing
@@ -191,6 +201,11 @@ contact already has. A different value is recorded as a proposal
   additional address**. An address of another contact is refused, as in an
   edit.
 - **Decline** writes a `PROPOSAL_REJECTED` entry; nothing else changes.
+- **One row per value:** every submission records its own proposals, and
+  the same value from several submissions (compared loosely) is one row,
+  "proposed by N submissions". Deciding it decides all of them, including
+  ones whose submission is still unconfirmed; those resolutions are marked
+  `decidedWith` and not listed again in the history.
 - **Once:** a proposal is decided at most once; the database allows one
   resolution per proposal, so two people deciding at the same moment cannot
   both win.

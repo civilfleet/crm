@@ -1,12 +1,12 @@
 import type { Prisma } from "@prisma/client";
 import { ApiError } from "@/lib/api-guard";
+import prisma from "@/lib/prisma";
 import { getContactVisibility } from "@/services/contacts/access";
 import {
   getContactFieldAccessMap,
   isFieldVisible,
 } from "@/services/contacts/field-access";
 import type { Roles } from "@/types";
-import prisma from "@/lib/prisma";
 import { ChangeAction, type ContactChangeLog } from "@/types";
 
 type ChangeLogMetadata = Prisma.JsonObject;
@@ -177,6 +177,13 @@ const logFieldUpdate = async (
  * existing value). Skipped when the same change is already pending. Returns
  * whether a new proposal was recorded.
  */
+/**
+ * Records a value an intake wanted to change (PROPOSED), one per submission:
+ * even the same value again is its own proposal, so whether it shows for
+ * review depends only on its own submission (confirmed or not), and removing
+ * an unconfirmed submission removes only its own. The review groups equal
+ * proposals (src/services/contact-proposals).
+ */
 const proposeFieldChange = async (
   tx: Prisma.TransactionClient,
   input: {
@@ -188,25 +195,13 @@ const proposeFieldChange = async (
     metadata: ChangeLogMetadata;
   },
 ) => {
-  const newValue = JSON.stringify(input.newValue);
-  const pending = await tx.contactChangeLog.findFirst({
-    where: {
-      contactId: input.contactId,
-      action: ChangeAction.PROPOSED,
-      fieldName: input.fieldName,
-      newValue,
-      resolutions: { none: {} },
-    },
-    select: { id: true },
-  });
-  if (pending) return false;
   await createChangeLog(
     {
       contactId: input.contactId,
       action: ChangeAction.PROPOSED,
       fieldName: input.fieldName,
       oldValue: JSON.stringify(input.oldValue),
-      newValue,
+      newValue: JSON.stringify(input.newValue),
       userName: input.userName,
       metadata: input.metadata,
     },

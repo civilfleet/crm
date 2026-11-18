@@ -151,6 +151,10 @@ export default function ContactChangeHistory({
   );
 
   const logs = (data?.data || []) as ContactChangeLog[];
+  // A proposal decided together with an equal one keeps its own resolution
+  // (so it shows as applied or rejected) but the entry itself is not listed
+  // again: the one it was decided with is.
+  const shownLogs = logs.filter((log) => !log.metadata?.decidedWith);
 
   return (
     <Card className="w-full shadow-sm">
@@ -177,7 +181,7 @@ export default function ContactChangeHistory({
           <div className="text-center py-8 text-sm text-muted-foreground">
             Failed to load change history
           </div>
-        ) : logs.length === 0 ? (
+        ) : shownLogs.length === 0 ? (
           <div className="text-center py-8 rounded-md border border-dashed">
             <History className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
             <p className="text-sm text-muted-foreground">
@@ -186,7 +190,7 @@ export default function ContactChangeHistory({
           </div>
         ) : (
           <div className="space-y-4">
-            {logs.map((log, index) => {
+            {shownLogs.map((log, index) => {
               const ActionIcon = getActionIcon(log.action);
               const metadataEntries = log.metadata
                 ? Object.entries(log.metadata)
@@ -203,7 +207,7 @@ export default function ContactChangeHistory({
                       >
                         <ActionIcon className="h-4 w-4" />
                       </div>
-                      {index < logs.length - 1 && (
+                      {index < shownLogs.length - 1 && (
                         <div className="w-px h-full bg-border mt-2" />
                       )}
                     </div>
@@ -342,7 +346,7 @@ export default function ContactChangeHistory({
                       )}
                     </div>
                   </div>
-                  {index < logs.length - 1 && <Separator />}
+                  {index < shownLogs.length - 1 && <Separator />}
                 </div>
               );
             })}

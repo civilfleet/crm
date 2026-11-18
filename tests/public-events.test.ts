@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as listRequest from "@/lib/list-request";
-import { loadModule } from "./helpers/load-module";
 import {
   distanceKm,
   geohash,
   geohashBounds,
   intersectsRadius,
 } from "../src/lib/public-events/geo";
-import { eventPath, isPast, postalShard } from "../src/lib/public-events/types";
 import {
   registrationMessage,
   registrationPayload,
 } from "../src/lib/public-events/registration";
+import { eventPath, isPast, postalShard } from "../src/lib/public-events/types";
+import { loadModule } from "./helpers/load-module";
 
 function registrationService() {
   let registration: Record<string, unknown> | null = null;
@@ -31,6 +31,12 @@ function registrationService() {
         registration = { id: "registration", ...data };
         return registration;
       },
+    },
+    // The registration's address belongs to the existing contact.
+    contactEmail: {
+      findFirst: async () => ({
+        contact: { id: "contact", deletedAt: null },
+      }),
     },
     contact: {
       findUnique: async () => ({
@@ -87,10 +93,9 @@ function registrationService() {
             return true;
           },
         },
-        "@/services/contacts": {
-          findContactByIdentityEmail: async () => ({ id: "contact" }),
+        "@/types": {
+          ContactEmailKind: { PRIMARY: "PRIMARY", ALIAS: "ALIAS" },
         },
-        "@/types": { ContactEmailKind: { PRIMARY: "PRIMARY" } },
       },
     ),
     "@/types": { ContactEmailKind: { PRIMARY: "PRIMARY" } },

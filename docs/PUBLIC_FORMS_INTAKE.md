@@ -121,11 +121,20 @@ the other keeps processing. Per message, both pipelines have the same semantics:
 `src/services/form-submissions` persists, in one transaction:
 
 - Contact matching shared with event registrations
-  (`src/services/contact-intake`): identity email (primary/alias) within the
-  team, then phone, else create (name falls back to the email address). Existing
-  contacts only get empty `name`, primary email, `phone`, `postalCode`, `city`
-  and `country` filled; nothing is overwritten. A contact without a primary
-  email always gets the submitted one. Changes are written to the contact
+  (`src/services/contact-intake`): **by e-mail only**, the submitted address
+  against the team's primary and alias addresses (lowercased), else a new
+  contact (name falls back to the address). E-mail is the one detail people
+  prove, by confirming it; a phone number typed into a public form proves
+  nothing, so it never picks a contact. If a new contact's phone matches
+  existing ones (by the last eight digits, so "+49 30 1234567" and
+  "030 1234567" agree), they are noted as possible duplicates in the new
+  contact's creation entry (`metadata.possibleDuplicates`); the contact page
+  shows "Possibly the same person" with the other contact, to merge in the
+  contacts list or dismiss as different people. An address of a contact in
+  the trash brings that contact back (logged), so the person's history stays
+  in one place. Existing contacts only get empty `name`, `phone`,
+  `postalCode`, `city` and `country` filled, and a primary address if they
+  had none; nothing is overwritten. Changes are written to the contact
   change log.
 - Proposed changes: a non-empty submitted value that differs from a non-empty
   contact value is recorded as a `PROPOSED` change-log entry (`fieldName`,
@@ -133,11 +142,12 @@ the other keeps processing. Per message, both pipelines have the same semantics:
   "Website form" or "Event registration", source and `submissionId` in
   `metadata`); the contact is unchanged. Values are compared loosely first:
   names, city and country ignoring case and repeated spaces, postal codes
-  ignoring spaces, phones by digits only, emails lowercased. When the contact
-  was matched by phone, a different primary email is proposed too. An identical
-  unresolved proposal (same contact, field and value) is not recorded again.
-  Event registrations use the same matching and record proposals the same way.
-  The engagement message notes "N contact changes pending review".
+  ignoring spaces, phones by digits only. Every submission records its own
+  proposals, the same value again included, so whether one shows for review
+  depends only on its own submission; the review groups equal ones (see
+  `docs/DATA_RULES.md`, "Proposed changes"). Event registrations use the same
+  matching and record proposals the same way. The engagement message notes
+  "N contact changes pending review".
 - `FormSubmission` row (form id/title/revision, locale, page, answers JSON,
   submittedAt, receivedAt).
 - One `ContactConsent` (`GRANTED`, source `FORM`) per ticked consent answer
@@ -304,7 +314,7 @@ website page ──POST /v1/forms/confirmations {"token"}──▶ bridge (check
   - `PER_HOUR` (default 1000) in total and `BATCH` (100) per round, every
     `FORM_CONFIRMATION_INTERVAL_MS` (10 s), `CONCURRENCY` (5) at a time.
     Raise them for a campaign, within the Scaleway quota.
-  - `PER_ADDRESS_PER_DAY` (3) e-mails actually sent per address across
+  - `PER_ADDRESS_PER_DAY` (5) e-mails actually sent per address across
     forms, against e-mail bombing; beyond it nothing is sent, the submission
     records why (`confirmationSkipped`) and expires. The Forms page's
     "E-mail confirmation" column shows each submission's state: confirmed,
