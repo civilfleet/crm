@@ -464,6 +464,8 @@ export interface ContactChangeLog {
   metadata?: Record<string, unknown>;
   /** On the entry that resolves a PROPOSED entry (its id). */
   proposalId?: string;
+  /** Names for the group and organization ids in this entry's values. */
+  valueLabels?: Record<string, string>;
   createdAt: Date;
 }
 

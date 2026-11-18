@@ -131,11 +131,19 @@ Code: `applyContactFieldAccess`, `filterContactByAccess`
 - runs in **one transaction**: if any part fails (an unknown organization, a
   group of another team, a taken e-mail), nothing changes, history included;
 - writes **one history entry per changed field**, with old and new value and
-  who changed it. Values sent unchanged leave no entry;
+  who changed it. Values sent unchanged leave no entry, profile attributes
+  included (their old and new values are stored in the same shape);
 - **groups** end up exactly as sent (an empty list removes all groups, which
   makes the contact visible to the whole team); only groups of the team;
 - **organizations** end up exactly as sent; only organizations of the team;
   changes are recorded in the history.
+
+The contact page shows the history as sentences in plain words
+(`src/lib/contact-change-format.ts`, tests in
+`tests/contact-change-format.test.ts`). Group and organization ids are shown
+by name (`getContactChangeLogs` adds `valueLabels`), and entries whose old and
+new values read the same (older saves logged unchanged profile attributes)
+are left out.
 
 Tests: `tests/db/contacts-edit.test.ts`.
 

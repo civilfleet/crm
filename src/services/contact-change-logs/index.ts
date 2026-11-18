@@ -50,6 +50,63 @@ const mapChangeLog = (log: ContactChangeLogWithDefaults): ContactChangeLog => ({
   createdAt: log.createdAt,
 });
 
+/** Fields whose values are group or organization ids. */
+const ID_FIELDS = new Set(["groupIds", "groupId", "organizationIds"]);
+
+const idsIn = (raw: string | null | undefined): string[] => {
+  if (!raw) return [];
+  try {
+    const value: unknown = JSON.parse(raw);
+    const items = Array.isArray(value) ? value : [value];
+    return items.filter((item): item is string => typeof item === "string");
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Names for the group and organization ids in these entries, so the history
+ * shows "Crew" instead of an id. Ids from another team stay unnamed.
+ */
+const getValueLabels = async (
+  logs: {
+    fieldName: string | null;
+    oldValue: string | null;
+    newValue: string | null;
+  }[],
+  teamId: string,
+) => {
+  const groupIds = new Set<string>();
+  const organizationIds = new Set<string>();
+  for (const log of logs) {
+    if (!log.fieldName || !ID_FIELDS.has(log.fieldName)) continue;
+    const target =
+      log.fieldName === "organizationIds" ? organizationIds : groupIds;
+    for (const id of [...idsIn(log.oldValue), ...idsIn(log.newValue)])
+      target.add(id);
+  }
+  const [groups, organizations] = await Promise.all([
+    groupIds.size
+      ? prisma.group.findMany({
+          where: { teamId, id: { in: [...groupIds] } },
+          select: { id: true, name: true },
+        })
+      : [],
+    organizationIds.size
+      ? prisma.organization.findMany({
+          where: { teamId, id: { in: [...organizationIds] } },
+          select: { id: true, name: true },
+        })
+      : [],
+  ]);
+  return new Map<string, string>([
+    ...groups.map((group): [string, string] => [group.id, group.name]),
+    ...organizations.flatMap((organization): [string, string][] =>
+      organization.name ? [[organization.id, organization.name]] : [],
+    ),
+  ]);
+};
+
 const getContactChangeLogs = async (
   contactId: string,
   teamId: string,
@@ -75,24 +132,40 @@ const getContactChangeLogs = async (
     },
   });
 
-  return logs
-    .filter((log) => {
-      const key = log.fieldName?.replace(/^profileAttribute\./, "");
-      return !key || !hiddenKeys.includes(key);
-    })
-    .map((log) => {
-      const mapped = mapChangeLog(log);
-      if (!hiddenKeys.length) return mapped;
-      // Aggregate history can contain snapshots of fields now hidden from this user.
-      return {
-        ...mapped,
-        metadata: undefined,
-        ...(!log.fieldName ||
-        ["merge", "profileAttributes"].includes(log.fieldName)
-          ? { oldValue: undefined, newValue: undefined }
-          : {}),
-      };
-    });
+  const visibleLogs = logs.filter((log) => {
+    const key = log.fieldName?.replace(/^profileAttribute\./, "");
+    return !key || !hiddenKeys.includes(key);
+  });
+  const labels = await getValueLabels(visibleLogs, teamId);
+
+  return visibleLogs.map((log) => {
+    const ids = ID_FIELDS.has(log.fieldName ?? "")
+      ? [...idsIn(log.oldValue), ...idsIn(log.newValue)]
+      : [];
+    const mapped: ContactChangeLog = {
+      ...mapChangeLog(log),
+      ...(ids.length
+        ? {
+            valueLabels: Object.fromEntries(
+              ids.flatMap((id) => {
+                const name = labels.get(id);
+                return name ? [[id, name]] : [];
+              }),
+            ),
+          }
+        : {}),
+    };
+    if (!hiddenKeys.length) return mapped;
+    // Aggregate history can contain snapshots of fields now hidden from this user.
+    return {
+      ...mapped,
+      metadata: undefined,
+      ...(!log.fieldName ||
+      ["merge", "profileAttributes"].includes(log.fieldName)
+        ? { oldValue: undefined, newValue: undefined }
+        : {}),
+    };
+  });
 };
 
 const createChangeLog = async (

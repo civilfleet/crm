@@ -849,6 +849,53 @@ const mapContactGender = (
 ): ContactGender | undefined =>
   gender ? (gender as ContactGender) : undefined;
 
+/**
+ * A normalized attribute in the shape toProfileAttribute reads back, so the
+ * change log stores old and new values alike.
+ */
+const normalizedToProfileAttribute = (
+  attribute: NormalizedAttribute,
+): ContactProfileAttribute | null => {
+  const { key } = attribute;
+  switch (attribute.type) {
+    case ContactAttributeType.STRING:
+      return attribute.stringValue
+        ? {
+            key,
+            type: ContactAttributeType.STRING,
+            value: attribute.stringValue,
+          }
+        : null;
+    case ContactAttributeType.DATE:
+      return attribute.dateValue
+        ? {
+            key,
+            type: ContactAttributeType.DATE,
+            value: attribute.dateValue.toISOString(),
+          }
+        : null;
+    case ContactAttributeType.NUMBER:
+      return attribute.numberValue
+        ? {
+            key,
+            type: ContactAttributeType.NUMBER,
+            value: attribute.numberValue.toNumber(),
+          }
+        : null;
+    case ContactAttributeType.LOCATION: {
+      const value: ContactLocationValue = {};
+      if (attribute.locationLabel) value.label = attribute.locationLabel;
+      if (attribute.latitude) value.latitude = attribute.latitude.toNumber();
+      if (attribute.longitude) value.longitude = attribute.longitude.toNumber();
+      return Object.keys(value).length > 0
+        ? { key, type: ContactAttributeType.LOCATION, value }
+        : null;
+    }
+    default:
+      return null;
+  }
+};
+
 const mapFileChangeValue = (
   files: { name?: string | null; type: string; url: string }[],
 ) =>
@@ -3302,7 +3349,7 @@ const updateContact = async (
             contactId,
             `profileAttribute.${key}`,
             null,
-            newAttr,
+            normalizedToProfileAttribute(newAttr),
             userId,
             userName,
             tx,
@@ -3323,14 +3370,18 @@ const updateContact = async (
         } else {
           // Check if attribute changed
           const oldValue = toProfileAttribute(existingAttr);
+          // A stored empty value is null, a normalized one undefined: compare
+          // both as null, or every save logs every attribute as changed.
           const hasChanged =
             existingAttr.type !== newAttr.type ||
-            existingAttr.stringValue !== newAttr.stringValue ||
+            (existingAttr.stringValue ?? null) !==
+              (newAttr.stringValue ?? null) ||
             existingAttr.numberValue?.toString() !==
               newAttr.numberValue?.toString() ||
             existingAttr.dateValue?.toISOString() !==
               newAttr.dateValue?.toISOString() ||
-            existingAttr.locationLabel !== newAttr.locationLabel ||
+            (existingAttr.locationLabel ?? null) !==
+              (newAttr.locationLabel ?? null) ||
             existingAttr.latitude?.toString() !==
               newAttr.latitude?.toString() ||
             existingAttr.longitude?.toString() !==
@@ -3341,7 +3392,7 @@ const updateContact = async (
               contactId,
               `profileAttribute.${key}`,
               oldValue,
-              newAttr,
+              normalizedToProfileAttribute(newAttr),
               userId,
               userName,
               tx,

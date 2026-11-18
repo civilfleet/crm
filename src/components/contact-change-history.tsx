@@ -1,14 +1,17 @@
 "use client";
 
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import {
+  ArrowRight,
   Ban,
   Edit,
   GitPullRequestArrow,
   History,
+  Minus,
   Plus,
   Trash,
 } from "lucide-react";
+import type { ReactNode } from "react";
 import useSWR from "swr";
 import { Loader } from "@/components/helper/loader";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +23,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { languageName } from "@/lib/languages";
+import {
+  creationSource,
+  describeListChange,
+  displayValue,
+  fieldLabel,
+  isListField,
+  type ListChange,
+  isNoOpChange,
+} from "@/lib/contact-change-format";
 import { ChangeAction, type ContactChangeLog } from "@/types";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
@@ -100,51 +111,203 @@ const getProposalStatus = (
       };
 };
 
-const formatFieldName = (fieldName?: string) => {
-  if (!fieldName) return "";
-  // One entry per language: "language.ar" → "Language: Arabic".
-  if (fieldName.startsWith("language.")) {
-    return `Language: ${languageName(fieldName.slice("language.".length))}`;
-  }
-  // Convert camelCase to Title Case
-  return fieldName
-    .replace(/[_-]+/g, " ")
-    .replace(/([A-Z])/g, " $1")
-    .replace(/^./, (str) => str.toUpperCase())
-    .trim();
-};
+const ADDED_VERB_PREFIXES = ["profileAttribute.", "socialLink.", "language."];
 
-const formatValue = (value?: string) => {
-  if (!value) return "—";
-  try {
-    const parsed = JSON.parse(value);
-    if (typeof parsed === "object") {
-      return JSON.stringify(parsed, null, 2);
+const Value = ({ children, old }: { children: string; old?: boolean }) => (
+  <span
+    className={
+      old
+        ? "text-muted-foreground line-through decoration-muted-foreground/60"
+        : "font-medium text-foreground"
     }
-    return String(parsed);
-  } catch {
-    return value;
-  }
-};
+  >
+    {children}
+  </span>
+);
 
-const formatMetadataValue = (value: unknown) => {
-  if (value === null || value === undefined) {
-    return "—";
+const ValueChange = ({ from, to }: { from: string; to: string }) => (
+  <p className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm whitespace-pre-wrap break-words">
+    {from && <Value old>{from}</Value>}
+    {from && to && (
+      <ArrowRight
+        className="h-3.5 w-3.5 shrink-0 self-center text-muted-foreground"
+        role="img"
+        aria-label="changed to"
+      />
+    )}
+    {to && <Value>{to}</Value>}
+  </p>
+);
+
+const ListChangeChips = ({ added, removed }: ListChange) => (
+  <ul className="mt-1 flex flex-wrap gap-1.5" aria-label="Changes">
+    {added.map((item) => (
+      <li key={`added-${item}`}>
+        <Badge
+          variant="outline"
+          className="bg-success/10 text-success-strong border-success/25 font-normal"
+        >
+          <Plus className="mr-1 h-3 w-3" role="img" aria-label="added" />
+          {item}
+        </Badge>
+      </li>
+    ))}
+    {removed.map((item) => (
+      <li key={`removed-${item}`}>
+        <Badge
+          variant="outline"
+          className="bg-muted text-muted-foreground border-border font-normal line-through"
+        >
+          <Minus className="mr-1 h-3 w-3" role="img" aria-label="removed" />
+          {item}
+        </Badge>
+      </li>
+    ))}
+  </ul>
+);
+
+/** The sentence and the values for one entry. */
+const describeEntry = (
+  log: ContactChangeLog,
+): { sentence: ReactNode; detail?: ReactNode } => {
+  const who = log.userName ? (
+    <span className="font-medium">{log.userName}</span>
+  ) : null;
+  const field = log.fieldName;
+  const label = <span className="font-medium">{fieldLabel(field)}</span>;
+  const labels = log.valueLabels ?? {};
+  const before = displayValue(field, log.oldValue, labels);
+  const after = displayValue(field, log.newValue, labels);
+  const subject = (text: string) =>
+    who ? (
+      <>
+        {who} {text}
+      </>
+    ) : (
+      text.charAt(0).toUpperCase() + text.slice(1)
+    );
+
+  switch (log.action) {
+    case ChangeAction.CREATED: {
+      const source = creationSource(log.metadata);
+      const duplicates = log.metadata?.possibleDuplicates;
+      return {
+        sentence: (
+          <>
+            {who ? <>{who} created this contact</> : "Contact created"}
+            {source ? ` from ${source}` : ""}
+          </>
+        ),
+        detail:
+          Array.isArray(duplicates) && duplicates.length > 0 ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Might be a duplicate: another contact has the same phone number.
+            </p>
+          ) : undefined,
+      };
+    }
+    case ChangeAction.DELETED:
+      return {
+        sentence: field ? (
+          <>
+            {subject("removed")} {label}
+          </>
+        ) : (
+          subject("deleted this contact")
+        ),
+      };
+    case ChangeAction.PROPOSED:
+      return {
+        sentence: (
+          <>
+            {subject("suggested a change to")} {label}
+          </>
+        ),
+        detail: <ValueChange from={before} to={after} />,
+      };
+    case ChangeAction.PROPOSAL_REJECTED:
+      return {
+        sentence: (
+          <>
+            {subject("declined a suggested")} {label}
+          </>
+        ),
+        detail: after ? <ValueChange from={after} to="" /> : undefined,
+      };
   }
 
-  if (
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
-    return String(value);
-  }
+  if (!field) return { sentence: subject("updated this contact") };
 
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
+  if (field === "merge") {
+    const merged = log.metadata?.sourceContactIds;
+    const count = Array.isArray(merged) ? merged.length : 0;
+    return {
+      sentence: subject(
+        count === 1
+          ? "merged another contact into this one"
+          : count > 1
+            ? `merged ${count} contacts into this one`
+            : "merged other contacts into this one",
+      ),
+    };
   }
+  if (field === "possibleDuplicate") {
+    return { sentence: subject("marked this as not a duplicate") };
+  }
+  if (field === "deletedAt") {
+    return {
+      sentence: subject(
+        after
+          ? "moved this contact to the trash"
+          : "restored this contact from the trash",
+      ),
+    };
+  }
+  if (isListField(field)) {
+    return {
+      sentence: (
+        <>
+          {subject("updated")} {label}
+        </>
+      ),
+      detail: (
+        <ListChangeChips
+          {...describeListChange(field, log.oldValue, log.newValue, labels)}
+        />
+      ),
+    };
+  }
+  if (!before) {
+    const verb = ADDED_VERB_PREFIXES.some((prefix) => field.startsWith(prefix))
+      ? "added"
+      : "set";
+    return {
+      sentence: (
+        <>
+          {subject(verb)} {label}
+        </>
+      ),
+      detail: <ValueChange from="" to={after} />,
+    };
+  }
+  if (!after) {
+    return {
+      sentence: (
+        <>
+          {subject("removed")} {label}
+        </>
+      ),
+      detail: <ValueChange from={before} to="" />,
+    };
+  }
+  return {
+    sentence: (
+      <>
+        {subject("changed")} {label}
+      </>
+    ),
+    detail: <ValueChange from={before} to={after} />,
+  };
 };
 
 export default function ContactChangeHistory({
@@ -159,7 +322,11 @@ export default function ContactChangeHistory({
   // A proposal decided together with an equal one keeps its own resolution
   // (so it shows as applied or rejected) but the entry itself is not listed
   // again: the one it was decided with is.
-  const shownLogs = logs.filter((log) => !log.metadata?.decidedWith);
+  // Updates that changed nothing visible (older saves logged every profile
+  // attribute) are left out.
+  const shownLogs = logs.filter(
+    (log) => !log.metadata?.decidedWith && !isNoOpChange(log, log.valueLabels),
+  );
 
   return (
     <Card className="w-full shadow-sm">
@@ -171,7 +338,7 @@ export default function ContactChangeHistory({
               Change History
             </CardTitle>
             <CardDescription>
-              Track all modifications made to this contact
+              Who changed what on this contact, newest first
             </CardDescription>
           </div>
         </div>
@@ -197,158 +364,53 @@ export default function ContactChangeHistory({
           <div className="space-y-4">
             {shownLogs.map((log, index) => {
               const ActionIcon = getActionIcon(log.action);
-              const metadataEntries = log.metadata
-                ? Object.entries(log.metadata)
-                : [];
-              const creationSource = log.metadata
-                ? log.metadata.source
-                : undefined;
+              const { sentence, detail } = describeEntry(log);
+              const createdAt = new Date(log.createdAt);
+              const proposalStatus =
+                log.action === ChangeAction.PROPOSED
+                  ? getProposalStatus(log, logs)
+                  : undefined;
               return (
                 <div key={log.id}>
-                  <div className="flex gap-4">
+                  <div className="flex gap-3">
                     <div className="flex flex-col items-center">
                       <div
                         className={`rounded-full p-2 ${getActionColor(log.action)}`}
+                        title={getActionLabel(log.action)}
                       >
-                        <ActionIcon className="h-4 w-4" />
+                        <ActionIcon className="h-4 w-4" aria-hidden="true" />
                       </div>
                       {index < shownLogs.length - 1 && (
                         <div className="w-px h-full bg-border mt-2" />
                       )}
                     </div>
 
-                    <div className="flex-1 pb-4">
-                      <div className="flex items-start justify-between gap-4 mb-2">
-                        <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1 pb-4">
+                      <p className="text-sm leading-6">{sentence}</p>
+                      {detail}
+                      {log.proposalId &&
+                        log.action !== ChangeAction.PROPOSAL_REJECTED && (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Accepted from a suggestion.
+                          </p>
+                        )}
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <time
+                          dateTime={createdAt.toISOString()}
+                          title={format(createdAt, "PPp")}
+                          className="text-xs text-muted-foreground"
+                        >
+                          {formatDistanceToNow(createdAt, { addSuffix: true })}
+                        </time>
+                        {proposalStatus && (
                           <Badge
                             variant="outline"
-                            className={`text-xs ${getActionColor(log.action)}`}
+                            className={`text-xs ${proposalStatus.className}`}
                           >
-                            {getActionLabel(log.action)}
+                            {proposalStatus.label}
                           </Badge>
-                          {log.fieldName && (
-                            <span className="text-sm font-medium">
-                              {formatFieldName(log.fieldName)}
-                            </span>
-                          )}
-                          {log.action === ChangeAction.PROPOSED && (
-                            <Badge
-                              variant="outline"
-                              className={`text-xs ${getProposalStatus(log, logs).className}`}
-                            >
-                              {getProposalStatus(log, logs).label}
-                            </Badge>
-                          )}
-                        </div>
-                        <span className="text-xs text-muted-foreground whitespace-nowrap">
-                          {format(new Date(log.createdAt), "PPp")}
-                        </span>
-                      </div>
-
-                      {log.action === ChangeAction.CREATED && (
-                        <p className="text-sm text-muted-foreground">
-                          Contact record was created
-                          {creationSource
-                            ? ` via ${formatMetadataValue(creationSource)}`
-                            : ""}
-                        </p>
-                      )}
-
-                      {log.action === ChangeAction.UPDATED && log.fieldName && (
-                        <div className="space-y-1 text-sm">
-                          {log.oldValue && (
-                            <div className="p-2 rounded bg-destructive/10 border border-destructive/25">
-                              <span className="text-xs font-medium text-destructive-strong">
-                                Old:
-                              </span>
-                              <pre className="text-xs text-destructive mt-1 whitespace-pre-wrap">
-                                {formatValue(log.oldValue)}
-                              </pre>
-                            </div>
-                          )}
-                          {log.newValue && (
-                            <div className="p-2 rounded bg-success/10 border border-success/25">
-                              <span className="text-xs font-medium text-success-strong">
-                                New:
-                              </span>
-                              <pre className="text-xs text-success mt-1 whitespace-pre-wrap">
-                                {formatValue(log.newValue)}
-                              </pre>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {log.action === ChangeAction.PROPOSED &&
-                        log.fieldName && (
-                          <div className="space-y-1 text-sm">
-                            <p className="text-xs text-muted-foreground">
-                              Submitted data differs from the contact. The
-                              contact was not changed.
-                            </p>
-                            <div className="p-2 rounded bg-muted/40 border">
-                              <span className="text-xs font-medium">
-                                Current:
-                              </span>
-                              <pre className="text-xs mt-1 whitespace-pre-wrap">
-                                {formatValue(log.oldValue)}
-                              </pre>
-                            </div>
-                            <div className="p-2 rounded bg-warning/10 border border-warning/25">
-                              <span className="text-xs font-medium text-warning-strong">
-                                Proposed:
-                              </span>
-                              <pre className="text-xs text-warning-strong mt-1 whitespace-pre-wrap">
-                                {formatValue(log.newValue)}
-                              </pre>
-                            </div>
-                          </div>
                         )}
-
-                      {log.proposalId && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {log.action === ChangeAction.PROPOSAL_REJECTED
-                            ? "Declined a proposed change."
-                            : "Applied from a proposed change."}
-                        </p>
-                      )}
-
-                      {log.action === ChangeAction.DELETED && (
-                        <p className="text-sm text-muted-foreground">
-                          {log.fieldName
-                            ? `${formatFieldName(log.fieldName)} was removed`
-                            : "Contact record was deleted"}
-                        </p>
-                      )}
-
-                      {metadataEntries.length > 0 && (
-                        <div className="mt-3 rounded-md border bg-muted/30 p-3">
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            Metadata
-                          </p>
-                          <dl className="mt-2 space-y-1">
-                            {metadataEntries.map(([key, value]) => (
-                              <div
-                                key={key}
-                                className="flex items-start justify-between gap-3 text-xs"
-                              >
-                                <dt className="font-medium text-muted-foreground">
-                                  {formatFieldName(key)}
-                                </dt>
-                                <dd className="max-w-[60%] text-right text-muted-foreground break-words">
-                                  {formatMetadataValue(value)}
-                                </dd>
-                              </div>
-                            ))}
-                          </dl>
-                        </div>
-                      )}
-
-                      {log.userName && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          By: {log.userName}
-                        </p>
-                      )}
+                      </div>
                     </div>
                   </div>
                   {index < shownLogs.length - 1 && <Separator />}

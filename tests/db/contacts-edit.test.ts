@@ -189,6 +189,56 @@ test("unchanged values sent with an edit leave no history", async () => {
   );
 });
 
+test("unchanged profile attributes leave no history, changed ones are recorded alike", async () => {
+  const setup = await createEditSetup();
+  const edit = (skills: string) =>
+    service.updateContact(
+      {
+        contactId: setup.contact.id,
+        teamId: setup.team.id,
+        profileAttributes: [
+          { key: "skills", type: "STRING", value: skills },
+          { key: "boats", type: "NUMBER", value: 2 },
+        ],
+      },
+      setup.editor.id,
+    );
+
+  await edit("copy writing");
+  await db.contactChangeLog.deleteMany({
+    where: { contactId: setup.contact.id },
+  });
+
+  await edit("copy writing");
+  assert.deepEqual(await history(setup.contact.id), []);
+
+  await edit("copywriting");
+  assert.deepEqual(
+    (await history(setup.contact.id)).map(
+      ({ fieldName, oldValue, newValue }) => ({
+        fieldName,
+        oldValue,
+        newValue,
+      }),
+    ),
+    [
+      {
+        fieldName: "profileAttribute.skills",
+        oldValue: JSON.stringify({
+          key: "skills",
+          type: "STRING",
+          value: "copy writing",
+        }),
+        newValue: JSON.stringify({
+          key: "skills",
+          type: "STRING",
+          value: "copywriting",
+        }),
+      },
+    ],
+  );
+});
+
 test("an edit that fails partway changes nothing", async () => {
   const setup = await createEditSetup();
   const before = await snapshot(setup.contact.id);
