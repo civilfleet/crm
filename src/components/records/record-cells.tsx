@@ -321,12 +321,21 @@ export const LocationCell = ({
   country?: string | null;
 }) => <TextCell value={[city, country].filter(Boolean).join(", ")} />;
 
-export const formatRecordDate = (value?: string | Date | null) => {
+export const formatRecordDate = (
+  value?: string | Date | null,
+  options: { withTime?: boolean } = {},
+) => {
   if (!value) return "";
   const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? "" : format(date, "d MMM yyyy");
+  if (Number.isNaN(date.getTime())) return "";
+  return format(date, options.withTime ? "d MMM yyyy, HH:mm" : "d MMM yyyy");
 };
 
-export const DateCell = ({ value }: { value?: string | Date | null }) => (
-  <TextCell value={formatRecordDate(value)} muted />
-);
+/** A date; with `withTime` also the hour and minute (local time). */
+export const DateCell = ({
+  value,
+  withTime = false,
+}: {
+  value?: string | Date | null;
+  withTime?: boolean;
+}) => <TextCell value={formatRecordDate(value, { withTime })} muted />;

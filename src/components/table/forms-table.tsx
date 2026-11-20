@@ -95,7 +95,9 @@ const getColumns = (
       sortField: "lastReceivedAt",
       width: 160,
     },
-    cell: ({ row }) => <DateCell value={row.original.lastReceivedAt} />,
+    cell: ({ row }) => (
+      <DateCell value={row.original.lastReceivedAt} withTime />
+    ),
   },
   {
     id: "publicCount",

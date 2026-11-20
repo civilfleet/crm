@@ -241,7 +241,9 @@ export const FormSubmissionsTable = ({
           sortField: "receivedAt",
           width: 150,
         },
-        cell: ({ row }) => <DateCell value={row.original.receivedAt} />,
+        cell: ({ row }) => (
+          <DateCell value={row.original.receivedAt} withTime />
+        ),
       },
       {
         id: "confirmed",
