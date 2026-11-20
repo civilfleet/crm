@@ -173,6 +173,57 @@ const createSender = () => {
 const greetingName = (name: string, email: string) =>
   name.trim().toLowerCase() === email.toLowerCase() ? "" : name.trim();
 
+/** Failed attempts before an address that is refused is given up. */
+export const REFUSED_ATTEMPTS = 3;
+
+/** How long to wait after the n-th failed attempt: 1, 5, 15, then 60 min. */
+const RETRY_MINUTES = [1, 5, 15, 60];
+const retryDelay = (attempts: number) =>
+  RETRY_MINUTES[Math.min(attempts, RETRY_MINUTES.length) - 1] * 60_000;
+
+/**
+ * What a sending error says. Only a refused address (Scaleway 400/422, or
+ * an SMTP 55x for the recipient) can be given up; everything else (rate
+ * limits, server errors, the network, our own credentials) is on our side
+ * and is tried again until the submission expires.
+ */
+const describeSendFailure = (error: unknown) => {
+  const details = (error ?? {}) as {
+    name?: unknown;
+    status?: unknown;
+    responseCode?: unknown;
+    command?: unknown;
+    message?: unknown;
+  };
+  const message =
+    typeof details.message === "string" ? details.message.trim() : "";
+  if (
+    details.name === "ScalewayEmailRejectedError" &&
+    typeof details.status === "number"
+  ) {
+    return {
+      status: details.status,
+      addressRefused: details.status === 400 || details.status === 422,
+      text: `Scaleway ${details.status}: ${message}`.slice(0, 255),
+    };
+  }
+  if (typeof details.responseCode === "number") {
+    return {
+      status: details.responseCode,
+      addressRefused:
+        details.responseCode >= 550 &&
+        details.responseCode <= 553 &&
+        details.command === "RCPT TO",
+      text: `SMTP ${details.responseCode}: ${message}`.slice(0, 255),
+    };
+  }
+  return {
+    status: undefined,
+    addressRefused: false,
+    text: (message || "Sending failed").slice(0, 255),
+  };
+};
+
 /** Runs `work` over `items`, at most `limit` at a time. */
 const inParallel = async <T>(
   items: T[],
@@ -193,8 +244,11 @@ const inParallel = async <T>(
  * e-mail: a second submission of the same form gets one too, since nothing
  * else proves it came from the address's owner.
  * - Over the per-address limit: not sent, marked handled (expires).
- * - Over the hourly or per-source limit, or the form file unreadable, or
- *   sending failed: waits for a later round.
+ * - Over the hourly or per-source limit, or the form file unreadable:
+ *   waits for a later round.
+ * - Sending failed: tried again after 1, 5, 15, then every 60 minutes, so it
+ *   never holds up the others. An address refused REFUSED_ATTEMPTS times,
+ *   while e-mails to others went out since, is given up ("rejected").
  */
 export const sendDueConfirmations = async ({
   readForm,
@@ -230,6 +284,11 @@ export const sendDueConfirmations = async ({
       receivedAt: {
         gt: new Date(now.getTime() - FORM_CONFIRMATION_DAYS * DAY),
       },
+      // One that failed waits its turn, so it never holds up the others.
+      OR: [
+        { confirmationRetryAt: null },
+        { confirmationRetryAt: { lte: now } },
+      ],
     },
     orderBy: { receivedAt: "asc" },
     // Some may wait for their source; look a little further ahead.
@@ -242,6 +301,8 @@ export const sendDueConfirmations = async ({
       locale: true,
       email: true,
       sourceKey: true,
+      confirmationAttempts: true,
+      confirmationFailedAt: true,
       contact: { select: { name: true } },
     },
   });
@@ -288,11 +349,62 @@ export const sendDueConfirmations = async ({
   // Decide first (one by one, so the counts hold), then send in parallel.
   // Only e-mails actually sent count toward the limits; a skipped one
   // records why.
-  const markHandled = (id: string, skipped?: "address-limit" | "no-address") =>
+  const markHandled = (
+    id: string,
+    skipped?: "address-limit" | "no-address" | "rejected",
+  ) =>
     prisma.formSubmission.update({
       where: { id },
-      data: { confirmationSentAt: now, confirmationSkipped: skipped ?? null },
+      data: {
+        confirmationSentAt: now,
+        confirmationSkipped: skipped ?? null,
+        confirmationRetryAt: null,
+      },
     });
+
+  // Sending failed: try again later, or give up on an address that is
+  // refused while other e-mails go out.
+  const handleSendFailure = async (
+    submission: (typeof due)[number],
+    failure: ReturnType<typeof describeSendFailure>,
+  ) => {
+    const attempts = submission.confirmationAttempts + 1;
+    const failedAt = submission.confirmationFailedAt ?? now;
+    if (failure.addressRefused && attempts >= REFUSED_ATTEMPTS) {
+      // Only when sending works for others since this one first failed; a
+      // broken sender refuses everyone and must not drop them all.
+      const sentSince = await prisma.formSubmission.count({
+        where: {
+          confirmationSentAt: { gt: failedAt },
+          confirmationSkipped: null,
+        },
+      });
+      if (sentSince > 0) {
+        await prisma.formSubmission.update({
+          where: { id: submission.id },
+          data: {
+            confirmationSentAt: now,
+            confirmationSkipped: "rejected",
+            confirmationRetryAt: null,
+            confirmationAttempts: attempts,
+            confirmationFailedAt: failedAt,
+            confirmationError: failure.text,
+          },
+        });
+        return "rejected" as const;
+      }
+    }
+    await prisma.formSubmission.update({
+      where: { id: submission.id },
+      data: {
+        confirmationAttempts: attempts,
+        confirmationFailedAt: failedAt,
+        confirmationRetryAt: new Date(now.getTime() + retryDelay(attempts)),
+        confirmationError: failure.text,
+      },
+    });
+    return "waiting" as const;
+  };
   const toSend: typeof due = [];
   for (const submission of due) {
     const email = submission.email?.toLowerCase();
@@ -317,6 +429,7 @@ export const sendDueConfirmations = async ({
 
   await inParallel(toSend, limits.concurrency, async (submission) => {
     const email = (submission.email ?? "").toLowerCase();
+    let sending = false;
     try {
       const form = await readForm(submission.formId, submission.locale);
       const mail = renderConfirmationEmail({
@@ -330,6 +443,7 @@ export const sendDueConfirmations = async ({
           submission.formId,
         ),
       });
+      sending = true;
       await send({
         teamId: submission.teamId,
         to: email,
@@ -338,18 +452,42 @@ export const sendDueConfirmations = async ({
         text: mail.text,
         sender: form?.confirmation ?? undefined,
       });
+      sending = false;
       await markHandled(submission.id);
       result.sent++;
     } catch (error) {
-      result.waiting++;
+      const context = {
+        formId: submission.formId,
+        locale: submission.locale,
+        error: error instanceof Error ? error.name : "unknown",
+      };
+      if (!sending) {
+        // The form file or the database: nothing about this address.
+        result.waiting++;
+        log.warn(
+          error instanceof PublishedFormUnavailableError
+            ? "Form confirmation waits for the published form file."
+            : "Form confirmation e-mail not sent; retrying on the next round.",
+          JSON.stringify(context),
+        );
+        return;
+      }
+      // The reason, but never the message: it may hold the address.
+      const failure = describeSendFailure(error);
+      // If even that cannot be recorded, it is simply tried next round.
+      const outcome = await handleSendFailure(submission, failure).catch(
+        () => "waiting" as const,
+      );
+      if (outcome === "rejected") result.skipped++;
+      else result.waiting++;
       log.warn(
-        error instanceof PublishedFormUnavailableError
-          ? "Form confirmation waits for the published form file."
-          : "Form confirmation e-mail not sent; retrying on the next round.",
+        outcome === "rejected"
+          ? "Form confirmation e-mail not sent: the address was refused."
+          : "Form confirmation e-mail not sent; trying again later.",
         JSON.stringify({
-          formId: submission.formId,
-          locale: submission.locale,
-          error: error instanceof Error ? error.name : "unknown",
+          ...context,
+          status: failure.status,
+          attempt: submission.confirmationAttempts + 1,
         }),
       );
     }

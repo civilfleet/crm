@@ -286,6 +286,112 @@ test("one sender cannot use up the budget: its e-mails wait, others go", async (
   assert.equal(later.sent, 2);
 });
 
+// What the Scaleway client throws when the API answers with an error.
+const refused = (status: number) =>
+  Object.assign(new Error("invalid recipient"), {
+    name: "ScalewayEmailRejectedError",
+    status,
+  });
+
+test("a refused address waits its turn, then is given up; others still go", async () => {
+  const team = await createTeam();
+  await sign(team.id, "giulia@unito.itit", { at: "2026-11-17T10:00:00.000Z" });
+
+  const sent: Mail[] = [];
+  const send = async (mail: Mail) => {
+    if (mail.to.endsWith(".itit")) throw refused(400);
+    sent.push(mail);
+  };
+  const at = (time: string) => new Date(`2026-11-17T${time}.000Z`);
+  const one = { ...THREE_A_DAY, batch: 1 };
+
+  // First attempt fails; it is tried again in a minute.
+  assert.deepEqual(
+    await run(sent, { send, limits: one, now: at("10:05:00") }),
+    {
+      sent: 0,
+      skipped: 0,
+      waiting: 1,
+    },
+  );
+  const typo = await db.formSubmission.findFirstOrThrow({
+    where: { email: "giulia@unito.itit" },
+  });
+  assert.equal(typo.confirmationAttempts, 1);
+  assert.deepEqual(typo.confirmationRetryAt, at("10:06:00"));
+  assert.match(typo.confirmationError ?? "", /^Scaleway 400: /);
+
+  // Meanwhile it takes no place: with room for one e-mail, the next signer's goes.
+  await sign(team.id, "marco@example.org", { at: "2026-11-17T10:05:20.000Z" });
+  assert.deepEqual(
+    await run(sent, { send, limits: one, now: at("10:05:30") }),
+    {
+      sent: 1,
+      skipped: 0,
+      waiting: 0,
+    },
+  );
+
+  // Second attempt (after 1 min), third (after 5 more): given up, since
+  // e-mails to others went out in the meantime.
+  assert.equal((await run(sent, { send, now: at("10:06:00") })).waiting, 1);
+  assert.deepEqual(await run(sent, { send, now: at("10:10:00") }), {
+    sent: 0,
+    skipped: 0,
+    waiting: 0,
+  });
+  assert.deepEqual(await run(sent, { send, now: at("10:11:00") }), {
+    sent: 0,
+    skipped: 1,
+    waiting: 0,
+  });
+  const given = await db.formSubmission.findFirstOrThrow({
+    where: { email: "giulia@unito.itit" },
+  });
+  assert.equal(given.confirmationSkipped, "rejected");
+  assert.equal(given.confirmationAttempts, 3);
+  assert.equal(given.confirmationRetryAt, null);
+  // Nothing more is tried.
+  assert.deepEqual(await run(sent, { send, now: at("12:00:00") }), {
+    sent: 0,
+    skipped: 0,
+    waiting: 0,
+  });
+});
+
+test("when sending fails for everyone, nobody is given up; they go once it works", async () => {
+  const team = await createTeam();
+  await sign(team.id, "giulia@example.org");
+  await sign(team.id, "marco@example.org");
+
+  const sent: Mail[] = [];
+  let broken = true;
+  const send = async (mail: Mail) => {
+    // A broken sender (e.g. an unverified domain) can answer 400 for all.
+    if (broken) throw refused(400);
+    sent.push(mail);
+  };
+  const times = ["10:05", "10:06", "10:11", "10:26", "11:26", "12:26"];
+  for (const time of times) {
+    const result = await run(sent, {
+      send,
+      now: new Date(`2026-11-17T${time}:00.000Z`),
+    });
+    assert.deepEqual(result, { sent: 0, skipped: 0, waiting: 2 }, time);
+  }
+  const rows = await db.formSubmission.findMany();
+  assert.ok(rows.every((row) => row.confirmationSkipped === null));
+  assert.ok(rows.every((row) => row.confirmationAttempts === times.length));
+
+  // Fixed: at the next try (hourly by now) both go.
+  broken = false;
+  const result = await run(sent, {
+    send,
+    now: new Date("2026-11-17T13:26:00.000Z"),
+  });
+  assert.deepEqual(result, { sent: 2, skipped: 0, waiting: 0 });
+});
+
 test("a team with verified Scaleway sends through it; others through SMTP", async () => {
   const scaleway = await createTeam();
   const plain = await db.teams.create({

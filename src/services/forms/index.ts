@@ -210,8 +210,12 @@ export type FormSubmissionRow = {
   confirmationRequested: boolean;
   /** When the confirmation e-mail was handled: sent, or skipped (below). */
   confirmationSentAt: Date | null;
-  /** Why no e-mail went out: "address-limit", "no-address". */
+  /** Why no e-mail went out: "address-limit", "no-address", "rejected". */
   confirmationSkipped: string | null;
+  /** Failed sending attempts, when the next one is due, the last error. */
+  confirmationAttempts: number;
+  confirmationRetryAt: Date | null;
+  confirmationError: string | null;
   confirmedAt: Date | null;
   verification: { status: string; issues: string[] } | null;
 };
@@ -272,6 +276,9 @@ export const getFormSubmissionsPage = async (
         confirmationRequested: true,
         confirmationSentAt: true,
         confirmationSkipped: true,
+        confirmationAttempts: true,
+        confirmationRetryAt: true,
+        confirmationError: true,
         confirmedAt: true,
         verification: true,
         contact: { select: { id: true, name: true, primaryEmail: true } },

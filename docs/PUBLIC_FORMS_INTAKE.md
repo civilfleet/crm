@@ -335,6 +335,20 @@ website page ──POST /v1/forms/confirmations {"token"}──▶ bridge (check
     never the address), so one machine cannot use up the hourly budget.
     Beyond it e-mails wait for the next hour rather than being dropped, so
     people behind a shared mobile address still get theirs.
+- **When sending fails** (`src/services/form-confirmations`), that one
+  e-mail is tried again after 1, 5 and 15 minutes, then hourly, and takes no
+  place in the rounds meanwhile, so a failing address never holds up the
+  others. The submission keeps the attempts, the first failure, the next
+  try and the last error (`confirmationAttempts`, `confirmationFailedAt`,
+  `confirmationRetryAt`, `confirmationError`); the Forms page shows
+  "Sending failed N×, next try …". Only an address the mail service refuses
+  (Scaleway 400/422, SMTP 550–553 at `RCPT TO`; usually a typo such as
+  `unito.itit`) is given up, after 3 attempts and only if e-mails to others
+  went out since its first failure: it is marked `rejected` ("Not sent:
+  address refused") and expires. A broken sender refuses everyone, so then
+  nobody is given up; rate limits, server and network errors and our own
+  credentials are tried again until the submission expires. Logs carry the
+  status and attempt, never Scaleway's message (it may hold the address).
 - **The token** is `<submissionId>.<HMAC-SHA256>`, signed with
   `FORM_CONFIRMATION_KEY`, which the CRM and the bridge share. It sits in the
   URL fragment, so it reaches no server log. The bridge answers `202` for a

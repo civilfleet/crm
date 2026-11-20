@@ -64,6 +64,9 @@ type FormSubmissionRow = {
   confirmationRequested: boolean;
   confirmationSentAt: string | null;
   confirmationSkipped: string | null;
+  confirmationAttempts: number;
+  confirmationRetryAt: string | null;
+  confirmationError: string | null;
   confirmedAt: string | null;
   verification: { status: string; issues: string[] } | null;
 };
@@ -104,6 +107,12 @@ const confirmationState = (
       hint: "This address already reached its daily number of confirmation e-mails (protection against e-mail bombing). The submission expires unconfirmed after 7 days.",
       tone: "warning",
     };
+  if (row.confirmationSkipped === "rejected")
+    return {
+      label: "Not sent: address refused",
+      hint: `The mail service refused this address, so the person cannot confirm (often a typo). Correct the address on the contact if you know the right one. ${row.confirmationError ?? ""}`.trim(),
+      tone: "warning",
+    };
   if (row.confirmationSkipped)
     return {
       label: "Not sent: no address",
@@ -114,6 +123,12 @@ const confirmationState = (
     return {
       label: `E-mail sent ${time(row.confirmationSentAt)}, waiting for click`,
       tone: "muted",
+    };
+  if (row.confirmationAttempts > 0)
+    return {
+      label: `Sending failed ${row.confirmationAttempts}×${row.confirmationRetryAt ? `, next try ${time(row.confirmationRetryAt)}` : ""}`,
+      hint: `Tried again later, so it never holds up the others. ${row.confirmationError ?? ""}`.trim(),
+      tone: "warning",
     };
   return {
     label: "Waiting to be sent",

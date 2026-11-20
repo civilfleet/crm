@@ -1466,8 +1466,15 @@ model FormSubmission {
   confirmationRequested Boolean   @default(false)
   // When it was handled: the e-mail sent, or (with a reason) not sent.
   confirmationSentAt    DateTime? @db.Timestamptz(6)
-  // Why no e-mail went out: "address-limit" or "no-address"; null when sent.
+  // Why no e-mail went out: "address-limit", "no-address" or "rejected"
+  // (the address was refused); null when sent.
   confirmationSkipped   String?   @db.VarChar(32)
+  // Failed sending attempts: how many, the first, when to try again (not
+  // before), and the last error in words.
+  confirmationAttempts  Int       @default(0)
+  confirmationFailedAt  DateTime? @db.Timestamptz(6)
+  confirmationRetryAt   DateTime? @db.Timestamptz(6)
+  confirmationError     String?   @db.VarChar(255)
   confirmedAt           DateTime? @db.Timestamptz(6)
   createdAt             DateTime  @default(now()) @db.Timestamptz(6)
 
