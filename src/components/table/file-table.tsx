@@ -323,6 +323,7 @@ export default function FileTable({
         sorts={list.sorts}
         onSortsChange={list.setSorts}
         columnVisibility={list.columnVisibility.visibility}
+        columnLayout={list.columnVisibility}
         view={list.view}
         renderCards={(rows) =>
           rows.map((file) =>

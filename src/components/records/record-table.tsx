@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
+import type { ColumnLayout } from "@/components/records/records-toolbar";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -33,6 +34,11 @@ import { useRangeSelect } from "@/hooks/use-range-select";
 import { nextSorts, type RecordSort } from "@/lib/list-request";
 import { TABLE_PAGE_SIZES } from "@/lib/table-page-size";
 import { cn } from "@/lib/utils";
+import { clampWidth, displayOrder, moveColumnId } from "@/lib/column-layout";
+import {
+  MAX_COLUMN_WIDTH,
+  MIN_COLUMN_WIDTH,
+} from "@/validations/view-preferences";
 
 declare module "@tanstack/react-table" {
   interface ColumnMeta<TData extends RowData, TValue> {
@@ -55,8 +61,15 @@ declare module "@tanstack/react-table" {
 
 const NO_SORTS: RecordSort<string>[] = [];
 
+/** A column's id as the table knows it: its id, else its accessor key. */
+const columnIdOf = <TData,>(column: ColumnDef<TData, unknown>) =>
+  column.id ??
+  String((column as { accessorKey?: string | number }).accessorKey ?? "");
+
 const DEFAULT_WIDTH = 180;
 const SELECT_WIDTH = 40;
+/** A keyboard step when resizing (arrow keys on the column's edge). */
+const RESIZE_STEP = 16;
 
 type Pagination = {
   page: number;
@@ -84,6 +97,8 @@ type RecordTableProps<TData> = {
   sorts?: RecordSort<string>[];
   onSortsChange?: (sorts: RecordSort<string>[]) => void;
   columnVisibility?: VisibilityState;
+  /** Dragged widths and order; without it the columns stay as listed. */
+  columnLayout?: ColumnLayout;
   selectable?: boolean;
   renderBulkActions?: (params: {
     selectedRows: TData[];
@@ -114,6 +129,7 @@ export const RecordTable = <TData,>({
   sorts = NO_SORTS,
   onSortsChange,
   columnVisibility,
+  columnLayout,
   selectable = false,
   renderBulkActions,
   view = "table",
@@ -137,6 +153,18 @@ export const RecordTable = <TData,>({
     });
   }, [data, getRowId]);
 
+  const columnIds = React.useMemo(() => columns.map(columnIdOf), [columns]);
+  const pinnedIds = React.useMemo(
+    () =>
+      new Set(columns.filter((column) => column.meta?.pinned).map(columnIdOf)),
+    [columns],
+  );
+  const savedOrder = columnLayout?.order;
+  const columnOrder = React.useMemo(
+    () => displayOrder(columnIds, pinnedIds, savedOrder ?? []),
+    [columnIds, pinnedIds, savedOrder],
+  );
+
   const table = useReactTable({
     data,
     columns,
@@ -146,8 +174,154 @@ export const RecordTable = <TData,>({
     onRowSelectionChange: setRowSelection,
     manualSorting: true,
     manualPagination: true,
-    state: { rowSelection, columnVisibility: columnVisibility ?? {} },
+    state: {
+      rowSelection,
+      columnVisibility: columnVisibility ?? {},
+      columnOrder,
+    },
   });
+
+  // Resizing: the width while dragging, saved when let go.
+  const [resizing, setResizing] = React.useState<{
+    id: string;
+    width: number;
+  } | null>(null);
+  const isResizingRef = React.useRef(false);
+  const widthOf = (id: string, listed?: number) =>
+    resizing?.id === id
+      ? resizing.width
+      : (columnLayout?.widths[id] ?? listed ?? DEFAULT_WIDTH);
+
+  const handleResizeStart = (
+    event: React.PointerEvent<HTMLDivElement>,
+    id: string,
+    startWidth: number,
+  ) => {
+    if (!columnLayout || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    isResizingRef.current = true;
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    const startX = event.clientX;
+    let width = startWidth;
+    setResizing({ id, width });
+    const handleMove = (move: PointerEvent) => {
+      width = clampWidth(startWidth + move.clientX - startX);
+      setResizing({ id, width });
+    };
+    const handleUp = () => {
+      handle.removeEventListener("pointermove", handleMove);
+      handle.removeEventListener("pointerup", handleUp);
+      handle.removeEventListener("pointercancel", handleUp);
+      isResizingRef.current = false;
+      setResizing(null);
+      if (width !== startWidth) columnLayout.setColumnWidth(id, width);
+    };
+    handle.addEventListener("pointermove", handleMove);
+    handle.addEventListener("pointerup", handleUp);
+    handle.addEventListener("pointercancel", handleUp);
+  };
+
+  const handleResizeKey = (
+    event: React.KeyboardEvent<HTMLDivElement>,
+    id: string,
+    width: number,
+  ) => {
+    if (!columnLayout) return;
+    const step =
+      event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+    if (!step) return;
+    event.preventDefault();
+    columnLayout.setColumnWidth(id, clampWidth(width + step * RESIZE_STEP));
+  };
+
+  // Reordering: drag a header onto another; the line shows where it lands.
+  // Pointer events, not the browser's drag and drop: Firefox will not drag
+  // from a button, and a sortable header is one.
+  const [dragging, setDragging] = React.useState<string | null>(null);
+  const suppressClickRef = React.useRef(false);
+  const [dropTarget, setDropTarget] = React.useState<{
+    id: string;
+    side: "before" | "after";
+  } | null>(null);
+  const canMove = (id: string) => Boolean(columnLayout) && !pinnedIds.has(id);
+
+  const handleMove = (id: string, targetId: string, side: "before" | "after") =>
+    columnLayout?.setOrder(
+      moveColumnId(columnOrder, id, targetId, side).filter(
+        (entry) => !pinnedIds.has(entry),
+      ),
+    );
+
+  const handleDragStart = (
+    event: React.PointerEvent<HTMLTableCellElement>,
+    id: string,
+  ) => {
+    if (!canMove(id) || event.button !== 0 || isResizingRef.current) return;
+    const row = event.currentTarget.parentElement;
+    if (!row) return;
+    const startX = event.clientX;
+    let active = false;
+    let target: { id: string; side: "before" | "after" } | null = null;
+    const handleMoveEvent = (move: PointerEvent) => {
+      if (!active) {
+        if (Math.abs(move.clientX - startX) < 6) return;
+        active = true;
+        suppressClickRef.current = true;
+        document.body.style.userSelect = "none";
+        setDragging(id);
+      }
+      target = null;
+      for (const cell of row.querySelectorAll<HTMLElement>(
+        "th[data-movable-column]",
+      )) {
+        const box = cell.getBoundingClientRect();
+        const cellId = cell.dataset.movableColumn ?? "";
+        if (move.clientX < box.left || move.clientX > box.right) continue;
+        if (cellId !== id) {
+          target = {
+            id: cellId,
+            side: move.clientX < box.left + box.width / 2 ? "before" : "after",
+          };
+        }
+        break;
+      }
+      setDropTarget(target);
+    };
+    const handleUp = () => {
+      window.removeEventListener("pointermove", handleMoveEvent);
+      window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+      if (!active) return;
+      document.body.style.userSelect = "";
+      if (target) handleMove(id, target.id, target.side);
+      setDragging(null);
+      setDropTarget(null);
+      // The click that ends a drag does not sort.
+      window.setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+    };
+    window.addEventListener("pointermove", handleMoveEvent);
+    window.addEventListener("pointerup", handleUp);
+    window.addEventListener("pointercancel", handleUp);
+  };
+
+  // Alt + arrow on a header moves it one visible column along.
+  const handleHeaderKey = (event: React.KeyboardEvent, id: string) => {
+    if (!event.altKey || !canMove(id)) return;
+    const step =
+      event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+    if (!step) return;
+    event.preventDefault();
+    const visible = table
+      .getVisibleLeafColumns()
+      .map((column) => column.id)
+      .filter((entry) => !pinnedIds.has(entry));
+    const neighbour = visible[visible.indexOf(id) + step];
+    if (neighbour) handleMove(id, neighbour, step < 0 ? "before" : "after");
+  };
 
   const selectedRows = table
     .getSelectedRowModel()
@@ -299,13 +473,28 @@ export const RecordTable = <TData,>({
                           ) : null}
                         </>
                       );
+                      const columnId = header.column.id;
+                      const width = widthOf(columnId, meta?.width);
+                      const movable = canMove(columnId);
                       return (
                         <th
                           key={header.id}
                           style={{
-                            width: meta?.width ?? DEFAULT_WIDTH,
+                            width,
                             left: meta?.pinned ? pinnedOffset : undefined,
                           }}
+                          data-movable-column={movable ? columnId : undefined}
+                          onPointerDown={(event) =>
+                            handleDragStart(event, columnId)
+                          }
+                          onClickCapture={(event) => {
+                            if (!suppressClickRef.current) return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                          }}
+                          onKeyDown={(event) =>
+                            handleHeaderKey(event, columnId)
+                          }
                           aria-sort={
                             sort
                               ? sort.direction === "asc"
@@ -314,20 +503,37 @@ export const RecordTable = <TData,>({
                               : undefined
                           }
                           className={cn(
-                            "h-9 border-r border-b bg-card text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground",
+                            "relative h-9 border-r border-b bg-card text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground",
                             // A sortable header is one button, edge to edge.
                             sortField && onSortsChange ? "p-0" : "px-3",
                             meta?.pinned && "sticky z-30",
                             meta?.align === "right" && "text-right",
+                            movable && "cursor-grab active:cursor-grabbing",
+                            dragging === columnId && "opacity-50",
                           )}
                         >
+                          {dropTarget?.id === columnId ? (
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "pointer-events-none absolute inset-y-0 z-10 w-0.5 bg-interactive",
+                                dropTarget.side === "before"
+                                  ? "-left-px"
+                                  : "-right-px",
+                              )}
+                            />
+                          ) : null}
                           {sortField && onSortsChange ? (
                             <button
                               type="button"
                               onClick={(event) =>
                                 handleSort(sortField, event.shiftKey)
                               }
-                              title="Click to sort; Shift-click to add to the order"
+                              title={
+                                movable
+                                  ? "Click to sort; Shift-click to add to the order. Drag to move (or Alt + arrow keys)."
+                                  : "Click to sort; Shift-click to add to the order"
+                              }
                               className={cn(
                                 "flex h-9 w-full cursor-pointer items-center gap-1.5 px-3 transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-hidden focus-visible:ring-inset",
                                 meta?.align === "right" && "justify-end",
@@ -345,6 +551,36 @@ export const RecordTable = <TData,>({
                               {content}
                             </span>
                           )}
+                          {columnLayout ? (
+                            // biome-ignore lint/a11y/useSemanticElements: a column's edge is a separator you can move, as in WAI-ARIA's window splitter
+                            <div
+                              role="separator"
+                              aria-orientation="vertical"
+                              aria-label={`Resize ${typeof label === "string" ? label : "column"}`}
+                              aria-valuenow={width}
+                              aria-valuemin={MIN_COLUMN_WIDTH}
+                              aria-valuemax={MAX_COLUMN_WIDTH}
+                              tabIndex={0}
+                              title="Drag to resize; double-click for the default width"
+                              onPointerDown={(event) =>
+                                handleResizeStart(event, columnId, width)
+                              }
+                              onDoubleClick={() =>
+                                columnLayout.setColumnWidth(columnId, undefined)
+                              }
+                              onKeyDown={(event) =>
+                                handleResizeKey(event, columnId, width)
+                              }
+                              onClick={(event) => event.stopPropagation()}
+                              className={cn(
+                                "absolute inset-y-0 -right-1 z-20 w-2 cursor-col-resize touch-none select-none",
+                                "after:absolute after:inset-y-1.5 after:left-1/2 after:w-0.5 after:-translate-x-1/2 after:rounded-full after:transition-colors",
+                                "hover:after:bg-interactive focus-visible:outline-hidden focus-visible:after:bg-interactive",
+                                resizing?.id === columnId &&
+                                  "after:bg-interactive",
+                              )}
+                            />
+                          ) : null}
                         </th>
                       );
                     })}

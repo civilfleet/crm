@@ -706,6 +706,7 @@ export default function ContactListsManager({
         sorts={list.sorts}
         onSortsChange={list.setSorts}
         columnVisibility={list.columnVisibility.visibility}
+        columnLayout={list.columnVisibility}
         view={list.view === "cards" ? "cards" : "table"}
         renderCards={(rows) => rows.map((row) => renderListCard(row))}
         pagination={{ ...list.pagination, total }}

@@ -782,6 +782,7 @@ export default function ContactTable({
         sorts={list.sorts}
         onSortsChange={list.setSorts}
         columnVisibility={list.columnVisibility.visibility}
+        columnLayout={list.columnVisibility}
         view={list.view}
         renderCards={(rows) => rows.map((contact) => renderCard(contact))}
         renderMap={(rows) => <ContactMap contacts={rows} />}

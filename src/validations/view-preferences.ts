@@ -29,6 +29,10 @@ export const getViewKeyScope = (key: string): ViewKeyScope => {
     : { kind: "team", id };
 };
 
+/** How narrow and wide a column can be dragged, in px. */
+export const MIN_COLUMN_WIDTH = 60;
+export const MAX_COLUMN_WIDTH = 1200;
+
 /** Saved settings are small; anything bigger is a bug or abuse. */
 export const MAX_VIEW_SETTINGS_BYTES = 20_000;
 
@@ -40,6 +44,15 @@ const sortSchema = z.object({
 export const viewPreferenceSettingsSchema = z
   .object({
     columns: z.record(z.string().max(64), z.boolean()).optional(),
+    /** Column widths the user dragged, in px. */
+    widths: z
+      .record(
+        z.string().max(64),
+        z.number().int().min(MIN_COLUMN_WIDTH).max(MAX_COLUMN_WIDTH),
+      )
+      .optional(),
+    /** The column order the user dragged, by column id. */
+    order: z.array(z.string().max(64)).max(100).optional(),
     /** The single order older saved views hold; read, no longer written. */
     sort: sortSchema.nullable().optional(),
     /** The orders, most important first. */

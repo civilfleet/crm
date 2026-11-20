@@ -172,7 +172,12 @@ export const useRecordList = <
     const saved = savedView.saved;
     const settings = settingsRef.current;
     if (saved) {
-      if (saved.columns) columnVisibility.restore(saved.columns);
+      if (saved.columns || saved.widths || saved.order) {
+        columnVisibility.restore(saved.columns, {
+          widths: saved.widths,
+          order: saved.order,
+        });
+      }
       // Several orders, or the single one older saved views hold; any on a
       // field this list no longer sorts by are dropped.
       const savedSorts = saved.sorts ?? (saved.sort ? [saved.sort] : []);
@@ -220,6 +225,14 @@ export const useRecordList = <
     if (!isViewRestored) return;
     const settings = {
       columns: columnVisibility.visibility,
+      // Only what the user changed: the list's own widths and order stay
+      // free to change in code.
+      ...(Object.keys(columnVisibility.widths).length
+        ? { widths: columnVisibility.widths }
+        : {}),
+      ...(columnVisibility.order.length
+        ? { order: columnVisibility.order }
+        : {}),
       sorts,
       view: chosenView,
       filters: model.write ? activeFilters.map(model.write) : activeFilters,
@@ -234,6 +247,8 @@ export const useRecordList = <
     isViewRestored,
     savedView,
     columnVisibility.visibility,
+    columnVisibility.widths,
+    columnVisibility.order,
     sorts,
     chosenView,
     activeFilters,

@@ -191,14 +191,19 @@ export const ColumnsMenu = ({
       >
         Reset to default
       </button>
+      <p className="px-2 pt-1 pb-1.5 text-xs text-muted-foreground">
+        Drag a header to move it, its edge to resize.
+      </p>
     </DropdownMenuContent>
   </DropdownMenu>
 );
 
 /**
- * Column visibility for one list. Defaults hide the long tail so the grid
- * opens uncluttered; the Columns menu brings any of it back. Remembering the
- * choice is the saved view's job (hooks/use-saved-view), per user and list.
+ * Column visibility, widths and order for one list. Defaults hide the long
+ * tail so the grid opens uncluttered; the Columns menu brings any of it back.
+ * Widths and order are what the user dragged in the grid; nothing set means
+ * the list's own. Remembering it all is the saved view's job
+ * (hooks/use-saved-view), per user and list.
  */
 export const useColumnVisibility = (defaults: Record<string, boolean>) => {
   // The defaults are fixed per list; a ref keeps callers that pass a fresh
@@ -206,22 +211,68 @@ export const useColumnVisibility = (defaults: Record<string, boolean>) => {
   const defaultsRef = React.useRef(defaults);
   const [visibility, setVisibility] =
     React.useState<Record<string, boolean>>(defaults);
+  const [widths, setWidths] = React.useState<Record<string, number>>({});
+  const [order, setOrder] = React.useState<string[]>([]);
 
   const setColumnVisible = React.useCallback(
     (id: string, visible: boolean) =>
       setVisibility((current) => ({ ...current, [id]: visible })),
     [],
   );
-  /** Apply a saved set on top of the defaults. */
-  const restore = React.useCallback(
-    (saved: Record<string, boolean>) =>
-      setVisibility({ ...defaultsRef.current, ...saved }),
+  /** A dragged width, or the list's own again (undefined). */
+  const setColumnWidth = React.useCallback(
+    (id: string, width: number | undefined) =>
+      setWidths((current) => {
+        const next = { ...current };
+        if (width === undefined) delete next[id];
+        else next[id] = Math.round(width);
+        return next;
+      }),
     [],
   );
-  const reset = React.useCallback(() => setVisibility(defaultsRef.current), []);
+  /** Apply a saved set on top of the defaults. */
+  const restore = React.useCallback(
+    (
+      saved: Record<string, boolean> | undefined,
+      layout: { widths?: Record<string, number>; order?: string[] } = {},
+    ) => {
+      setVisibility({ ...defaultsRef.current, ...saved });
+      setWidths(layout.widths ?? {});
+      setOrder(layout.order ?? []);
+    },
+    [],
+  );
+  const reset = React.useCallback(() => {
+    setVisibility(defaultsRef.current);
+    setWidths({});
+    setOrder([]);
+  }, []);
 
   return React.useMemo(
-    () => ({ visibility, setColumnVisible, restore, reset }),
-    [visibility, setColumnVisible, restore, reset],
+    () => ({
+      visibility,
+      setColumnVisible,
+      widths,
+      setColumnWidth,
+      order,
+      setOrder,
+      restore,
+      reset,
+    }),
+    [
+      visibility,
+      setColumnVisible,
+      widths,
+      setColumnWidth,
+      order,
+      restore,
+      reset,
+    ],
   );
 };
+
+/** The column layout a records grid reads and changes. */
+export type ColumnLayout = Pick<
+  ReturnType<typeof useColumnVisibility>,
+  "widths" | "setColumnWidth" | "order" | "setOrder"
+>;

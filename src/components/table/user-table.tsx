@@ -288,6 +288,7 @@ export default function UserTable({
         sorts={list.sorts}
         onSortsChange={list.setSorts}
         columnVisibility={list.columnVisibility.visibility}
+        columnLayout={list.columnVisibility}
         view={list.view}
         renderCards={(rows) =>
           rows.map((user) => renderUserCard(user, basePath))

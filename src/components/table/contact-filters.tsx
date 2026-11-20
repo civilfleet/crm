@@ -262,9 +262,7 @@ const summarize = (
       return sent;
     }
     case "consent":
-      return filter.purpose === "marketing"
-        ? "Consent: marketing"
-        : "Consent";
+      return filter.purpose === "marketing" ? "Consent: marketing" : "Consent";
     case "createdAt":
       if (filter.from && filter.to) {
         return `Created between ${filter.from} and ${filter.to}`;
@@ -527,14 +525,12 @@ const ContactFilterEditor = ({
               <SelectItem value="granted">
                 Wants updates (marketing consent)
               </SelectItem>
-              <SelectItem value="not-granted">
-                Doesn’t want updates
-              </SelectItem>
+              <SelectItem value="not-granted">Doesn’t want updates</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Consent counts as it holds now, wherever it was given.
-            Unconfirmed submissions are removed after 7 days.
+            Consent counts as it holds now, wherever it was given. Unconfirmed
+            submissions are removed after 7 days.
           </p>
         </div>
       );

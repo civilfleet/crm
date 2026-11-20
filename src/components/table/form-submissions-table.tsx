@@ -407,6 +407,7 @@ export const FormSubmissionsTable = ({
         sorts={list.sorts}
         onSortsChange={list.setSorts}
         columnVisibility={list.columnVisibility.visibility}
+        columnLayout={list.columnVisibility}
         pagination={{ ...list.pagination, total }}
         selectable={canDelete}
         renderBulkActions={({ selectedRows, clearSelection }) => (
