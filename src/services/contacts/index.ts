@@ -1647,6 +1647,52 @@ async function getTeamContacts(
     });
   }
 
+  // Each "sent a form" filter must hold; by default only confirmed
+  // submissions count (docs/DATA_RULES.md, "Consent" and "Forms").
+  for (const filter of resolvedFilters) {
+    if (filter.type !== "form" || !filter.formId) continue;
+    andConditions.push({
+      formSubmissions: {
+        some: {
+          teamId,
+          formId: filter.formId,
+          ...(filter.status === "any" ? {} : { confirmedAt: { not: null } }),
+        },
+      },
+    });
+  }
+
+  // Consent as it holds now: the latest grant or withdrawal per contact is
+  // a grant (a pending tick does not count). With a form: and a grant came
+  // through that form.
+  for (const filter of resolvedFilters) {
+    if (filter.type !== "consent" || !filter.purpose) continue;
+    const throughForm = filter.formId
+      ? Prisma.sql`AND EXISTS (
+          SELECT 1 FROM "ContactConsent" given
+          WHERE given."contactId" = latest."contactId"
+            AND given."teamId" = ${teamId}
+            AND given."purpose" = ${filter.purpose}
+            AND given."status" = 'GRANTED'
+            AND given."formId" = ${filter.formId}
+        )`
+      : Prisma.empty;
+    const rows = await prisma.$queryRaw<{ contactId: string }[]>(Prisma.sql`
+      SELECT latest."contactId"
+      FROM (
+        SELECT DISTINCT ON ("contactId") "contactId", "status"
+        FROM "ContactConsent"
+        WHERE "teamId" = ${teamId}
+          AND "purpose" = ${filter.purpose}
+          AND "status" <> 'PENDING'
+        ORDER BY "contactId", "recordedAt" DESC, "createdAt" DESC
+      ) latest
+      WHERE latest."status" = 'GRANTED'
+      ${throughForm}
+    `);
+    andConditions.push({ id: { in: rows.map((row) => row.contactId) } });
+  }
+
   const contactIdsFilters = resolvedFilters.filter(
     (filter): filter is Extract<ContactFilter, { type: "contactIds" }> =>
       filter.type === "contactIds" &&

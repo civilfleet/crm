@@ -341,6 +341,19 @@ export type ContactFilter =
       radiusKm: number;
     }
   | {
+      // Sent this website form; by default only once the e-mail is confirmed.
+      type: "form";
+      formId: string;
+      status?: "confirmed" | "any";
+    }
+  | {
+      // Consent for this purpose holds now (the latest grant or withdrawal
+      // is a grant); with a form, it was given through that form.
+      type: "consent";
+      purpose: "marketing";
+      formId?: string;
+    }
+  | {
       type: "contactIds";
       contactIds: string[];
     };

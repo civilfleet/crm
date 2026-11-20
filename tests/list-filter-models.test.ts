@@ -49,6 +49,9 @@ const contactFilters = loadModule<{
 }>("src/components/table/contact-filters.tsx", {
   ...ui,
   "@/components/records/list-filters": listFilters,
+  "@/components/records/use-record-list": {
+    recordListFetcher: async () => ({}),
+  },
   "@/lib/languages": languages,
   "@/validations/contacts": contactValidations,
 });
@@ -166,6 +169,38 @@ test("contact filters: only filters the API accepts are active or restored", () 
     model.read({
       key: "x",
       filter: { type: "language", language: "ar", minLevel: "GOOD" },
+    }),
+    null,
+  );
+
+  // "Sent a form" needs the form; confirmed people only unless asked.
+  const signed = model.create("form");
+  assert.deepEqual(signed.filter, {
+    type: "form",
+    formId: "",
+    status: "confirmed",
+  });
+  assert.equal(model.isActive(signed), false);
+  assert.equal(
+    model.isActive({ ...signed, filter: { ...signed.filter, formId: "f1" } }),
+    true,
+  );
+  assert.equal(
+    model.read({
+      key: "x",
+      filter: { type: "form", formId: "f1", status: "maybe" },
+    }),
+    null,
+  );
+
+  // "Gave consent" holds as made: marketing, any form.
+  const consent = model.create("consent");
+  assert.deepEqual(consent.filter, { type: "consent", purpose: "marketing" });
+  assert.equal(model.isActive(consent), true);
+  assert.equal(
+    model.read({
+      key: "x",
+      filter: { type: "consent", purpose: "spam" },
     }),
     null,
   );

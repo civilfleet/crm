@@ -1,8 +1,13 @@
 "use client";
 
+import { useMemo } from "react";
+import useSWR from "swr";
 import { DebouncedInput } from "@/components/records/list-filters";
 import type { FilterDefinition } from "@/components/records/record-list-toolbar";
-import type { FilterModel } from "@/components/records/use-record-list";
+import {
+  type FilterModel,
+  recordListFetcher,
+} from "@/components/records/use-record-list";
 import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,7 +30,8 @@ import { contactFilterSchema } from "@/validations/contacts";
 /*
   The contact filters, as chips: a field that is present, missing or
   contains a text; an attribute; a language spoken; a group; an event role;
-  a distance from a postal code; the created date. Each chip holds one filter exactly as the
+  a website form sent; a consent given; a distance from a postal code; the
+  created date. Each chip holds one filter exactly as the
   contacts API reads it (`filters=`, validations/contacts), so a saved view
   is checked by the same schema the server uses.
 */
@@ -61,19 +67,85 @@ const FIELD_KIND_PREFIX = "field:";
 /** The level select's "any level" choice (a Select item cannot be empty). */
 const ANY_LEVEL = "any";
 
-/** The Filter menu, in its order. */
-const CONTACT_FILTER_KINDS: Array<{ kind: string; label: string }> = [
-  ...CONTACT_FIELDS.map((field) => ({
+const PLACE_FIELDS = new Set<ContactField>([
+  "address",
+  "postalCode",
+  "city",
+  "state",
+  "country",
+]);
+
+/** The Filter menu, by heading, in its order. */
+const CONTACT_FILTER_KINDS: Array<{
+  kind: string;
+  label: string;
+  group: string;
+  keywords?: string[];
+}> = [
+  ...CONTACT_FIELDS.filter((field) => !PLACE_FIELDS.has(field)).map(
+    (field) => ({
+      kind: `${FIELD_KIND_PREFIX}${field}`,
+      label: CONTACT_FIELD_LABELS[field],
+      group: "Contact details",
+    }),
+  ),
+  ...CONTACT_FIELDS.filter((field) => PLACE_FIELDS.has(field)).map((field) => ({
     kind: `${FIELD_KIND_PREFIX}${field}`,
     label: CONTACT_FIELD_LABELS[field],
+    group: "Place",
   })),
-  { kind: "attribute", label: "Attribute" },
-  { kind: "language", label: "Speaks" },
-  { kind: "group", label: "Group" },
-  { kind: "eventRole", label: "Event role" },
-  { kind: "distance", label: "Within distance of postal code" },
-  { kind: "createdAt", label: "Created date" },
+  {
+    kind: "distance",
+    label: "Within distance of…",
+    group: "Place",
+    keywords: ["radius", "near", "postal code", "km"],
+  },
+  {
+    kind: "attribute",
+    label: "Attribute",
+    group: "Profile",
+    keywords: ["custom field"],
+  },
+  {
+    kind: "language",
+    label: "Speaks",
+    group: "Profile",
+    keywords: ["language"],
+  },
+  { kind: "group", label: "Group", group: "Profile" },
+  {
+    kind: "createdAt",
+    label: "Created date",
+    group: "Profile",
+    keywords: ["added", "new"],
+  },
+  {
+    kind: "form",
+    label: "Sent a form",
+    group: "Activity & consent",
+    keywords: ["website", "petition", "signed", "submission", "confirmed"],
+  },
+  {
+    kind: "consent",
+    label: "Gave consent",
+    group: "Activity & consent",
+    keywords: ["marketing", "newsletter", "updates", "opt-in", "gdpr"],
+  },
+  {
+    kind: "eventRole",
+    label: "Event role",
+    group: "Activity & consent",
+    keywords: ["event", "participant"],
+  },
 ];
+
+/** What a consent is for, in words. */
+export const CONSENT_PURPOSE_LABELS: Record<"marketing", string> = {
+  marketing: "Marketing (updates, newsletter)",
+};
+
+/** The form select's "any form" choice (a Select item cannot be empty). */
+const ANY_FORM = "any";
 
 // The distance and the created date make sense once; the rest may repeat.
 const SINGLE_KINDS = new Set(["distance", "createdAt"]);
@@ -95,6 +167,10 @@ const createFilter = (kind: string): ContactFilter => {
       return { type: "group", groupId: "" };
     case "eventRole":
       return { type: "eventRole", eventRoleId: "" };
+    case "form":
+      return { type: "form", formId: "", status: "confirmed" };
+    case "consent":
+      return { type: "consent", purpose: "marketing" };
     case "distance":
       return {
         type: "distance",
@@ -107,7 +183,8 @@ const createFilter = (kind: string): ContactFilter => {
   }
 };
 
-const kindOf = (filter: ContactFilter) =>
+/** The Filter menu entry a filter belongs to. */
+export const kindOf = (filter: ContactFilter) =>
   filter.type === "contactField"
     ? `${FIELD_KIND_PREFIX}${filter.field}`
     : filter.type;
@@ -135,7 +212,11 @@ export const toContactApiFilters = (items: ContactListFilter[]) =>
 
 const summarize = (
   filter: ContactFilter,
-  names: { groups: Map<string, string>; eventRoles: Map<string, string> },
+  names: {
+    groups: Map<string, string>;
+    eventRoles: Map<string, string>;
+    forms: Map<string, string>;
+  },
 ) => {
   switch (filter.type) {
     case "contactField": {
@@ -171,6 +252,19 @@ const summarize = (
       const name = names.eventRoles.get(filter.eventRoleId);
       return name ? `Role: ${name}` : "Role: choose…";
     }
+    case "form": {
+      if (!filter.formId) return "Sent a form: choose…";
+      const title = names.forms.get(filter.formId) ?? filter.formId;
+      return filter.status === "any"
+        ? `Sent “${title}”`
+        : `Confirmed “${title}”`;
+    }
+    case "consent": {
+      const purpose = filter.purpose === "marketing" ? "marketing" : "consent";
+      if (!filter.formId) return `Consent: ${purpose}`;
+      const title = names.forms.get(filter.formId) ?? filter.formId;
+      return `Consent: ${purpose}, via “${title}”`;
+    }
     case "createdAt":
       if (filter.from && filter.to) {
         return `Created between ${filter.from} and ${filter.to}`;
@@ -194,6 +288,8 @@ type Options = {
   groups: Array<{ id: string; name: string }>;
   eventRoles: Array<{ id: string; name: string }>;
   attributeKeys: string[];
+  /** The team's website forms, newest first. */
+  forms: Array<{ formId: string; title: string }>;
 };
 
 const ContactFilterEditor = ({
@@ -202,6 +298,7 @@ const ContactFilterEditor = ({
   groups,
   eventRoles,
   attributeKeys,
+  forms,
 }: Options & {
   filter: ContactFilter;
   onChange: (next: ContactFilter) => void;
@@ -369,6 +466,98 @@ const ContactFilterEditor = ({
           </Select>
         </div>
       );
+    case "form":
+      if (forms.length === 0) {
+        return (
+          <p className="w-56 p-1 text-sm text-muted-foreground">
+            No website form has been received yet.
+          </p>
+        );
+      }
+      return (
+        <div className="flex w-72 flex-col gap-2 p-1">
+          <Select
+            value={filter.formId || undefined}
+            onValueChange={(formId) => onChange({ ...filter, formId })}
+          >
+            <SelectTrigger aria-label="Form" className="h-8">
+              <SelectValue placeholder="Choose a form" />
+            </SelectTrigger>
+            <SelectContent>
+              {forms.map((form) => (
+                <SelectItem key={form.formId} value={form.formId}>
+                  {form.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={filter.status ?? "confirmed"}
+            onValueChange={(status) =>
+              onChange({ ...filter, status: status as "confirmed" | "any" })
+            }
+          >
+            <SelectTrigger aria-label="Which people" className="h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="confirmed">Confirmed their e-mail</SelectItem>
+              <SelectItem value="any">Everyone who sent it</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Unconfirmed submissions are removed after 7 days.
+          </p>
+        </div>
+      );
+    case "consent":
+      return (
+        <div className="flex w-72 flex-col gap-2 p-1">
+          <Select
+            value={filter.purpose}
+            onValueChange={(purpose) =>
+              onChange({ ...filter, purpose: purpose as "marketing" })
+            }
+          >
+            <SelectTrigger aria-label="Purpose" className="h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(CONSENT_PURPOSE_LABELS).map(
+                ([purpose, label]) => (
+                  <SelectItem key={purpose} value={purpose}>
+                    {label}
+                  </SelectItem>
+                ),
+              )}
+            </SelectContent>
+          </Select>
+          <Select
+            value={filter.formId ?? ANY_FORM}
+            onValueChange={(formId) =>
+              onChange({
+                ...filter,
+                formId: formId === ANY_FORM ? undefined : formId,
+              })
+            }
+          >
+            <SelectTrigger aria-label="Given through" className="h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY_FORM}>Given anywhere</SelectItem>
+              {forms.map((form) => (
+                <SelectItem key={form.formId} value={form.formId}>
+                  Via “{form.title}”
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Only consents that hold now: confirmed and not withdrawn.
+          </p>
+        </div>
+      );
     case "createdAt":
       return (
         <div className="grid w-72 grid-cols-2 gap-2 p-1">
@@ -440,14 +629,18 @@ export const contactFilterDefinitions = (
   const names = {
     groups: new Map(options.groups.map((group) => [group.id, group.name])),
     eventRoles: new Map(options.eventRoles.map((role) => [role.id, role.name])),
+    forms: new Map(options.forms.map((form) => [form.formId, form.title])),
   };
-  return CONTACT_FILTER_KINDS.map(({ kind, label }) => ({
+  return CONTACT_FILTER_KINDS.map(({ kind, label, group, keywords }) => ({
     key: kind,
     label,
+    group,
+    keywords,
     disabled:
       (kind === "group" && options.groups.length === 0) ||
       (kind === "eventRole" && options.eventRoles.length === 0) ||
-      (kind === "attribute" && options.attributeKeys.length === 0),
+      (kind === "attribute" && options.attributeKeys.length === 0) ||
+      (kind === "form" && options.forms.length === 0),
     summary: (item) => summarize(item.filter, names),
     editor: (item, onChange) => (
       <ContactFilterEditor
@@ -457,4 +650,44 @@ export const contactFilterDefinitions = (
       />
     ),
   }));
+};
+
+/**
+ * The Filter menu entries and chips, with what they choose from (groups,
+ * event roles, attributes, forms) loaded for the team.
+ */
+export const useContactFilterDefinitions = (teamId: string) => {
+  const { data: rolesData } = useSWR<{
+    data?: Array<{ id: string; name: string }>;
+  }>(`/api/event-roles?teamId=${teamId}`, recordListFetcher);
+  const { data: groupsData } = useSWR<{
+    data?: Array<{ id: string; name: string }>;
+  }>(`/api/groups?teamId=${teamId}`, recordListFetcher);
+  // Every attribute in the team, not only those on this page.
+  const { data: attributeKeysData } = useSWR<{ data?: string[] }>(
+    `/api/contacts/attribute-keys?teamId=${teamId}`,
+    recordListFetcher,
+  );
+  // A team has few forms; the newest first.
+  const { data: formsData } = useSWR<{
+    data?: Array<{ formId: string; title: string }>;
+  }>(`/api/forms?teamId=${teamId}&pageSize=100`, recordListFetcher);
+  return useMemo(
+    () =>
+      contactFilterDefinitions({
+        groups: groupsData?.data ?? [],
+        eventRoles: rolesData?.data ?? [],
+        attributeKeys: attributeKeysData?.data ?? [],
+        forms: (formsData?.data ?? []).map(({ formId, title }) => ({
+          formId,
+          title,
+        })),
+      }),
+    [
+      groupsData?.data,
+      rolesData?.data,
+      attributeKeysData?.data,
+      formsData?.data,
+    ],
+  );
 };

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isLanguageCode, LANGUAGE_LEVELS } from "@/lib/languages";
+import { CONSENT_PURPOSES } from "@/lib/public-forms/submission";
 import type { ContactFilter } from "@/types";
 import {
   ContactAttributeType,
@@ -215,6 +216,16 @@ export const contactFilterSchema: z.ZodType<ContactFilter> =
         message: "Unknown language",
       }),
       minLevel: z.enum(LANGUAGE_LEVELS).optional(),
+    }),
+    z.object({
+      type: z.literal("form"),
+      formId: z.string().trim().min(1, "Choose a form").max(64),
+      status: z.enum(["confirmed", "any"]).optional(),
+    }),
+    z.object({
+      type: z.literal("consent"),
+      purpose: z.enum(CONSENT_PURPOSES),
+      formId: z.string().trim().min(1).max(64).optional(),
     }),
     z
       .object({

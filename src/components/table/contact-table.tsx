@@ -20,6 +20,7 @@ import { EmptyState } from "@/components/design/empty-state";
 import { Switcher } from "@/components/design/switcher";
 import { InternalCopyFields } from "@/components/emails/internal-copy-fields";
 import { ContactExportDialog } from "@/components/forms/contact-export-dialog";
+import { SaveSmartListButton } from "@/components/forms/save-smart-list-dialog";
 import {
   NoMatchState,
   RecordListToolbar,
@@ -45,9 +46,9 @@ import {
 } from "@/components/table/contact-columns";
 import {
   type ContactListFilter,
-  contactFilterDefinitions,
   contactFilterModel,
   toContactApiFilters,
+  useContactFilterDefinitions,
 } from "@/components/table/contact-filters";
 import {
   AlertDialog,
@@ -235,26 +236,7 @@ export default function ContactTable({
   );
   const totalContacts = Number(data?.total ?? 0);
 
-  const { data: rolesData } = useSWR<{
-    data?: Array<{ id: string; name: string }>;
-  }>(`/api/event-roles?teamId=${teamId}`, recordListFetcher);
-  const { data: groupsData } = useSWR<{
-    data?: Array<{ id: string; name: string }>;
-  }>(`/api/groups?teamId=${teamId}`, recordListFetcher);
-  // Every attribute in the team, not only those on this page.
-  const { data: attributeKeysData } = useSWR<{ data?: string[] }>(
-    `/api/contacts/attribute-keys?teamId=${teamId}`,
-    recordListFetcher,
-  );
-  const filterDefinitions = useMemo(
-    () =>
-      contactFilterDefinitions({
-        groups: groupsData?.data ?? [],
-        eventRoles: rolesData?.data ?? [],
-        attributeKeys: attributeKeysData?.data ?? [],
-      }),
-    [groupsData?.data, rolesData?.data, attributeKeysData?.data],
-  );
+  const filterDefinitions = useContactFilterDefinitions(teamId);
 
   useEffect(() => {
     if (!error) return;
@@ -738,6 +720,14 @@ export default function ContactTable({
         filters={filterDefinitions}
         searchLabel="Search contacts"
         isRefreshing={isValidating && !isLoading}
+        filterActions={
+          showTrash ? null : (
+            <SaveSmartListButton
+              teamId={teamId}
+              filters={toContactApiFilters(list.activeFilters)}
+            />
+          )
+        }
         start={
           <Switcher
             label="Which contacts"

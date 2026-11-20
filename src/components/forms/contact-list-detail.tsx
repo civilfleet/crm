@@ -9,8 +9,8 @@ import type { FieldErrors } from "react-hook-form";
 import { useForm } from "react-hook-form";
 import useSWR from "swr";
 import type { z } from "zod";
+import { ContactFilterChips } from "@/components/forms/contact-filter-chips";
 import { ContactListExportDialog } from "@/components/forms/contact-list-export-dialog";
-import { ContactListFiltersBuilder } from "@/components/forms/contact-list-filters-builder";
 import { TagPicker } from "@/components/tags/tag-picker";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -630,7 +630,7 @@ export function ContactListDetail({ teamId, listId }: ContactListDetailProps) {
                         automatically.
                       </FormDescription>
                       <FormControl>
-                        <ContactListFiltersBuilder
+                        <ContactFilterChips
                           teamId={teamId}
                           value={(field.value ?? []) as ContactFilter[]}
                           onChange={(next) => field.onChange(next)}

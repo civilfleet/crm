@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import type * as React from "react";
-import { useId } from "react";
+import { useId, useState } from "react";
 import { EmptyState } from "@/components/design/empty-state";
 import { SearchField } from "@/components/design/search-field";
 import { Switcher } from "@/components/design/switcher";
@@ -36,12 +36,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { MAX_SORTS, type RecordSort } from "@/lib/list-request";
 
 /** One kind of filter as the toolbar shows it: in the Filter menu and as a chip. */
@@ -49,6 +55,10 @@ export type FilterDefinition<F extends RecordFilter> = {
   /** The kind (a filter's `kind`, or its key when it has none). */
   key: string;
   label: string;
+  /** The heading it is listed under in the Filter menu: "Place". */
+  group?: string;
+  /** Other words it is found by in the menu's search. */
+  keywords?: string[];
   /** Nothing to choose from yet. */
   disabled?: boolean;
   /** "Status is Submitted or Accepted" */
@@ -57,53 +67,105 @@ export type FilterDefinition<F extends RecordFilter> = {
   editor: (filter: F, onChange: (next: F) => void) => React.ReactNode;
 };
 
+type FilterMenuOption = {
+  key: string;
+  label: string;
+  group?: string;
+  keywords?: string[];
+  disabled?: boolean;
+};
+
 type FilterMenuProps = {
-  options: Array<{ key: string; label: string; disabled?: boolean }>;
+  options: FilterMenuOption[];
   activeCount: number;
   onAdd: (key: string) => void;
   /** "Filter events by" */
   label?: string;
 };
 
-/** "Filter" in the toolbar: pick an attribute, then its value in the new chip. */
+/** Above this many entries the menu can be searched. */
+const SEARCHABLE_FROM = 8;
+
+/** The options by heading, in the order the headings first appear. */
+const groupOptions = (options: FilterMenuOption[]) => {
+  const groups = new Map<string, FilterMenuOption[]>();
+  for (const option of options) {
+    const heading = option.group ?? "";
+    groups.set(heading, [...(groups.get(heading) ?? []), option]);
+  }
+  return [...groups];
+};
+
+/**
+ * "Filter" in the toolbar: pick an attribute, then its value in the new
+ * chip. Long menus are grouped under headings and can be searched.
+ */
 export const FilterMenu = ({
   options,
   activeCount,
   onAdd,
   label = "Filter by",
-}: FilterMenuProps) => (
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5">
-        <ListFilter /> Filter
-        {activeCount > 0 ? (
-          <span className="rounded-full bg-interactive px-1.5 text-[11px] font-semibold tabular-nums text-interactive-foreground">
-            {activeCount}
-          </span>
-        ) : null}
-      </Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent
-      align="start"
-      className="min-w-48"
-      // Focus belongs to the new filter's editor, not back on "Filter".
-      onCloseAutoFocus={(event) => event.preventDefault()}
-    >
-      <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
-        {label}
-      </DropdownMenuLabel>
-      {options.map((option) => (
-        <DropdownMenuItem
-          key={option.key}
-          disabled={option.disabled}
-          onSelect={() => onAdd(option.key)}
-        >
-          {option.label}
-        </DropdownMenuItem>
-      ))}
-    </DropdownMenuContent>
-  </DropdownMenu>
-);
+}: FilterMenuProps) => {
+  const [open, setOpen] = useState(false);
+  const searchable = options.length >= SEARCHABLE_FROM;
+  const handleSelect = (key: string) => {
+    setOpen(false);
+    onAdd(key);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5">
+          <ListFilter /> Filter
+          {activeCount > 0 ? (
+            <span className="rounded-full bg-interactive px-1.5 text-[11px] font-semibold tabular-nums text-interactive-foreground">
+              {activeCount}
+            </span>
+          ) : null}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-64 p-0"
+        // Focus belongs to the new filter's editor, not back on "Filter".
+        onCloseAutoFocus={(event) => event.preventDefault()}
+      >
+        <Command label={label}>
+          {searchable ? (
+            <CommandInput placeholder="Search filters…" />
+          ) : (
+            <p className="px-3 pt-2 pb-1 text-xs font-medium text-muted-foreground">
+              {label}
+            </p>
+          )}
+          <CommandList className="max-h-[min(24rem,60vh)]">
+            <CommandEmpty>No filter found.</CommandEmpty>
+            {groupOptions(options).map(([heading, entries]) => (
+              <CommandGroup key={heading || "_"} heading={heading || undefined}>
+                {entries.map((option) => (
+                  <CommandItem
+                    key={option.key}
+                    value={option.key}
+                    keywords={[
+                      option.label,
+                      ...(option.group ? [option.group] : []),
+                      ...(option.keywords ?? []),
+                    ]}
+                    disabled={option.disabled}
+                    onSelect={() => handleSelect(option.key)}
+                  >
+                    {option.label}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 type SortChipProps = {
   sorts: RecordSort<string>[];
@@ -271,6 +333,8 @@ type RecordListToolbarProps<
   filterMenuLabel?: string;
   /** Before the Filter menu: e.g. which records ("All" or "Trash"). */
   start?: React.ReactNode;
+  /** After the chips, while a filter applies: "Save as smart list". */
+  filterActions?: React.ReactNode;
 };
 
 /**
@@ -289,6 +353,7 @@ export const RecordListToolbar = <
   filters = [],
   filterMenuLabel,
   start,
+  filterActions,
 }: RecordListToolbarProps<TData, F, V>) => {
   const getSortLabel = (field: string) =>
     columns.find((column) => column.meta?.sortField === field)?.meta?.label ??
@@ -306,6 +371,8 @@ export const RecordListToolbar = <
                 options={filters.map((definition) => ({
                   key: definition.key,
                   label: definition.label,
+                  group: definition.group,
+                  keywords: definition.keywords,
                   disabled:
                     definition.disabled ||
                     list.isFilterKindTaken(definition.key),
@@ -385,6 +452,7 @@ export const RecordListToolbar = <
               </FilterChip>
             );
           })}
+          {list.activeFilters.length > 0 ? filterActions : null}
         </RecordsFilterBar>
       ) : null}
     </>

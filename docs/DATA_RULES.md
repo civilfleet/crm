@@ -287,11 +287,19 @@ What a person agreed to beyond a single form, for example to receive updates
   contract.
 - Merging contacts moves their consents, history included; deleting a contact
   permanently deletes them.
+- **Filters and smart lists** (`src/services/contacts`, `getTeamContacts`):
+  "Gave consent" counts a contact whose consent for the purpose holds now
+  (the latest grant or withdrawal is a grant; a pending tick alone does not
+  count), optionally only where a grant came through a given form. "Sent a
+  form" counts confirmed submissions of that form by default, or every
+  submission on request. Both stay within the team and the usual contact
+  visibility.
 
 Tests: `tests/public-forms.test.ts` (contract, intake),
 `tests/db/form-consent.test.ts` (real intake, unticked box, a confirmed
 consent holds, team scope), `tests/db/form-confirmation.test.ts`
-(confirmation, removal after 7 days) and `tests/db/contacts-merge.test.ts`.
+(confirmation, removal after 7 days), `tests/db/contact-form-filters.test.ts`
+(the form and consent filters) and `tests/db/contacts-merge.test.ts`.
 
 ### Unconfirmed website submissions
 
