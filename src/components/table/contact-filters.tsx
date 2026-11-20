@@ -144,8 +144,8 @@ export const CONSENT_PURPOSE_LABELS: Record<"marketing", string> = {
   marketing: "Marketing (updates, newsletter)",
 };
 
-/** The form select's "any form" choice (a Select item cannot be empty). */
-const ANY_FORM = "any";
+/** The consent select's "either way" choice (a Select item cannot be empty). */
+const ANY_CONSENT = "any";
 
 // The distance and the created date make sense once; the rest may repeat.
 const SINGLE_KINDS = new Set(["distance", "createdAt"]);
@@ -255,16 +255,16 @@ const summarize = (
     case "form": {
       if (!filter.formId) return "Sent a form: choose…";
       const title = names.forms.get(filter.formId) ?? filter.formId;
-      return filter.status === "any"
-        ? `Sent “${title}”`
-        : `Confirmed “${title}”`;
+      const sent =
+        filter.status === "any" ? `Sent “${title}”` : `Confirmed “${title}”`;
+      if (filter.consent === "granted") return `${sent} · wants updates`;
+      if (filter.consent === "not-granted") return `${sent} · no updates`;
+      return sent;
     }
-    case "consent": {
-      const purpose = filter.purpose === "marketing" ? "marketing" : "consent";
-      if (!filter.formId) return `Consent: ${purpose}`;
-      const title = names.forms.get(filter.formId) ?? filter.formId;
-      return `Consent: ${purpose}, via “${title}”`;
-    }
+    case "consent":
+      return filter.purpose === "marketing"
+        ? "Consent: marketing"
+        : "Consent";
     case "createdAt":
       if (filter.from && filter.to) {
         return `Created between ${filter.from} and ${filter.to}`;
@@ -505,7 +505,35 @@ const ContactFilterEditor = ({
               <SelectItem value="any">Everyone who sent it</SelectItem>
             </SelectContent>
           </Select>
+          <Select
+            value={filter.consent ?? ANY_CONSENT}
+            onValueChange={(consent) =>
+              onChange({
+                ...filter,
+                consent:
+                  consent === ANY_CONSENT
+                    ? undefined
+                    : (consent as "granted" | "not-granted"),
+              })
+            }
+          >
+            <SelectTrigger aria-label="Marketing consent" className="h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ANY_CONSENT}>
+                With or without consent
+              </SelectItem>
+              <SelectItem value="granted">
+                Wants updates (marketing consent)
+              </SelectItem>
+              <SelectItem value="not-granted">
+                Doesn’t want updates
+              </SelectItem>
+            </SelectContent>
+          </Select>
           <p className="text-xs text-muted-foreground">
+            Consent counts as it holds now, wherever it was given.
             Unconfirmed submissions are removed after 7 days.
           </p>
         </div>
@@ -530,27 +558,6 @@ const ContactFilterEditor = ({
                   </SelectItem>
                 ),
               )}
-            </SelectContent>
-          </Select>
-          <Select
-            value={filter.formId ?? ANY_FORM}
-            onValueChange={(formId) =>
-              onChange({
-                ...filter,
-                formId: formId === ANY_FORM ? undefined : formId,
-              })
-            }
-          >
-            <SelectTrigger aria-label="Given through" className="h-8">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ANY_FORM}>Given anywhere</SelectItem>
-              {forms.map((form) => (
-                <SelectItem key={form.formId} value={form.formId}>
-                  Via “{form.title}”
-                </SelectItem>
-              ))}
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">

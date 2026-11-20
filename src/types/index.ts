@@ -342,16 +342,18 @@ export type ContactFilter =
     }
   | {
       // Sent this website form; by default only once the e-mail is confirmed.
+      // With `consent`: and marketing consent holds now (anywhere given), or
+      // does not.
       type: "form";
       formId: string;
       status?: "confirmed" | "any";
+      consent?: "granted" | "not-granted";
     }
   | {
-      // Consent for this purpose holds now (the latest grant or withdrawal
-      // is a grant); with a form, it was given through that form.
+      // Consent for this purpose holds now: the latest grant or withdrawal
+      // is a grant.
       type: "consent";
       purpose: "marketing";
-      formId?: string;
     }
   | {
       type: "contactIds";

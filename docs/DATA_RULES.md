@@ -290,10 +290,11 @@ What a person agreed to beyond a single form, for example to receive updates
 - **Filters and smart lists** (`src/services/contacts`, `getTeamContacts`):
   "Gave consent" counts a contact whose consent for the purpose holds now
   (the latest grant or withdrawal is a grant; a pending tick alone does not
-  count), optionally only where a grant came through a given form. "Sent a
-  form" counts confirmed submissions of that form by default, or every
-  submission on request. Both stay within the team and the usual contact
-  visibility.
+  count). "Sent a form" counts confirmed submissions of that form by default,
+  or every submission on request, and can add "wants updates" or "doesn't":
+  marketing consent as it holds now, wherever it was given (another form, by
+  hand), since that is what decides who may be e-mailed. Both stay within the
+  team and the usual contact visibility.
 
 Tests: `tests/public-forms.test.ts` (contract, intake),
 `tests/db/form-consent.test.ts` (real intake, unticked box, a confirmed

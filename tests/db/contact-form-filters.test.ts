@@ -130,7 +130,7 @@ test("sent a form: confirmed only by default, everyone on request; several must 
   );
 });
 
-test("gave consent: as it holds now, optionally given through one form", async () => {
+test("gave consent: as it holds now", async () => {
   const { other, person, consent, names } = await setup();
   // Confirmed through the petition.
   const anna = await person("Anna");
@@ -158,37 +158,55 @@ test("gave consent: as it holds now, optionally given through one form", async (
     "Elena",
     "Fabio",
   ]);
-  assert.deepEqual(
-    await names([
-      { type: "consent", purpose: "marketing", formId: "petition" },
-    ]),
-    ["Anna", "Elena"],
-  );
-  // Through a form, but withdrawn since: no longer.
+  // Withdrawn since: no longer.
   await consent(anna, "WITHDRAWN", "13:00");
-  assert.deepEqual(
-    await names([
-      { type: "consent", purpose: "marketing", formId: "petition" },
-    ]),
-    ["Elena"],
-  );
+  assert.deepEqual(await names([{ type: "consent", purpose: "marketing" }]), [
+    "Elena",
+    "Fabio",
+  ]);
 });
 
-test("a smart list of confirmed signers who want updates", async () => {
+test("sent a form, and wants updates or not: consent as it holds now, wherever given", async () => {
   const { person, sent, consent, names } = await setup();
+  // Signed with the tick, confirmed.
   const anna = await person("Anna");
   await sent(anna, "petition", true);
   await consent(anna, "GRANTED", "10:05", "petition");
-  // Signed and confirmed, without the tick.
-  await sent(await person("Bruno"), "petition", true);
+  // Signed without the tick, but agreed to updates on another form before.
+  const bruno = await person("Bruno");
+  await sent(bruno, "petition", true);
+  await consent(bruno, "GRANTED", "09:00", "survey");
+  // Signed without the tick.
+  await sent(await person("Carla"), "petition", true);
+  // Signed with the tick, but withdrew since.
+  const dario = await person("Dario");
+  await sent(dario, "petition", true);
+  await consent(dario, "GRANTED", "10:05", "petition");
+  await consent(dario, "WITHDRAWN", "11:00");
+  // Ticked, never confirmed.
+  const elena = await person("Elena");
+  await sent(elena, "petition", false);
+  await consent(elena, "PENDING", "10:00", "petition");
   // Wants updates, but has not signed.
-  await consent(await person("Carla"), "GRANTED", "09:00");
+  await consent(await person("Fabio"), "GRANTED", "09:00");
 
+  const petition = { type: "form", formId: "petition" };
+  assert.deepEqual(await names([{ ...petition, consent: "granted" }]), [
+    "Anna",
+    "Bruno",
+  ]);
+  assert.deepEqual(await names([{ ...petition, consent: "not-granted" }]), [
+    "Carla",
+    "Dario",
+  ]);
+  // Everyone who sent it: the unconfirmed one has no consent either.
   assert.deepEqual(
-    await names([
-      { type: "form", formId: "petition" },
-      { type: "consent", purpose: "marketing" },
-    ]),
-    ["Anna"],
+    await names([{ ...petition, status: "any", consent: "not-granted" }]),
+    ["Carla", "Dario", "Elena"],
+  );
+  // The same as the two filters together.
+  assert.deepEqual(
+    await names([petition, { type: "consent", purpose: "marketing" }]),
+    ["Anna", "Bruno"],
   );
 });
