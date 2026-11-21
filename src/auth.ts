@@ -17,7 +17,6 @@ import type { Roles } from "./types";
 declare module "next-auth" {
   interface Session {
     user: {
-      accessToken?: string;
       provider?: string;
       roles?: Roles[];
       organizationId?: string;
@@ -227,8 +226,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
       },
 
       async jwt({ token, user, account }) {
+        // The identity provider's access token is never needed here, and
+        // anything in the session can end up in page HTML: keep it out.
+        // Sessions from before this still carry one; drop it on refresh.
+        delete token.accessToken;
         if (account && user) {
-          token.accessToken = account.access_token;
           token.provider = account.provider;
           const userExist = await prisma.user.findFirst({
             where: { email: user.email as string },
@@ -246,9 +248,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
       },
 
       async session({ session, token }) {
-        const accessToken = token.accessToken as string | undefined;
         if (session.user) {
-          session.user.accessToken = accessToken;
           session.user.userId = token.userId as string | undefined;
           session.user.roles = token.roles as Roles[] | undefined;
           session.user.organizationId = token.organizationId as
