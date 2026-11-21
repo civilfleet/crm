@@ -4,6 +4,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { DateCell, formatRecordDate } from "@/components/records/record-cells";
 import { Badge } from "@/components/ui/badge";
 import { formatSpokenLanguages } from "@/lib/languages";
 import {
@@ -256,8 +257,8 @@ export const contactColumns: ColumnDef<ContactRow, unknown>[] = [
   },
   {
     accessorKey: "createdAt",
-    meta: { label: "Created", sortField: "createdAt", width: 140 },
-    cell: ({ row }) => <span>{formatDate(row.original.createdAt)}</span>,
+    meta: { label: "Created", sortField: "createdAt", width: 160 },
+    cell: ({ row }) => <DateCell value={row.original.createdAt} withTime />,
     sortingFn: (rowA, rowB) =>
       getDateValue(rowA.original.createdAt) -
       getDateValue(rowB.original.createdAt),
@@ -312,7 +313,7 @@ export const renderContactCard = (contact: ContactRow, teamId: string) => {
         {renderAttributes(contact.profileAttributes)}
       </div>
       <p className="text-xs text-muted-foreground">
-        Added {formatDate(contact.createdAt)}
+        Added {formatRecordDate(contact.createdAt, { withTime: true })}
       </p>
     </div>
   );
