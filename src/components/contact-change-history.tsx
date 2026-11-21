@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import {
-  creationSource,
+  describeCreation,
   describeListChange,
   displayValue,
   fieldLabel,
@@ -189,13 +189,20 @@ const describeEntry = (
 
   switch (log.action) {
     case ChangeAction.CREATED: {
-      const source = creationSource(log.metadata);
+      const creation = describeCreation(log);
       const duplicates = log.metadata?.possibleDuplicates;
       return {
         sentence: (
           <>
-            {who ? <>{who} created this contact</> : "Contact created"}
-            {source ? ` from ${source}` : ""}
+            {creation.who ? (
+              <>
+                <span className="font-medium">{creation.who}</span> created this
+                contact
+              </>
+            ) : (
+              "Contact created"
+            )}
+            {creation.source ? ` from ${creation.source}` : ""}
           </>
         ),
         detail:

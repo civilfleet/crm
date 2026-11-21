@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, beforeEach, test } from "node:test";
+import { describeCreation } from "@/lib/contact-change-format";
+import type { ContactChangeLog } from "@/types";
 import { db, disconnect, loadService, resetDatabase } from "./helpers";
 
 /*
@@ -35,12 +37,22 @@ class ApiError extends Error {
   }
 }
 const boundaries = { "@/lib/api-guard": { ApiError } };
+type ChangeLogsService = {
+  getContactCreationLog: (
+    contactId: string,
+  ) => Promise<ContactChangeLog | null>;
+};
 const intake = loadService<IntakeService>(
   "src/services/form-submissions/index.ts",
   boundaries,
 );
 const duplicates = loadService<DuplicatesService>(
   "src/services/contact-duplicates/index.ts",
+  boundaries,
+);
+
+const changeLogs = loadService<ChangeLogsService>(
+  "src/services/contact-change-logs/index.ts",
   boundaries,
 );
 
@@ -155,4 +167,18 @@ test("an address in the trash brings its contact back", async () => {
   });
   assert.equal(restored.deletedAt, null);
   assert.equal(await db.contact.count(), 1, "no second contact");
+});
+
+test("a contact made by a form says which form made it", async () => {
+  const { team } = await setup();
+  const { contactId } = await submit(team.id, {
+    email: "new.person@example.org",
+    name: "New Person",
+  });
+  const log = await changeLogs.getContactCreationLog(contactId);
+  assert.ok(log, "the creation is recorded");
+  assert.equal(log.metadata?.source, "website-form");
+  assert.deepEqual(describeCreation(log), {
+    source: "the website form “Firma”",
+  });
 });

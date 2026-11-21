@@ -11,6 +11,7 @@ import {
   getPrimaryEmail,
   primaryContactEmailSelect,
 } from "@/services/contact-emails";
+import { logContactCreation } from "@/services/contact-change-logs";
 import { findContactByIdentityEmail } from "@/services/contacts";
 import { enqueueZammadTicketSyncJob } from "@/services/integrations/zammad-queue";
 import {
@@ -217,6 +218,7 @@ const ensureContactForEmail = async (
   teamId: string,
   email?: string | null,
   name?: string | null,
+  ticket?: { id: number; number?: string | null },
 ) => {
   if (!email) return null;
   const normalizedEmail = email.toLowerCase();
@@ -243,6 +245,17 @@ const ensureContactForEmail = async (
       },
     },
     select: { id: true },
+  });
+
+  await logContactCreation(contact.id, undefined, undefined, prisma, {
+    source: "zammad",
+    createdVia: "zammad-import",
+    ...(ticket
+      ? {
+          ticketId: ticket.id,
+          ...(ticket.number ? { ticketNumber: ticket.number } : {}),
+        }
+      : {}),
   });
 
   return contact.id;
@@ -309,6 +322,7 @@ const upsertArticleEngagement = async (
       teamId,
       primaryEmail,
       contactName,
+      ticket,
     );
     if (createdId) {
       return await upsertArticleEngagement(

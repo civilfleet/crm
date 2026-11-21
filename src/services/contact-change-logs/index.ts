@@ -283,9 +283,25 @@ const proposeFieldChange = async (
   return true;
 };
 
+/**
+ * The entry that records how a contact was created, if any. Callers have
+ * already checked access to the contact; the entry names no field, so field
+ * visibility does not apply.
+ */
+const getContactCreationLog = async (
+  contactId: string,
+): Promise<ContactChangeLog | null> => {
+  const log = await prisma.contactChangeLog.findFirst({
+    where: { contactId, action: ChangeAction.CREATED },
+    orderBy: { createdAt: "asc" },
+  });
+  return log ? mapChangeLog(log) : null;
+};
+
 export {
   createChangeLog,
   getContactChangeLogs,
+  getContactCreationLog,
   logContactCreation,
   logFieldUpdate,
   proposeFieldChange,

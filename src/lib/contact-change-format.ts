@@ -278,7 +278,30 @@ export const creationSource = (metadata?: Record<string, unknown>) => {
     }
     case "inbound-email":
       return "an incoming email";
+    case "zammad":
+      return "a Zammad ticket";
+    case "klaviyo":
+      return "a Klaviyo import";
     default:
       return text(metadata.source)?.replace(/[_-]+/g, " ").toLowerCase();
   }
+};
+
+/** Klaviyo imports used to put this label where the user's name goes. */
+const LEGACY_KLAVIYO_LABEL = "Klaviyo import";
+
+/**
+ * Who created a contact and from where, read from its CREATED change log.
+ * Only a signed-in user counts as "who"; automatic paths (inbound e-mail,
+ * imports) name themselves through the source instead.
+ */
+export const describeCreation = (
+  log: Pick<ContactChangeLog, "userId" | "userName" | "metadata">,
+): { who?: string; source?: string } => {
+  const source = creationSource(log.metadata);
+  if (log.userId) return { who: log.userName || undefined, source };
+  if (source) return { source };
+  if (log.userName === LEGACY_KLAVIYO_LABEL)
+    return { source: creationSource({ source: "klaviyo" }) };
+  return { who: log.userName || undefined };
 };

@@ -36,7 +36,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { describeCreation } from "@/lib/contact-change-format";
 import { formatSpokenLanguages } from "@/lib/languages";
+import { getContactCreationLog } from "@/services/contact-change-logs";
 import { getContactConsents } from "@/services/contact-consents";
 import {
   getAllowedContactSubmodules,
@@ -217,10 +219,18 @@ export default async function ContactDetailPage({
     notFound();
   }
 
-  const [allowedSubmodules, consents] = await Promise.all([
+  const [allowedSubmodules, consents, creationLog] = await Promise.all([
     getAllowedContactSubmodules(teamId, userId),
     getContactConsents(id, teamId),
+    getContactCreationLog(id),
   ]);
+  const creation = creationLog ? describeCreation(creationLog) : {};
+  const createdBy = [
+    creation.who && `by ${creation.who}`,
+    creation.source && `from ${creation.source}`,
+  ]
+    .filter(Boolean)
+    .join(" ");
   const showSupervisionTab = allowedSubmodules.includes("SUPERVISION");
   const showShopTab = allowedSubmodules.includes("SHOP");
   const showEventsTab = true;
@@ -470,6 +480,9 @@ export default async function ContactDetailPage({
             <p className="text-base">
               {format(new Date(contact.createdAt), "PPpp")}
             </p>
+            {createdBy && (
+              <p className="text-sm text-muted-foreground">{createdBy}</p>
+            )}
           </div>
           <div className="rounded-md border bg-muted/30 p-3">
             <p className="text-sm font-medium text-muted-foreground">

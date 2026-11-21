@@ -107,7 +107,10 @@ const upsertContactFromProfile = async (
     },
   });
 
-  await logContactCreation(created.id, undefined, "Klaviyo import", prisma);
+  await logContactCreation(created.id, undefined, undefined, prisma, {
+    source: "klaviyo",
+    createdVia: "klaviyo-import",
+  });
 
   return {
     contactId: created.id,
@@ -694,7 +697,10 @@ export const syncKlaviyoIntegration = async (
         },
       },
     });
-    await logContactCreation(created.id, undefined, "Klaviyo import", prisma);
+    await logContactCreation(created.id, undefined, undefined, prisma, {
+      source: "klaviyo",
+      createdVia: "klaviyo-import",
+    });
     fallbackContactsCreated += 1;
     emailToContactId.set(normalized, created.id);
     return created.id;

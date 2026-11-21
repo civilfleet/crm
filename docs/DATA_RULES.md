@@ -123,6 +123,22 @@ an edit ignores it. Ignoring means "leave as it is", never "clear it".
 Code: `applyContactFieldAccess`, `filterContactByAccess`
 (`src/services/contacts/index.ts`).
 
+### Where a contact came from
+
+Every way of creating a contact writes one **Created** history entry
+(`logContactCreation`, `src/services/contact-change-logs`) with
+`metadata.source`: `manual` (contact form, with the user), `website-form`,
+`event-registration`, `inbound-email`, `zammad` or `klaviyo`. There is no
+column for it: the entry is the record. The contact page shows it under
+*Created At* ("by Ana", "from the website form “Firma”"), worded by
+`describeCreation` (`src/lib/contact-change-format.ts`), the same helper the
+history uses. Only a signed-in user is named as "who"; automatic paths name
+themselves through the source. Contacts created before sources were saved
+show no source.
+
+Tests: `tests/contact-change-format.test.ts`,
+`tests/db/intake-matching.test.ts`.
+
 ### Editing a contact
 
 `updateContact` (`src/services/contacts/index.ts`):

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   creationSource,
+  describeCreation,
   describeListChange,
   displayValue,
   fieldLabel,
@@ -149,4 +150,39 @@ test("a new contact's source is named", () => {
     creationSource({ source: "inbound-email" }),
     "an incoming email",
   );
+});
+
+test("imports name themselves as the source", () => {
+  assert.equal(creationSource({ source: "zammad" }), "a Zammad ticket");
+  assert.equal(creationSource({ source: "klaviyo" }), "a Klaviyo import");
+});
+
+test("a creation names the person who made it, or where it came from", () => {
+  assert.deepEqual(
+    describeCreation({
+      userId: "u1",
+      userName: "Ana",
+      metadata: { source: "manual" },
+    }),
+    { who: "Ana", source: undefined },
+  );
+  assert.deepEqual(
+    describeCreation({
+      metadata: { source: "event-registration", eventTitle: "Open day" },
+    }),
+    { source: "a registration for “Open day”" },
+  );
+  // Automatic paths name themselves through the source, not as a person.
+  assert.deepEqual(
+    describeCreation({
+      userName: "Inbound email sync",
+      metadata: { source: "inbound-email" },
+    }),
+    { source: "an incoming email" },
+  );
+  // Older Klaviyo entries carried the label in place of a name.
+  assert.deepEqual(describeCreation({ userName: "Klaviyo import" }), {
+    source: "a Klaviyo import",
+  });
+  assert.deepEqual(describeCreation({}), { who: undefined });
 });
