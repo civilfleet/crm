@@ -766,7 +766,8 @@ const sidebarMenuButtonVariants = cva(
           "bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]",
       },
       size: {
-        default: "h-8 text-sm",
+        // Phone widths (the slide-in sidebar) get 44px rows: easy to tap.
+        default: "h-8 text-sm max-md:h-11 max-md:text-base",
         sm: "h-7 text-xs",
         lg: "h-12 text-sm group-data-[collapsible=icon]:p-0!",
       },
@@ -857,7 +858,7 @@ const SidebarMenuAction = React.forwardRef<
         // Increases the hit area of the button on mobile.
         "after:absolute after:-inset-2 md:after:hidden",
         "peer-data-[size=sm]/menu-button:top-1",
-        "peer-data-[size=default]/menu-button:top-1.5",
+        "peer-data-[size=default]/menu-button:top-1.5 max-md:peer-data-[size=default]/menu-button:top-3",
         "peer-data-[size=lg]/menu-button:top-2.5",
         "group-data-[collapsible=icon]:hidden",
         showOnHover &&
@@ -880,7 +881,7 @@ const SidebarMenuBadge = React.forwardRef<
     className={cn(
       "absolute right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-sidebar-indicator px-1.5 text-[11px] font-semibold tabular-nums text-sidebar select-none pointer-events-none",
       "peer-data-[size=sm]/menu-button:top-1",
-      "peer-data-[size=default]/menu-button:top-1.5",
+      "peer-data-[size=default]/menu-button:top-1.5 max-md:peer-data-[size=default]/menu-button:top-3",
       "peer-data-[size=lg]/menu-button:top-2.5",
       "group-data-[collapsible=icon]:hidden",
       className,

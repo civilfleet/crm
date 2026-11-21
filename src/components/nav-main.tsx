@@ -110,7 +110,7 @@ export function NavMain({ items = [] }: { items?: NavItem[] }) {
                   type="button"
                   onClick={() => handleToggleSection(section.key)}
                   aria-expanded={!isClosed}
-                  className="group/section flex h-7 w-full items-center gap-1 px-2 text-left text-xs font-medium text-sidebar-muted-foreground outline-hidden transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
+                  className="group/section flex h-7 max-md:h-10 w-full items-center gap-1 px-2 text-left text-xs font-medium text-sidebar-muted-foreground outline-hidden transition-colors hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
                 >
                   <span className="truncate">{section.label}</span>
                   <ChevronRight
