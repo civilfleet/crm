@@ -16,6 +16,7 @@ done, remove it here and update `docs/DATA_RULES.md` if a rule changed.
 - [10. Send marketing consent to Klaviyo](#10-send-marketing-consent-to-klaviyo)
 - [12. Unconfirmed submissions still fill existing contacts](#12-unconfirmed-submissions-still-fill-existing-contacts)
 - [13. Expired and repeated confirmation links](#13-expired-and-repeated-confirmation-links)
+- [14. Upgrade PostgreSQL 16 to 18](#14-upgrade-postgresql-16-to-18)
 
 ## 1. Protect `Contact.primaryEmail`
 
@@ -231,3 +232,35 @@ know what the CRM (behind the VPN) knows, so:
 
 **Size.** Small: `src/lib/public-forms/confirmation.ts`, the bridge route in
 `scripts/public-api.ts`, tests; a bridge build and an Argo sync.
+
+## 14. Upgrade PostgreSQL 16 to 18
+
+**What.** Production (`crm-postgres` on the VM, `postgres:16-alpine`, Ansible
+role `roles/crm` in `datacenter-infra`), CI (`.gitea/workflows/docker-image.yml`),
+local `docker-compose.yml` and the prepared Kubernetes database
+(`deploy/crm/kubernetes/postgres.yaml`, `postgis/postgis:16-3.6`) all run
+PostgreSQL 16. That was inherited from the first compose file, not chosen.
+
+**Why it matters.** Not urgent: 16 gets security fixes until November 2028.
+18 brings faster I/O, `uuidv7()` and statistics kept across later upgrades,
+nothing the CRM needs today. Doing it late means doing it under time
+pressure.
+
+**How.**
+- Best together with the Kubernetes cutover (`deploy/crm/README.md`): that
+  already moves the data by dump and restore, so restoring into 18 costs
+  almost nothing extra. Beforehand, switch CI, `docker-compose.yml` and the
+  Kubernetes image to 18 and let the tests (`yarn ci:db`) run on it.
+- If the VM should get 18 earlier: a maintenance window with dump, restore
+  into a new volume, `pgbackrest stanza-upgrade` and a fresh full backup.
+  Only after the pgBackRest archive is live, so there is a backup to fall
+  back on. Mind the 18 image layout: data in `/var/lib/postgresql/18/docker`,
+  volume mounted at `/var/lib/postgresql`; the compose file and
+  `pg1-path` in `pgbackrest.conf` change with it.
+- A major version cannot open older data: changing the image tag alone
+  makes Postgres refuse to start. Backups taken on 16 restore only on 16.
+- Moving from the Alpine to a Debian-based image is safe only through dump
+  and restore (indexes are rebuilt); on the existing data directory the
+  different text sorting would break text indexes.
+
+**Size.** Small to medium; one short downtime.
