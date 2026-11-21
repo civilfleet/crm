@@ -40,6 +40,10 @@ const SIDEBAR_ICON_PX = 48;
 const SIDEBAR_WIDTH_MOBILE = "18rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
+/** Radix layers that legitimately block the page while open. */
+const OPEN_LAYER_SELECTOR = ["dialog", "alertdialog", "menu", "listbox"]
+  .map((role) => `[role="${role}"][data-state="open"]`)
+  .join(", ");
 const SIDEBAR_TOOLTIP_CLASS =
   "rounded-md border-0 bg-sidebar-foreground px-2 py-1 text-xs font-medium text-sidebar shadow-md";
 
@@ -145,6 +149,32 @@ const SidebarProvider = React.forwardRef<
         ? setOpenMobile((open) => !open)
         : setOpen((open) => !open);
     }, [isMobile, setOpen]);
+
+    // A dialog or menu removed while open or closing (the mobile sidebar
+    // when a team switch replaces the whole layout) can leave Radix's
+    // `pointer-events: none` on <body>, sometimes set back only after the
+    // new layout has mounted; then no tap reaches the page. Radix sets it
+    // only while something is open, so whenever it appears with nothing
+    // open, it is a leftover: remove it.
+    React.useEffect(() => {
+      const body = document.body;
+      let frame = 0;
+      const releaseLeftoverLock = () => {
+        cancelAnimationFrame(frame);
+        frame = requestAnimationFrame(() => {
+          if (body.style.pointerEvents !== "none") return;
+          if (document.querySelector(OPEN_LAYER_SELECTOR)) return;
+          body.style.pointerEvents = "";
+        });
+      };
+      releaseLeftoverLock();
+      const observer = new MutationObserver(releaseLeftoverLock);
+      observer.observe(body, { attributes: true, attributeFilter: ["style"] });
+      return () => {
+        observer.disconnect();
+        cancelAnimationFrame(frame);
+      };
+    }, []);
 
     // Adds a keyboard shortcut to toggle the sidebar.
     React.useEffect(() => {

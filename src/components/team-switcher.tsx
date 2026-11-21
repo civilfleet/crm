@@ -40,7 +40,7 @@ export function TeamSwitcher({
   activeType: "team" | "organization" | "admin" | null;
   userRoles?: Roles[];
 }) {
-  const { isMobile } = useSidebar();
+  const { isMobile, setOpenMobile } = useSidebar();
   const router = useRouter();
   const isAdmin = userRoles?.includes(Roles.Admin);
 
@@ -54,6 +54,10 @@ export function TeamSwitcher({
           : null;
 
   const setItem = (_item: SwitcherItem, subUrl: string, id: string) => {
+    // Close the mobile sidebar first: switching between admin, team and
+    // organization replaces the whole layout, and a sidebar removed while
+    // open can leave the page blocking every tap.
+    if (isMobile) setOpenMobile(false);
     if (subUrl === "teams") {
       router.push(`/${subUrl}/${id}`); // Team dashboard
     } else if (subUrl === "admin") {
