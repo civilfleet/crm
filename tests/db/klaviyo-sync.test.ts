@@ -31,6 +31,11 @@ type KlaviyoService = {
     options?: { now?: Date },
   ) => Promise<SyncResult>;
   deleteKlaviyoIntegration: (teamId: string) => Promise<void>;
+  saveKlaviyoIntegration: (input: {
+    teamId: string;
+    isEnabled?: boolean;
+    sendConsents?: boolean;
+  }) => Promise<unknown>;
 };
 type QueueService = {
   enqueueKlaviyoSyncJob: (teamId: string) => Promise<{ id: string }>;
@@ -229,7 +234,13 @@ afterEach(() => {
 });
 after(disconnect);
 
-const setUp = async ({ listId = "LIST" }: { listId?: string | null } = {}) => {
+const setUp = async ({
+  listId = "LIST",
+  sendConsents = true,
+}: {
+  listId?: string | null;
+  sendConsents?: boolean;
+} = {}) => {
   const team = await db.teams.create({
     data: {
       name: `Team ${Date.now()}`,
@@ -243,6 +254,7 @@ const setUp = async ({ listId = "LIST" }: { listId?: string | null } = {}) => {
       // Stored in plaintext: legacy values are read as they are.
       apiKey: "pk_test",
       defaultListId: listId,
+      sendConsents,
     },
   });
   return team.id;
@@ -804,4 +816,45 @@ test("without Klaviyo switched on, no address is kept after a permanent delete",
   ]);
   assert.equal(await db.klaviyoProfileDeletion.count(), 0);
   assert.equal(await db.contactImportBlock.count(), 1);
+});
+
+test("consents are sent only once an admin switches sending on", async () => {
+  const teamId = await setUp({ sendConsents: false });
+  const contact = await createContact(teamId, "ana@example.org");
+  await consent(teamId, contact.id, "GRANTED", "2026-01-01T00:00:00Z");
+
+  const off = await klaviyo.syncKlaviyoIntegration(teamId);
+  assert.equal(fake.sent.length, 0);
+  assert.equal(off.consentsSent, 0);
+  assert.match(off.consentsWaiting.join(" "), /switched off/);
+  assert.equal(await db.klaviyoConsentSync.count(), 0);
+
+  // Saving encrypts the key: a throwaway encryption key for this test.
+  process.env.INTEGRATION_SECRET_ENCRYPTION_KEYS = `test=${Buffer.alloc(32, 1).toString("base64")}`;
+  try {
+    await klaviyo.saveKlaviyoIntegration({ teamId, sendConsents: true });
+    const on = await klaviyo.syncKlaviyoIntegration(teamId);
+    assert.equal(on.consentsSent, 1);
+    assert.deepEqual(
+      fake.sent.map(({ path }) => path),
+      ["/profile-subscription-bulk-create-jobs"],
+    );
+  } finally {
+    delete process.env.INTEGRATION_SECRET_ENCRYPTION_KEYS;
+  }
+});
+
+test("switching off a Klaviyo that was never connected needs no key", async () => {
+  const team = await db.teams.create({
+    data: { name: "No Klaviyo", email: `none-${Date.now()}@example.org` },
+  });
+  assert.equal(
+    await klaviyo.saveKlaviyoIntegration({ teamId: team.id, isEnabled: false }),
+    null,
+  );
+  await assert.rejects(
+    klaviyo.saveKlaviyoIntegration({ teamId: team.id, isEnabled: true }),
+    /API key is required/,
+  );
+  assert.equal(await db.integrationConnection.count(), 0);
 });

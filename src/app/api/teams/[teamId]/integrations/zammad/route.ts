@@ -55,7 +55,9 @@ export async function POST(
       baseUrl: validated.baseUrl,
       webhookSecret: validated.webhookSecret,
       isEnabled: validated.isEnabled,
-      shouldTestConnection: validated.testConnection ?? true,
+      // Disabling needs no working connection.
+      shouldTestConnection:
+        validated.testConnection ?? validated.isEnabled !== false,
     });
 
     return NextResponse.json({ data: integration }, { status: 200 });

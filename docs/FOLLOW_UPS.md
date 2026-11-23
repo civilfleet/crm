@@ -182,9 +182,12 @@ against a fake of Klaviyo's API, not against a real account.
 **How.**
 - Give the private key the scopes it now needs: read for profiles, events
   and metrics; write for subscriptions, lists and profiles.
-- Set the list for marketing consents, then watch the first sync: under the
-  settings, in the system log (`KLAVIYO`), and in Klaviyo (the profiles'
-  consent and its time).
+- Imports and unsubscribes recorded from Klaviyo start on their own after
+  the deploy; consents are sent only once "Send consents to Klaviyo" is
+  switched on. Check the list for marketing consents first (it used to be
+  the "default list for new contacts"), switch sending on, then watch that
+  sync: under the settings, in the system log (`KLAVIYO`), and in Klaviyo
+  (the profiles' consent and its time).
 - Decide whether subscribing as a historical import is right: it keeps the
   CRM's consent time and sends no second opt-in, but starts no "added to
   list" flow (a welcome series). The consent wording stays in the CRM only.

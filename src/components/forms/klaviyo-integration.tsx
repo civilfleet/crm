@@ -46,6 +46,7 @@ type KlaviyoIntegrationResponse = {
   id?: string;
   teamId?: string;
   isEnabled?: boolean;
+  sendConsents?: boolean;
   defaultListId?: string;
   hasApiKey?: boolean;
   apiKeyPreview?: string;
@@ -103,6 +104,7 @@ export default function KlaviyoIntegration({
   const [apiKey, setApiKey] = useState("");
   const [defaultListId, setDefaultListId] = useState("");
   const [isEnabled, setIsEnabled] = useState(true);
+  const [sendConsents, setSendConsents] = useState(false);
 
   const fetcher = async (url: string) => {
     const response = await fetch(url);
@@ -129,8 +131,13 @@ export default function KlaviyoIntegration({
 
   useEffect(() => {
     setIsEnabled(integration?.isEnabled ?? true);
+    setSendConsents(integration?.sendConsents ?? false);
     setDefaultListId(integration?.defaultListId ?? "");
-  }, [integration?.isEnabled, integration?.defaultListId]);
+  }, [
+    integration?.isEnabled,
+    integration?.sendConsents,
+    integration?.defaultListId,
+  ]);
 
   useEffect(() => {
     if (!integrationError) return;
@@ -157,19 +164,27 @@ export default function KlaviyoIntegration({
           // Sent even when empty: an empty field clears the list.
           defaultListId,
           isEnabled,
+          sendConsents,
         }),
       });
       const json = await response.json();
       if (!response.ok) {
         throw new Error(json?.error || response.statusText);
       }
-      const data = json.data as KlaviyoIntegrationResponse;
+      const data = json.data as KlaviyoIntegrationResponse | null;
       await mutate(data, { revalidate: false });
       setApiKey("");
-      toast({
-        title: "Klaviyo settings saved",
-        description: data.connectionMessage,
-      });
+      toast(
+        data
+          ? {
+              title: "Klaviyo settings saved",
+              description: data.connectionMessage,
+            }
+          : {
+              title: "Klaviyo is not connected",
+              description: "There is nothing to switch off.",
+            },
+      );
     } catch (error) {
       toast({
         title: "Failed to save integration",
@@ -285,8 +300,8 @@ export default function KlaviyoIntegration({
             <CardTitle>Klaviyo</CardTitle>
             <CardDescription>
               Imports contacts and newsletter activity from Klaviyo every 15
-              minutes, sends marketing consents to your Klaviyo list and records
-              unsubscribes made in Klaviyo.
+              minutes, records unsubscribes made in Klaviyo and, if switched on,
+              sends marketing consents to your Klaviyo list.
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -317,6 +332,27 @@ export default function KlaviyoIntegration({
             aria-labelledby="klaviyo-enabled-label"
             checked={isEnabled}
             onCheckedChange={(checked) => setIsEnabled(checked)}
+            disabled={disabled}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+          <div>
+            <p className="font-medium" id="klaviyo-send-consents-label">
+              Send consents to Klaviyo
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Subscribes contacts with marketing consent to the list below and
+              unsubscribes withdrawals. Check the list first: switching this on
+              sends every existing consent. While off, contacts and activity are
+              still imported and unsubscribes made in Klaviyo are still
+              recorded.
+            </p>
+          </div>
+          <Switch
+            aria-labelledby="klaviyo-send-consents-label"
+            checked={sendConsents}
+            onCheckedChange={(checked) => setSendConsents(checked)}
             disabled={disabled}
           />
         </div>

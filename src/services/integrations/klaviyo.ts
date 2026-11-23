@@ -812,7 +812,13 @@ export const syncKlaviyoIntegration = async (
       new Date(now.getTime() - initialEventDays() * 24 * 60 * 60 * 1000),
     result,
   );
-  await pushConsents(teamId, apiKey, integration.defaultListId, result);
+  if (integration.sendConsents) {
+    await pushConsents(teamId, apiKey, integration.defaultListId, result);
+  } else {
+    result.consentsWaiting.push(
+      'Marketing consents are not sent to Klaviyo: "Send consents to Klaviyo" is switched off.',
+    );
+  }
 
   await prisma.integrationConnection.update({
     where: { id: integration.id },
@@ -832,6 +838,7 @@ const toSettings = async (
     provider: IntegrationProvider.KLAVIYO,
     defaultListId: record.defaultListId ?? undefined,
     isEnabled: record.isEnabled,
+    sendConsents: record.sendConsents,
     lastSyncedAt: record.lastSyncedAt ?? undefined,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -866,6 +873,7 @@ export const saveKlaviyoIntegration = async ({
   apiKey,
   defaultListId,
   isEnabled,
+  sendConsents,
   shouldTestConnection,
 }: {
   teamId: string;
@@ -873,13 +881,16 @@ export const saveKlaviyoIntegration = async ({
   /** Empty clears the list; undefined keeps it. */
   defaultListId?: string;
   isEnabled?: boolean;
+  sendConsents?: boolean;
   shouldTestConnection?: boolean;
-}): Promise<KlaviyoIntegrationSettings> => {
+}): Promise<KlaviyoIntegrationSettings | null> => {
   const existing = await findIntegration(teamId);
   const plaintextApiKey =
     apiKey?.trim() ||
     (existing?.apiKey ? decryptIntegrationSecret(existing.apiKey) : undefined);
   if (!plaintextApiKey) {
+    // Switching off a Klaviyo that was never connected: nothing to save.
+    if (isEnabled === false) return null;
     throw new Error("API key is required to configure Klaviyo integration.");
   }
   if (shouldTestConnection) {
@@ -897,6 +908,7 @@ export const saveKlaviyoIntegration = async ({
       apiKey: apiKeyToPersist,
       ...(listId === undefined ? {} : { defaultListId: listId }),
       isEnabled: isEnabled ?? existing?.isEnabled ?? true,
+      ...(sendConsents === undefined ? {} : { sendConsents }),
     },
     create: {
       teamId,
@@ -904,6 +916,7 @@ export const saveKlaviyoIntegration = async ({
       apiKey: apiKeyToPersist,
       defaultListId: listId ?? null,
       isEnabled: isEnabled ?? true,
+      sendConsents: sendConsents ?? false,
     },
   });
 

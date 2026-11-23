@@ -102,6 +102,8 @@ export interface IntegrationConnection {
   senderEmail?: string;
   senderName?: string;
   isEnabled: boolean;
+  /** Klaviyo: send marketing consents. */
+  sendConsents?: boolean;
   lastSyncedAt?: Date;
   createdAt: Date;
   updatedAt: Date;

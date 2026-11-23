@@ -354,6 +354,8 @@ model IntegrationConnection {
   senderEmail   String?             @db.VarChar(255)
   senderName    String?             @db.VarChar(255)
   isEnabled     Boolean             @default(true)
+  /// Klaviyo: send marketing consents (subscribe/unsubscribe). Off until an admin switches it on.
+  sendConsents  Boolean             @default(false)
   lastSyncedAt  DateTime?           @db.Timestamptz(6)
   createdAt     DateTime            @default(now()) @db.Timestamptz(6)
   updatedAt     DateTime            @updatedAt @db.Timestamptz(6)

@@ -172,7 +172,8 @@ export default function ZammadIntegration({ teamId }: ZammadIntegrationProps) {
           baseUrl: baseUrl || undefined,
           webhookSecret: webhookSecret || undefined,
           isEnabled,
-          testConnection: true,
+          // Switching off needs no working connection.
+          testConnection: isEnabled,
         }),
       });
 
@@ -181,7 +182,14 @@ export default function ZammadIntegration({ teamId }: ZammadIntegrationProps) {
         throw new Error(json?.error || response.statusText);
       }
 
-      const data = json.data as ZammadIntegrationResponse;
+      const data = json.data as ZammadIntegrationResponse | null;
+      if (!data) {
+        toast({
+          title: "Zammad is not connected",
+          description: "There is nothing to switch off.",
+        });
+        return;
+      }
       mutate(data, { revalidate: false });
       setHasApiKey(Boolean(data.hasApiKey));
       setApiKeyPreview(data.apiKeyPreview ?? "");

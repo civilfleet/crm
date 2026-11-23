@@ -8,6 +8,9 @@ CREATE TYPE "KlaviyoConsentSyncStatus" AS ENUM ('SENT', 'SKIPPED', 'FAILED');
 ALTER TABLE "BackgroundWorkerHeartbeat" ADD COLUMN     "enabledKlaviyoCount" INTEGER NOT NULL DEFAULT 0,
 ADD COLUMN     "oldestKlaviyoSyncedAt" TIMESTAMPTZ(6);
 
+-- AlterTable
+ALTER TABLE "IntegrationConnection" ADD COLUMN     "sendConsents" BOOLEAN NOT NULL DEFAULT false;
+
 -- CreateTable
 CREATE TABLE "KlaviyoSyncJob" (
     "id" TEXT NOT NULL,

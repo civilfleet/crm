@@ -486,7 +486,7 @@ export const saveZammadIntegration = async ({
   webhookSecret?: string;
   isEnabled?: boolean;
   shouldTestConnection?: boolean;
-}): Promise<ZammadIntegrationSettings> => {
+}): Promise<ZammadIntegrationSettings | null> => {
   const existing = await prisma.integrationConnection.findUnique({
     where: {
       teamId_provider: {
@@ -506,6 +506,11 @@ export const saveZammadIntegration = async ({
         ? decryptIntegrationSecret(existing.webhookSecret)
         : ""
       : webhookSecret;
+
+  // Switching off a Zammad that was never connected: nothing to save.
+  if (!existing && isEnabled === false && (!nextApiKey || !nextBaseUrl)) {
+    return null;
+  }
 
   if (!nextApiKey) {
     throw new Error("API token is required to configure Zammad.");

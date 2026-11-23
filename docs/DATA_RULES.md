@@ -366,8 +366,12 @@ newsletter's text (one copy per recipient would fill the database), and an
 e-mails sent to them. Opens
 and clicks of one e-mail by one person are one entry each, the first.
 
-**Marketing consent → Klaviyo** (an outbox, `KlaviyoConsentSync`). Every
-`marketing` grant or withdrawal is sent once:
+**Marketing consent → Klaviyo** (an outbox, `KlaviyoConsentSync`). Nothing
+is sent until a team admin switches on "Send consents to Klaviyo"
+(`IntegrationConnection.sendConsents`, off by default, also for connections
+that existed before); until then the sync reports that consents wait, and
+switching it on sends every consent that holds. Every `marketing` grant or
+withdrawal is sent once:
 
 - only the row that **holds now** for the contact is sent; earlier ones are
   marked skipped;

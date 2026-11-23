@@ -13,6 +13,7 @@ const updateIntegrationSchema = z.object({
   // An empty string clears the list.
   defaultListId: z.string().trim().max(255).optional(),
   isEnabled: z.boolean().optional(),
+  sendConsents: z.boolean().optional(),
   testConnection: z.boolean().optional(),
 });
 
@@ -55,6 +56,7 @@ export async function POST(
       apiKey: validated.apiKey,
       defaultListId: validated.defaultListId,
       isEnabled: validated.isEnabled,
+      sendConsents: validated.sendConsents,
       // Disabling needs no working key.
       shouldTestConnection:
         validated.testConnection ?? validated.isEnabled !== false,
