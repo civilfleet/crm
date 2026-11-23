@@ -27,6 +27,7 @@ import {
 } from "@/lib/languages";
 import prisma from "@/lib/prisma";
 import { parseVCardContacts } from "@/lib/vcard";
+import { blockContactImports } from "@/services/contact-import-blocks";
 import { getContactVisibility } from "@/services/contacts/access";
 import {
   createChangeLog,
@@ -4071,12 +4072,21 @@ const permanentlyDeleteContacts = async (
     roles,
     deleted: "trashed",
   });
-  const result = await prisma.contact.deleteMany({
-    where: {
-      AND: [visibility.where, { id: { in: ids }, deletedAt: { not: null } }],
-    },
+  return await prisma.$transaction(async (tx) => {
+    const doomed = await tx.contact.findMany({
+      where: {
+        AND: [visibility.where, { id: { in: ids }, deletedAt: { not: null } }],
+      },
+      select: { id: true },
+    });
+    const doomedIds = doomed.map(({ id }) => id);
+    // Imports (Klaviyo) must not bring these people back.
+    await blockContactImports(tx, teamId, doomedIds);
+    const result = await tx.contact.deleteMany({
+      where: { teamId, id: { in: doomedIds } },
+    });
+    return result.count;
   });
-  return result.count;
 };
 
 const getTeamContactAttributeKeys = async (

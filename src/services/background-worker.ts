@@ -8,6 +8,14 @@ import {
   recoverStaleEmailReplyDispatches,
   syncDueEmailInboxes,
 } from "@/services/inbound-email";
+import { syncKlaviyoIntegration } from "@/services/integrations/klaviyo";
+import {
+  claimNextKlaviyoSyncJob,
+  enqueueDueKlaviyoSyncs,
+  markKlaviyoSyncJobFailed,
+  markKlaviyoSyncJobSucceeded,
+  recoverStaleKlaviyoSyncJobs,
+} from "@/services/integrations/klaviyo-queue";
 import {
   claimNextEmailBatch,
   markEmailBatchFailed,
@@ -33,6 +41,8 @@ const DEFAULT_PENDING_UPLOAD_CLEANUP_LIMIT = 100;
 const DEFAULT_INBOUND_EMAIL_SYNC_INTERVAL_MS = 60 * 1000;
 const DEFAULT_INBOUND_EMAIL_SYNC_LIMIT = 25;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30 * 1000;
+const DEFAULT_KLAVIYO_SYNC_INTERVAL_MS = 15 * 60 * 1000;
+const KLAVIYO_SCHEDULE_CHECK_MS = 60 * 1000;
 
 const parsePositiveInteger = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
@@ -100,6 +110,10 @@ export const runBackgroundWorker = async () => {
     process.env.BACKGROUND_WORKER_HEARTBEAT_INTERVAL_MS,
     DEFAULT_HEARTBEAT_INTERVAL_MS,
   );
+  const klaviyoSyncIntervalMs = parsePositiveInteger(
+    process.env.KLAVIYO_SYNC_INTERVAL_MS,
+    DEFAULT_KLAVIYO_SYNC_INTERVAL_MS,
+  );
   const workerId =
     process.env.BACKGROUND_WORKER_ID ??
     process.env.ZAMMAD_WORKER_ID ??
@@ -107,6 +121,7 @@ export const runBackgroundWorker = async () => {
   let shouldStop = false;
   let nextPendingUploadCleanupAt = 0;
   let nextInboundEmailSyncAt = 0;
+  let nextKlaviyoScheduleAt = 0;
   const startedAt = new Date();
   let heartbeatInFlight = false;
 
@@ -154,6 +169,18 @@ export const runBackgroundWorker = async () => {
     });
   }
 
+  const recoveredKlaviyo = await recoverStaleKlaviyoSyncJobs(staleLockMs);
+  if (recoveredKlaviyo.count > 0) {
+    await logWorkerEvent({
+      level: "WARN",
+      event: "klaviyo_jobs_recovered",
+      message: `Recovered ${recoveredKlaviyo.count} stale Klaviyo sync jobs.`,
+      workerId,
+      source: "KLAVIYO",
+      metadata: { recovered: recoveredKlaviyo.count },
+    });
+  }
+
   const recoveredEmailBatches = await recoverStaleEmailBatches(staleLockMs);
   if (recoveredEmailBatches.count > 0) {
     logger.warn(
@@ -196,6 +223,7 @@ export const runBackgroundWorker = async () => {
       inboundEmailSyncIntervalMs,
       inboundEmailSyncLimit,
       heartbeatIntervalMs,
+      klaviyoSyncIntervalMs,
     },
     "[BackgroundWorker] Started",
   );
@@ -318,9 +346,74 @@ export const runBackgroundWorker = async () => {
     }
   };
 
+  const scheduleKlaviyoSyncs = async () => {
+    const now = Date.now();
+    if (now < nextKlaviyoScheduleAt) return;
+    nextKlaviyoScheduleAt = now + KLAVIYO_SCHEDULE_CHECK_MS;
+    try {
+      await enqueueDueKlaviyoSyncs(klaviyoSyncIntervalMs);
+    } catch (error) {
+      logger.error(
+        { workerId, error },
+        "[BackgroundWorker] Scheduling Klaviyo syncs failed",
+      );
+    }
+  };
+
+  /** Runs one queued Klaviyo sync; false when none was due. */
+  const runKlaviyoSyncJob = async () => {
+    const job = await claimNextKlaviyoSyncJob(workerId);
+    if (!job) return false;
+    await logWorkerEvent({
+      teamId: job.teamId,
+      event: "klaviyo_job_processing",
+      message: `Processing Klaviyo sync job ${job.id}.`,
+      workerId,
+      source: "KLAVIYO",
+      entityType: "KlaviyoSyncJob",
+      entityId: job.id,
+      metadata: { attempts: job.attempts },
+    });
+    try {
+      const result = await syncKlaviyoIntegration(job.teamId);
+      await markKlaviyoSyncJobSucceeded(job.id, result);
+      await logWorkerEvent({
+        teamId: job.teamId,
+        level:
+          result.failures > 0 || result.consentsFailed > 0 ? "WARN" : "INFO",
+        event: "klaviyo_job_succeeded",
+        message: `Klaviyo sync job ${job.id} finished.`,
+        workerId,
+        source: "KLAVIYO",
+        entityType: "KlaviyoSyncJob",
+        entityId: job.id,
+        metadata: result,
+      });
+    } catch (error) {
+      const updated = await markKlaviyoSyncJobFailed(job, error);
+      logger.error(
+        { workerId, jobId: job.id, attempts: updated.attempts, error },
+        "[BackgroundWorker] Klaviyo job failed",
+      );
+      await logWorkerEvent({
+        teamId: job.teamId,
+        level: "ERROR",
+        event: "klaviyo_job_failed",
+        message: `Klaviyo sync job ${job.id} failed.`,
+        workerId,
+        source: "KLAVIYO",
+        entityType: "KlaviyoSyncJob",
+        entityId: job.id,
+        metadata: { attempts: updated.attempts, status: updated.status, error },
+      });
+    }
+    return true;
+  };
+
   while (!shouldStop) {
     await runPendingUploadCleanup();
     await runInboundEmailSync();
+    await scheduleKlaviyoSyncs();
 
     const job = await claimNextZammadSyncJob(workerId);
 
@@ -328,7 +421,9 @@ export const runBackgroundWorker = async () => {
       const emailBatch = await claimNextEmailBatch(workerId);
 
       if (!emailBatch) {
-        await sleep(pollIntervalMs);
+        if (!(await runKlaviyoSyncJob())) {
+          await sleep(pollIntervalMs);
+        }
         continue;
       }
 

@@ -266,6 +266,9 @@ model Teams {
   integrationConnections  IntegrationConnection[]
   zammadGroupSettings     ZammadGroupSetting[]
   zammadSyncJobs          ZammadSyncJob[]
+  klaviyoSyncJobs         KlaviyoSyncJob[]
+  contactImportBlocks     ContactImportBlock[]
+  klaviyoProfileDeletions KlaviyoProfileDeletion[]
   contactFieldAccesses    ContactFieldAccess[]
   organizationEngagements OrganizationEngagement[]
   fileDownloadAudits      FileDownloadAudit[]
@@ -396,6 +399,74 @@ model ZammadSyncJob {
   @@index([status, runAfter])
   @@index([teamId, status])
   @@index([lockedAt])
+}
+
+// One Klaviyo sync of a team (profiles, e-mail events, consents), run by the
+// background worker. At most one PENDING or RUNNING job per team.
+model KlaviyoSyncJob {
+  id          String               @id @default(uuid())
+  teamId      String
+  team        Teams                @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  status      KlaviyoSyncJobStatus @default(PENDING)
+  result      Json?
+  attempts    Int                  @default(0)
+  maxAttempts Int                  @default(5)
+  runAfter    DateTime             @default(now()) @db.Timestamptz(6)
+  lockedAt    DateTime?            @db.Timestamptz(6)
+  lockedBy    String?              @db.VarChar(255)
+  startedAt   DateTime?            @db.Timestamptz(6)
+  finishedAt  DateTime?            @db.Timestamptz(6)
+  lastError   String?              @db.Text
+  createdAt   DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime             @updatedAt @db.Timestamptz(6)
+
+  @@unique([teamId], map: "KlaviyoSyncJob_active_team_key", where: raw("status = ANY (ARRAY['PENDING'::\"KlaviyoSyncJobStatus\", 'RUNNING'::\"KlaviyoSyncJobStatus\"])"))
+  @@index([status, runAfter])
+  @@index([teamId, status])
+  @@index([lockedAt])
+}
+
+// Whether a marketing consent row has reached Klaviyo (the outbox of
+// docs/DATA_RULES.md, "Klaviyo"). A consent row without one is still to send.
+model KlaviyoConsentSync {
+  consentId String                   @id
+  consent   ContactConsent           @relation(fields: [consentId], references: [id], onDelete: Cascade)
+  teamId    String
+  status    KlaviyoConsentSyncStatus
+  attempts  Int                      @default(1)
+  detail    String?                  @db.Text
+  createdAt DateTime                 @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime                 @updatedAt @db.Timestamptz(6)
+
+  @@index([teamId, status])
+}
+
+// Addresses of permanently deleted contacts (SHA-256 of the lowercase
+// address, never the address), so imports from other systems do not bring
+// the person back.
+model ContactImportBlock {
+  teamId    String
+  team      Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  emailHash String   @db.VarChar(64)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([teamId, emailHash])
+}
+
+// Addresses of permanently deleted contacts still to be marked deleted and
+// unsubscribed in Klaviyo. The address is kept only until the next sync has
+// done that (or given up), then the row is removed (docs/DATA_RULES.md,
+// "Klaviyo").
+model KlaviyoProfileDeletion {
+  id        String   @id @default(uuid())
+  teamId    String
+  team      Teams    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  email     String   @db.VarChar(255)
+  deletedAt DateTime @default(now()) @db.Timestamptz(6)
+  attempts  Int      @default(0)
+  lastError String?  @db.Text
+
+  @@index([teamId])
 }
 
 model User {
@@ -538,6 +609,19 @@ enum ZammadSyncJobStatus {
   RUNNING
   SUCCEEDED
   FAILED
+}
+
+enum KlaviyoSyncJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum KlaviyoConsentSyncStatus {
+  SENT // accepted by Klaviyo
+  SKIPPED // superseded, came from Klaviyo, or no address
+  FAILED // will be retried
 }
 
 enum ContactGender {
@@ -1000,17 +1084,19 @@ model SystemLog {
 }
 
 model BackgroundWorkerHeartbeat {
-  workerId             String    @id @db.VarChar(255)
-  startedAt            DateTime  @db.Timestamptz(6)
-  lastSeenAt           DateTime  @db.Timestamptz(6)
-  emailQueueDepth      Int       @default(0)
-  oldestEmailQueuedAt  DateTime? @db.Timestamptz(6)
-  zammadQueueDepth     Int       @default(0)
-  oldestZammadQueuedAt DateTime? @db.Timestamptz(6)
-  enabledInboxCount    Int       @default(0)
-  oldestInboxSyncedAt  DateTime? @db.Timestamptz(6)
-  createdAt            DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt            DateTime  @updatedAt @db.Timestamptz(6)
+  workerId              String    @id @db.VarChar(255)
+  startedAt             DateTime  @db.Timestamptz(6)
+  lastSeenAt            DateTime  @db.Timestamptz(6)
+  emailQueueDepth       Int       @default(0)
+  oldestEmailQueuedAt   DateTime? @db.Timestamptz(6)
+  zammadQueueDepth      Int       @default(0)
+  oldestZammadQueuedAt  DateTime? @db.Timestamptz(6)
+  enabledInboxCount     Int       @default(0)
+  oldestInboxSyncedAt   DateTime? @db.Timestamptz(6)
+  enabledKlaviyoCount   Int       @default(0)
+  oldestKlaviyoSyncedAt DateTime? @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(6)
 
   @@index([lastSeenAt])
 }
@@ -1410,6 +1496,8 @@ model ContactConsent {
   recordedBy   String?       @db.VarChar(255)
   recordedAt   DateTime      @db.Timestamptz(6)
   createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+
+  klaviyoSync KlaviyoConsentSync?
 
   @@index([contactId, purpose, recordedAt])
   @@index([teamId, purpose])

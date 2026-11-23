@@ -36,6 +36,7 @@ const FIELD_LABELS: Record<string, string> = {
   deletedAt: "Trash",
   possibleDuplicate: "Possible duplicate",
   merge: "Merge",
+  marketingConsent: "Marketing consent",
 };
 
 /** Fields whose value is a list: shown as what was added and removed. */
@@ -55,12 +56,15 @@ const ENUM_LABELS: Record<string, string> = {
   NO_ANSWER: "Prefer not to answer",
   YES: "Yes",
   NO: "No",
+  GRANTED: "Wants updates",
+  WITHDRAWN: "Withdrawn",
 };
 
 const ENUM_FIELDS = new Set([
   "gender",
   "genderRequestPreference",
   "racismRequestPreference",
+  "marketingConsent",
 ]);
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:?\d{2})?)?$/;

@@ -33,6 +33,7 @@ const limits = {
   maxEmailQueueLagMs: 300_000,
   maxZammadQueueLagMs: 300_000,
   maxInboxSyncLagMs: 300_000,
+  maxKlaviyoSyncLagMs: 7_200_000,
 };
 
 const snapshot = (overrides = {}) => ({
@@ -45,6 +46,8 @@ const snapshot = (overrides = {}) => ({
   oldestZammadQueuedAt: null,
   enabledInboxCount: 0,
   oldestInboxSyncedAt: null,
+  enabledKlaviyoCount: 0,
+  oldestKlaviyoSyncedAt: null,
   ...overrides,
 });
 
@@ -65,6 +68,7 @@ test("rejects a missing or stale worker heartbeat", () => {
       emailQueueLagMs: null,
       zammadQueueLagMs: null,
       inboxSyncLagMs: null,
+      klaviyoSyncLagMs: null,
     },
   );
 });
@@ -85,6 +89,7 @@ test("rejects excessive eligible email queue lag", () => {
       emailQueueLagMs: 301_000,
       zammadQueueLagMs: null,
       inboxSyncLagMs: null,
+      klaviyoSyncLagMs: null,
     },
   );
 });
@@ -105,6 +110,7 @@ test("accepts a current heartbeat with no excessive queue lag", () => {
       emailQueueLagMs: 240_000,
       zammadQueueLagMs: null,
       inboxSyncLagMs: null,
+      klaviyoSyncLagMs: null,
     },
   );
 });
@@ -136,5 +142,35 @@ test("rejects excessive Zammad queue and inbox sync lag", () => {
       limits,
     ).reason,
     "inbox_sync_lag",
+  );
+});
+
+test("rejects a Klaviyo sync that has not finished for too long", () => {
+  assert.equal(
+    evaluateBackgroundWorkerHealth(
+      snapshot({
+        enabledKlaviyoCount: 1,
+        oldestKlaviyoSyncedAt: new Date("2026-10-05T09:59:59.000Z"),
+      }),
+      limits,
+    ).reason,
+    "klaviyo_sync_lag",
+  );
+  assert.equal(
+    evaluateBackgroundWorkerHealth(
+      snapshot({
+        enabledKlaviyoCount: 1,
+        oldestKlaviyoSyncedAt: new Date("2026-10-05T10:30:00.000Z"),
+      }),
+      limits,
+    ).reason,
+    "healthy",
+  );
+  assert.equal(
+    evaluateBackgroundWorkerHealth(
+      snapshot({ enabledKlaviyoCount: 0, oldestKlaviyoSyncedAt: null }),
+      limits,
+    ).reason,
+    "healthy",
   );
 });

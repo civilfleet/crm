@@ -1,622 +1,831 @@
-import { IntegrationProvider as PrismaIntegrationProvider } from "@prisma/client";
+import {
+  ConsentSource,
+  ConsentStatus,
+  KlaviyoConsentSyncStatus,
+  Prisma,
+  IntegrationProvider as PrismaIntegrationProvider,
+} from "@prisma/client";
 import {
   decryptIntegrationSecret,
   encryptIntegrationSecret,
 } from "@/lib/integration-secrets";
 import {
-  fetchKlaviyoCampaignMessage,
-  fetchKlaviyoEmailEvents,
-  fetchKlaviyoEventDetails,
-  fetchKlaviyoEventMetric,
-  fetchKlaviyoMessageContent,
+  fetchKlaviyoMetricEvents,
+  fetchKlaviyoMetrics,
   fetchKlaviyoProfiles,
-  fetchKlaviyoTemplate,
-  type KlaviyoEvent,
-  type KlaviyoProfile,
+  findKlaviyoProfileIds,
+  KLAVIYO_EMAIL_METRICS,
+  KLAVIYO_LOOKUP_BATCH,
+  KLAVIYO_SUBSCRIBE_BATCH,
+  KLAVIYO_UNSUBSCRIBE_BATCH,
+  type KlaviyoEmailMetric,
+  type KlaviyoMetric,
+  KlaviyoRequestError,
   maskKlaviyoApiKey,
+  setKlaviyoProfileProperties,
+  subscribeKlaviyoProfiles,
   testKlaviyoCredentials,
+  unsubscribeKlaviyoProfiles,
 } from "@/lib/klaviyo";
+import {
+  type ConsentPushCandidate,
+  eventToEngagement,
+  KLAVIYO_SOURCE_LABEL,
+  klaviyoEventTime,
+  normalizeKlaviyoEmail,
+  planConsentPush,
+  profileListLeftAt,
+  profileMarketingWithdrawnAt,
+  profileToIntake,
+  WITHDRAWING_METRICS,
+} from "@/lib/klaviyo-mapping";
 import prisma from "@/lib/prisma";
-import { logContactCreation } from "@/services/contact-change-logs";
-import { findContactByIdentityEmail } from "@/services/contacts";
+import { proposeFieldChange } from "@/services/contact-change-logs";
+import { isContactImportBlocked } from "@/services/contact-import-blocks";
+import {
+  comparableIntakeValue,
+  resolveIntakeContact,
+} from "@/services/contact-intake";
+import { getLatestKlaviyoSyncJob } from "@/services/integrations/klaviyo-queue";
 import {
   ContactEmailKind,
-  EngagementDirection,
   EngagementSource,
   type IntegrationConnection,
   IntegrationProvider,
 } from "@/types";
 
+/*
+  Klaviyo sync, run by the background worker (klaviyo-queue.ts). Rules and
+  their reasons: docs/DATA_RULES.md, "Klaviyo".
+*/
+
 const EXTERNAL_SOURCE = "KLAVIYO";
+const MARKETING = "marketing";
+const INTAKE_SOURCE = {
+  label: KLAVIYO_SOURCE_LABEL,
+  metadata: { source: "klaviyo", createdVia: "klaviyo-import" },
+};
+/** Each sync re-reads this much before the last one, for late arrivals. */
+const SYNC_OVERLAP_MS = 10 * 60 * 1000;
+const DEFAULT_INITIAL_EVENT_DAYS = 90;
+const MAX_CONSENT_PUSH_ATTEMPTS = 5;
+const CONSENT_PUSH_LIMIT = 5000;
+const MAX_REPORTED_ERRORS = 10;
 
 export type KlaviyoIntegrationSettings = IntegrationConnection & {
   hasApiKey: boolean;
   apiKeyPreview?: string;
   connectionVerified?: boolean;
   connectionMessage?: string;
+  lastSync?: {
+    status: string;
+    queuedAt: Date;
+    finishedAt?: Date;
+    error?: string;
+    result?: unknown;
+  };
 };
 
 export type KlaviyoSyncResult = {
+  profilesRead: number;
   contactsCreated: number;
-  contactsUpdated: number;
+  contactsMatched: number;
+  changesProposed: number;
+  profilesSkipped: number;
   engagementsUpserted: number;
-  fallbackContactsCreated: number;
+  eventsSkipped: number;
+  consentsWithdrawn: number;
+  /** Left the team's list in Klaviyo: proposed for review, not applied. */
+  withdrawalsProposed: number;
+  consentsSent: number;
+  consentsSkipped: number;
+  consentsFailed: number;
+  consentsWaiting: string[];
+  /** Permanently deleted in the CRM: marked and unsubscribed in Klaviyo. */
+  deletionsMarked: number;
+  /** Permanently deleted in the CRM, with no profile in Klaviyo. */
+  deletionsNotInKlaviyo: number;
+  failures: number;
+  errors: string[];
   lastSyncedAt: Date;
 };
 
-const getContactName = (profile: KlaviyoProfile, fallback: string) => {
-  const first = profile.attributes.first_name?.trim() ?? "";
-  const last = profile.attributes.last_name?.trim() ?? "";
-  const name = [first, last].filter(Boolean).join(" ").trim();
-  if (name) {
-    return name;
-  }
-  return fallback;
+const initialEventDays = () => {
+  const days = Number(process.env.KLAVIYO_INITIAL_EVENT_DAYS);
+  return Number.isFinite(days) && days > 0 ? days : DEFAULT_INITIAL_EVENT_DAYS;
 };
 
-const normalizeEmail = (email?: string) => email?.trim().toLowerCase() ?? "";
+type ContactLookup =
+  | { kind: "found"; contactId: string }
+  | { kind: "trashed" }
+  | { kind: "blocked" }
+  | { kind: "none" };
 
-const upsertContactFromProfile = async (
+/** The contact an address identifies, including one in the trash. */
+const lookUpContact = async (
   teamId: string,
-  profile: KlaviyoProfile,
-) => {
-  const email = normalizeEmail(profile.attributes.email);
-  if (!email) {
-    return null;
-  }
+  email: string,
+): Promise<ContactLookup> => {
+  const identity = await prisma.contactEmail.findFirst({
+    where: {
+      teamId,
+      email,
+      kind: { in: [ContactEmailKind.PRIMARY, ContactEmailKind.ALIAS] },
+    },
+    select: { contact: { select: { id: true, deletedAt: true } } },
+  });
+  if (identity?.contact.deletedAt) return { kind: "trashed" };
+  if (identity) return { kind: "found", contactId: identity.contact.id };
+  return (await isContactImportBlocked(teamId, email))
+    ? { kind: "blocked" }
+    : { kind: "none" };
+};
 
-  const existing = await findContactByIdentityEmail(teamId, email);
+type ProfileIntake = NonNullable<ReturnType<typeof profileToIntake>>;
+type ProposableField = "name" | "phone" | "city";
 
-  const name = getContactName(profile, email);
-  const phone = profile.attributes.phone_number?.trim() || undefined;
-  const city =
-    profile.attributes.location?.city?.trim() ||
-    profile.attributes.location?.region?.trim() ||
-    undefined;
-
-  if (existing) {
-    const updated = await prisma.contact.update({
-      where: { id: existing.id },
-      data: {
-        name,
-        phone,
-        city,
-      },
+/**
+ * Drops values Klaviyo already proposed for this contact (pending or
+ * declined), so a declined value is not proposed again on every sync.
+ */
+const withoutRepeatedProposals = async (
+  contactId: string,
+  intake: ProfileIntake,
+): Promise<ProfileIntake> => {
+  const earlier = await prisma.contactChangeLog.findMany({
+    where: {
+      contactId,
+      action: "PROPOSED",
+      fieldName: { in: ["name", "phone", "city"] },
+      metadata: { path: ["source"], equals: "klaviyo" },
+    },
+    select: { fieldName: true, newValue: true },
+  });
+  if (!earlier.length) return intake;
+  const result = { ...intake };
+  for (const field of ["name", "phone", "city"] as ProposableField[]) {
+    const value = result[field];
+    if (!value) continue;
+    const repeated = earlier.some((log) => {
+      if (log.fieldName !== field || !log.newValue) return false;
+      try {
+        const proposed = JSON.parse(log.newValue);
+        return (
+          typeof proposed === "string" &&
+          comparableIntakeValue(field, proposed) ===
+            comparableIntakeValue(field, value)
+        );
+      } catch {
+        return false;
+      }
     });
-    return {
-      contactId: updated.id,
-      created: false,
-    };
+    if (!repeated) continue;
+    if (field === "name") result.name = "";
+    else result[field] = undefined;
   }
+  return result;
+};
 
-  const created = await prisma.contact.create({
+/**
+ * Records that the person withdrew marketing consent in Klaviyo, unless the
+ * CRM already says so or holds a later grant (consented again since).
+ */
+const recordKlaviyoWithdrawal = async (
+  teamId: string,
+  contactId: string,
+  at: Date,
+) => {
+  const latest = await prisma.contactConsent.findFirst({
+    where: {
+      teamId,
+      contactId,
+      purpose: MARKETING,
+      status: { in: [ConsentStatus.GRANTED, ConsentStatus.WITHDRAWN] },
+    },
+    orderBy: [{ recordedAt: "desc" }, { createdAt: "desc" }],
+    select: { status: true, recordedAt: true },
+  });
+  if (latest?.status === ConsentStatus.WITHDRAWN) return false;
+  if (latest && latest.recordedAt >= at) return false;
+  await prisma.contactConsent.create({
     data: {
       teamId,
-      name,
-      phone,
-      city,
-      emails: {
-        create: [
-          {
-            teamId,
-            email,
-            kind: ContactEmailKind.PRIMARY,
-          },
-        ],
+      contactId,
+      purpose: MARKETING,
+      status: ConsentStatus.WITHDRAWN,
+      source: ConsentSource.EXTERNAL,
+      recordedBy: KLAVIYO_SOURCE_LABEL,
+      recordedAt: at,
+    },
+  });
+  return true;
+};
+
+/**
+ * The person left the team's list in Klaviyo (not all marketing). Proposed
+ * for a person to decide, once per time Klaviyo reports, and only while the
+ * CRM holds a grant older than that.
+ */
+const proposeListLeave = async (
+  teamId: string,
+  contactId: string,
+  at: Date,
+  listId: string,
+) => {
+  const latest = await prisma.contactConsent.findFirst({
+    where: {
+      teamId,
+      contactId,
+      purpose: MARKETING,
+      status: { in: [ConsentStatus.GRANTED, ConsentStatus.WITHDRAWN] },
+    },
+    orderBy: [{ recordedAt: "desc" }, { createdAt: "desc" }],
+    select: { status: true, recordedAt: true },
+  });
+  if (latest?.status !== ConsentStatus.GRANTED || latest.recordedAt >= at) {
+    return false;
+  }
+  const already = await prisma.contactChangeLog.findFirst({
+    where: {
+      contactId,
+      action: "PROPOSED",
+      fieldName: "marketingConsent",
+      AND: [
+        { metadata: { path: ["source"], equals: "klaviyo" } },
+        { metadata: { path: ["at"], equals: at.toISOString() } },
+      ],
+    },
+    select: { id: true },
+  });
+  if (already) return false;
+  await prisma.$transaction((tx) =>
+    proposeFieldChange(tx, {
+      contactId,
+      fieldName: "marketingConsent",
+      oldValue: ConsentStatus.GRANTED,
+      newValue: ConsentStatus.WITHDRAWN,
+      userName: KLAVIYO_SOURCE_LABEL,
+      metadata: {
+        source: "klaviyo",
+        reason: "left-list",
+        listId,
+        at: at.toISOString(),
       },
+    }),
+  );
+  return true;
+};
+
+/**
+ * Errors about one record's data (too long, taken meanwhile, gone
+ * meanwhile): that record is skipped and reported. Anything else (the
+ * database unreachable, a timeout) fails the sync, which is retried.
+ */
+const RECORD_ERROR_CODES = new Set([
+  "P2000",
+  "P2002",
+  "P2003",
+  "P2011",
+  "P2025",
+]);
+const isRecordError = (error: unknown) =>
+  error instanceof Prisma.PrismaClientKnownRequestError &&
+  RECORD_ERROR_CODES.has(error.code);
+
+const newResult = (now: Date): KlaviyoSyncResult => ({
+  profilesRead: 0,
+  contactsCreated: 0,
+  contactsMatched: 0,
+  changesProposed: 0,
+  profilesSkipped: 0,
+  engagementsUpserted: 0,
+  eventsSkipped: 0,
+  consentsWithdrawn: 0,
+  withdrawalsProposed: 0,
+  consentsSent: 0,
+  consentsSkipped: 0,
+  consentsFailed: 0,
+  consentsWaiting: [],
+  deletionsMarked: 0,
+  deletionsNotInKlaviyo: 0,
+  failures: 0,
+  errors: [],
+  lastSyncedAt: now,
+});
+
+const recordFailure = (
+  result: KlaviyoSyncResult,
+  what: string,
+  error: unknown,
+) => {
+  if (!isRecordError(error)) throw error;
+  result.failures += 1;
+  if (result.errors.length < MAX_REPORTED_ERRORS) {
+    result.errors.push(
+      `${what}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+};
+
+const importProfiles = async (
+  teamId: string,
+  apiKey: string,
+  updatedAfter: Date | undefined,
+  listId: string | null,
+  result: KlaviyoSyncResult,
+) => {
+  let cursor: string | undefined;
+  do {
+    const page = await fetchKlaviyoProfiles(apiKey, { cursor, updatedAfter });
+    for (const profile of page.profiles) {
+      result.profilesRead += 1;
+      const intake = profileToIntake(profile);
+      if (!intake) {
+        result.profilesSkipped += 1;
+        continue;
+      }
+      try {
+        const lookup = await lookUpContact(teamId, intake.email);
+        // The trash and permanent deletion are decisions of the team; an
+        // import must not undo them.
+        if (lookup.kind === "trashed" || lookup.kind === "blocked") {
+          result.profilesSkipped += 1;
+          continue;
+        }
+        const input =
+          lookup.kind === "found"
+            ? await withoutRepeatedProposals(lookup.contactId, intake)
+            : intake;
+        const resolved = await prisma.$transaction((tx) =>
+          resolveIntakeContact(tx, { teamId, ...input }, INTAKE_SOURCE),
+        );
+        if (resolved.created) result.contactsCreated += 1;
+        else result.contactsMatched += 1;
+        result.changesProposed += resolved.proposedChanges;
+
+        const withdrawnAt = profileMarketingWithdrawnAt(profile);
+        if (
+          withdrawnAt &&
+          (await recordKlaviyoWithdrawal(
+            teamId,
+            resolved.contact.id,
+            withdrawnAt,
+          ))
+        ) {
+          result.consentsWithdrawn += 1;
+        }
+        const leftAt =
+          !withdrawnAt && listId ? profileListLeftAt(profile, listId) : null;
+        if (
+          leftAt &&
+          listId &&
+          (await proposeListLeave(teamId, resolved.contact.id, leftAt, listId))
+        ) {
+          result.withdrawalsProposed += 1;
+        }
+      } catch (error) {
+        recordFailure(result, `Profile ${profile.id}`, error);
+      }
+    }
+    cursor = page.nextCursor;
+  } while (cursor);
+};
+
+/** The account's built-in e-mail metrics, by name. */
+const findEmailMetrics = (metrics: KlaviyoMetric[]) => {
+  const byName = new Map<KlaviyoEmailMetric, string>();
+  for (const name of KLAVIYO_EMAIL_METRICS) {
+    const candidates = metrics.filter(
+      (metric) => metric.attributes?.name === name,
+    );
+    const builtIn =
+      candidates.find(
+        (metric) => metric.attributes?.integration?.name === "Klaviyo",
+      ) ?? candidates[0];
+    if (builtIn) byName.set(name, builtIn.id);
+  }
+  return byName;
+};
+
+const importEmailEvents = async (
+  teamId: string,
+  apiKey: string,
+  since: Date,
+  result: KlaviyoSyncResult,
+) => {
+  const metrics = findEmailMetrics(await fetchKlaviyoMetrics(apiKey));
+  const contactByEmail = new Map<string, string | null>();
+  const contactFor = async (email: string) => {
+    if (!contactByEmail.has(email)) {
+      const lookup = await lookUpContact(teamId, email);
+      contactByEmail.set(
+        email,
+        lookup.kind === "found" ? lookup.contactId : null,
+      );
+    }
+    return contactByEmail.get(email) ?? null;
+  };
+
+  for (const [metric, metricId] of metrics) {
+    let cursor: string | undefined;
+    do {
+      const page = await fetchKlaviyoMetricEvents(apiKey, {
+        metricId,
+        since,
+        cursor,
+      });
+      for (const event of page.events) {
+        try {
+          const profileId = event.relationships?.profile?.data?.id;
+          const email = normalizeKlaviyoEmail(
+            profileId ? page.profileEmails.get(profileId) : undefined,
+          );
+          // Events only attach to contacts that exist: profiles were
+          // imported first, and a contact in the trash or deleted stays so.
+          const contactId = email ? await contactFor(email) : null;
+          const draft =
+            contactId && profileId
+              ? eventToEngagement(metric, event, profileId, email)
+              : null;
+          if (!contactId || !draft) {
+            result.eventsSkipped += 1;
+            continue;
+          }
+          const fields = {
+            direction: draft.direction,
+            source: EngagementSource.EMAIL,
+            subject: draft.subject.slice(0, 500),
+            message: draft.message,
+            engagedAt: draft.engagedAt,
+          };
+          await prisma.contactEngagement.upsert({
+            where: {
+              teamId_externalId_externalSource: {
+                teamId,
+                externalId: draft.externalId,
+                externalSource: EXTERNAL_SOURCE,
+              },
+            },
+            create: {
+              ...fields,
+              teamId,
+              contactId,
+              externalId: draft.externalId,
+              externalSource: EXTERNAL_SOURCE,
+            },
+            update: draft.firstOnly ? {} : fields,
+          });
+          result.engagementsUpserted += 1;
+
+          const at = klaviyoEventTime(event);
+          if (
+            WITHDRAWING_METRICS.has(metric) &&
+            at &&
+            (await recordKlaviyoWithdrawal(teamId, contactId, at))
+          ) {
+            result.consentsWithdrawn += 1;
+          }
+        } catch (error) {
+          recordFailure(result, `Event ${event.id}`, error);
+        }
+      }
+      cursor = page.nextCursor;
+    } while (cursor);
+  }
+};
+
+const markConsentSync = (
+  teamId: string,
+  consentId: string,
+  status: KlaviyoConsentSyncStatus,
+  detail?: string,
+) =>
+  prisma.klaviyoConsentSync.upsert({
+    where: { consentId },
+    create: { consentId, teamId, status, detail },
+    update: { status, detail: detail ?? null, attempts: { increment: 1 } },
+  });
+
+const isRequestRejected = (error: unknown) =>
+  error instanceof KlaviyoRequestError &&
+  error.status >= 400 &&
+  error.status < 500 &&
+  error.status !== 429;
+
+/**
+ * Sends batches; when Klaviyo rejects a whole batch, sends its entries one
+ * by one so a single bad address does not hold back the rest.
+ */
+const sendInBatches = async <T extends { consentId: string }>(
+  teamId: string,
+  entries: T[],
+  batchSize: number,
+  send: (batch: T[]) => Promise<void>,
+  result: KlaviyoSyncResult,
+) => {
+  for (let index = 0; index < entries.length; index += batchSize) {
+    const batch = entries.slice(index, index + batchSize);
+    try {
+      await send(batch);
+      for (const entry of batch) {
+        await markConsentSync(teamId, entry.consentId, "SENT");
+      }
+      result.consentsSent += batch.length;
+    } catch (error) {
+      // Klaviyo unreachable or failing: the whole sync fails and is retried.
+      if (!isRequestRejected(error)) throw error;
+      if (batch.length > 1) {
+        await sendInBatches(teamId, batch, 1, send, result);
+        continue;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      await markConsentSync(teamId, batch[0].consentId, "FAILED", message);
+      result.consentsFailed += 1;
+    }
+  }
+};
+
+/**
+ * The outbox: every marketing grant or withdrawal not yet sent (or failed
+ * fewer than five times) goes to Klaviyo. Only the row that holds now for
+ * its contact is sent; older ones are marked skipped.
+ */
+const pushConsents = async (
+  teamId: string,
+  apiKey: string,
+  listId: string | null,
+  result: KlaviyoSyncResult,
+) => {
+  const candidates = (await prisma.contactConsent.findMany({
+    where: {
+      teamId,
+      purpose: MARKETING,
+      // Without a list grants cannot be sent; withdrawals still can.
+      status: listId
+        ? { in: [ConsentStatus.GRANTED, ConsentStatus.WITHDRAWN] }
+        : ConsentStatus.WITHDRAWN,
+      OR: [
+        { klaviyoSync: null },
+        {
+          klaviyoSync: {
+            status: KlaviyoConsentSyncStatus.FAILED,
+            attempts: { lt: MAX_CONSENT_PUSH_ATTEMPTS },
+          },
+        },
+      ],
+    },
+    orderBy: { recordedAt: "asc" },
+    take: CONSENT_PUSH_LIMIT,
+    select: {
+      id: true,
+      contactId: true,
+      status: true,
+      source: true,
+      recordedBy: true,
+      recordedAt: true,
+    },
+  })) as ConsentPushCandidate[];
+  if (!listId) {
+    const waiting = await prisma.contactConsent.count({
+      where: {
+        teamId,
+        purpose: MARKETING,
+        status: ConsentStatus.GRANTED,
+        klaviyoSync: null,
+      },
+    });
+    if (waiting) {
+      result.consentsWaiting.push(
+        `${waiting} marketing consents wait for a Klaviyo list to be set.`,
+      );
+    }
+  }
+  if (!candidates.length) return;
+
+  const contactIds = [...new Set(candidates.map((row) => row.contactId))];
+  const [latestRows, contacts] = await Promise.all([
+    prisma.contactConsent.findMany({
+      where: {
+        teamId,
+        purpose: MARKETING,
+        contactId: { in: contactIds },
+        status: { in: [ConsentStatus.GRANTED, ConsentStatus.WITHDRAWN] },
+      },
+      orderBy: [{ recordedAt: "desc" }, { createdAt: "desc" }],
+      select: { id: true, contactId: true },
+    }),
+    prisma.contact.findMany({
+      where: { teamId, id: { in: contactIds } },
+      select: {
+        id: true,
+        deletedAt: true,
+        emails: {
+          where: { kind: ContactEmailKind.PRIMARY },
+          select: { email: true },
+        },
+      },
+    }),
+  ]);
+  const latestByContact = new Map<string, string>();
+  for (const row of latestRows) {
+    if (!latestByContact.has(row.contactId)) {
+      latestByContact.set(row.contactId, row.id);
+    }
+  }
+  const contactById = new Map(contacts.map((contact) => [contact.id, contact]));
+
+  const subscribes: Array<{
+    consentId: string;
+    email: string;
+    consentedAt: Date;
+  }> = [];
+  const unsubscribes: Array<{ consentId: string; email: string }> = [];
+  let trashedWaiting = 0;
+  for (const candidate of candidates) {
+    const contact = contactById.get(candidate.contactId);
+    const action = planConsentPush(candidate, {
+      latestConsentId: latestByContact.get(candidate.contactId),
+      email: contact?.emails[0]?.email ?? null,
+      contactInTrash: Boolean(contact?.deletedAt),
+      listId,
+    });
+    if (action.kind === "subscribe") {
+      subscribes.push({ consentId: candidate.id, ...action });
+    } else if (action.kind === "unsubscribe") {
+      unsubscribes.push({ consentId: candidate.id, email: action.email });
+    } else if (action.kind === "skip") {
+      await markConsentSync(teamId, candidate.id, "SKIPPED", action.reason);
+      result.consentsSkipped += 1;
+    } else {
+      trashedWaiting += 1;
+    }
+  }
+  if (trashedWaiting) {
+    result.consentsWaiting.push(
+      `${trashedWaiting} marketing consents of contacts in the trash wait until they are restored.`,
+    );
+  }
+
+  if (listId) {
+    await sendInBatches(
+      teamId,
+      subscribes,
+      KLAVIYO_SUBSCRIBE_BATCH,
+      (batch) => subscribeKlaviyoProfiles(apiKey, listId, batch),
+      result,
+    );
+  }
+  await sendInBatches(
+    teamId,
+    unsubscribes,
+    KLAVIYO_UNSUBSCRIBE_BATCH,
+    (batch) =>
+      unsubscribeKlaviyoProfiles(
+        apiKey,
+        batch.map(({ email }) => email),
+      ),
+    result,
+  );
+};
+
+const MAX_DELETION_ATTEMPTS = 5;
+/** The custom profile property Klaviyo users can build a segment on. */
+export const KLAVIYO_DELETED_PROPERTY = "crm_deleted_at";
+
+/**
+ * People permanently deleted in the CRM: their Klaviyo profile gets
+ * `crm_deleted_at` and is unsubscribed from e-mail marketing, so the team can
+ * find and delete them in Klaviyo and no newsletter reaches them meanwhile.
+ * An address Klaviyo does not know is left alone (an unsubscribe would create
+ * a profile). Each queued address is removed once handled, or after five
+ * refused attempts, so it is not kept longer than needed.
+ */
+const markDeletedProfiles = async (
+  teamId: string,
+  apiKey: string,
+  result: KlaviyoSyncResult,
+) => {
+  const queued = await prisma.klaviyoProfileDeletion.findMany({
+    where: { teamId },
+    orderBy: { deletedAt: "asc" },
+    take: 1000,
+  });
+  for (let index = 0; index < queued.length; index += KLAVIYO_LOOKUP_BATCH) {
+    const batch = queued.slice(index, index + KLAVIYO_LOOKUP_BATCH);
+    const emails = [...new Set(batch.map((row) => row.email))];
+    try {
+      const profileIds = await findKlaviyoProfileIds(apiKey, emails);
+      for (const row of batch) {
+        const profileId = profileIds.get(row.email);
+        if (!profileId) continue;
+        await setKlaviyoProfileProperties(apiKey, profileId, {
+          [KLAVIYO_DELETED_PROPERTY]: row.deletedAt.toISOString(),
+        });
+      }
+      const found = emails.filter((email) => profileIds.has(email));
+      for (
+        let start = 0;
+        start < found.length;
+        start += KLAVIYO_UNSUBSCRIBE_BATCH
+      ) {
+        await unsubscribeKlaviyoProfiles(
+          apiKey,
+          found.slice(start, start + KLAVIYO_UNSUBSCRIBE_BATCH),
+        );
+      }
+      result.deletionsMarked += batch.filter((row) =>
+        profileIds.has(row.email),
+      ).length;
+      result.deletionsNotInKlaviyo += batch.filter(
+        (row) => !profileIds.has(row.email),
+      ).length;
+      await prisma.klaviyoProfileDeletion.deleteMany({
+        where: { id: { in: batch.map((row) => row.id) } },
+      });
+    } catch (error) {
+      // Klaviyo unreachable or failing: the sync fails and is retried.
+      if (!isRequestRejected(error)) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      for (const row of batch) {
+        if (row.attempts + 1 >= MAX_DELETION_ATTEMPTS) {
+          await prisma.klaviyoProfileDeletion.delete({ where: { id: row.id } });
+          result.failures += 1;
+          if (result.errors.length < MAX_REPORTED_ERRORS) {
+            result.errors.push(
+              `A deleted contact could not be marked in Klaviyo: ${message}`,
+            );
+          }
+        } else {
+          await prisma.klaviyoProfileDeletion.update({
+            where: { id: row.id },
+            data: { attempts: { increment: 1 }, lastError: message },
+          });
+        }
+      }
+    }
+  }
+};
+
+const findIntegration = (teamId: string) =>
+  prisma.integrationConnection.findUnique({
+    where: {
+      teamId_provider: { teamId, provider: PrismaIntegrationProvider.KLAVIYO },
     },
   });
 
-  await logContactCreation(created.id, undefined, undefined, prisma, {
-    source: "klaviyo",
-    createdVia: "klaviyo-import",
-  });
-
-  return {
-    contactId: created.id,
-    created: true,
-  };
-};
-
-const resolveEngagementDirection = (metricName?: string) => {
-  const lower = metricName?.toLowerCase() ?? "";
-  if (
-    lower.includes("open") ||
-    lower.includes("click") ||
-    lower.includes("reply") ||
-    lower.includes("responded")
-  ) {
-    return EngagementDirection.INBOUND;
+/**
+ * One sync: profiles changed since the last sync (all, the first time), the
+ * e-mail events since then (the last KLAVIYO_INITIAL_EVENT_DAYS days, the
+ * first time), then the consent outbox. A Klaviyo API failure throws, so the
+ * worker retries the whole sync; a single profile or event that cannot be
+ * saved is counted and reported instead.
+ */
+export const syncKlaviyoIntegration = async (
+  teamId: string,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<KlaviyoSyncResult> => {
+  const integration = await findIntegration(teamId);
+  if (!integration?.apiKey) {
+    throw new Error("Klaviyo integration is not configured for this team.");
   }
-  return EngagementDirection.OUTBOUND;
-};
-
-const getEventProperties = (event: KlaviyoEvent) =>
-  event.attributes.properties ?? event.attributes.event_properties ?? {};
-
-const stripHtml = (html?: string) =>
-  typeof html === "string"
-    ? html
-        .replace(/<(br|p|div|section|article)[^>]*>/gi, "\n")
-        .replace(/<\/(p|div|section|article)>/gi, "\n")
-        .replace(/<[^>]+>/g, " ")
-        .replace(/\s+\n/g, "\n")
-        .replace(/\n+\s*\n+/g, "\n\n")
-        .replace(/\s{2,}/g, " ")
-        .trim()
+  if (!integration.isEnabled) {
+    throw new Error("Klaviyo integration is currently disabled.");
+  }
+  const apiKey = decryptIntegrationSecret(integration.apiKey);
+  const result = newResult(now);
+  const watermark = integration.lastSyncedAt
+    ? new Date(integration.lastSyncedAt.getTime() - SYNC_OVERLAP_MS)
     : undefined;
 
-const buildEngagementContent = async (
-  event: KlaviyoEvent,
-  profileId: string | undefined,
-  apiKey: string,
-) => {
-  const properties = getEventProperties(event);
-  const resolveMessageId = () => {
-    const direct =
-      (properties.$message as string | undefined) ||
-      (properties.message_id as string | undefined) ||
-      (properties.$message_interaction as string | undefined) ||
-      (properties.message_interaction as string | undefined);
-    if (direct && typeof direct === "string" && direct.trim()) {
-      return direct.trim();
-    }
-    const cohort = properties.$_cohort$message_send_cohort;
-    if (typeof cohort === "string" && cohort.includes(":")) {
-      const parts = cohort.split(":");
-      const last = parts[parts.length - 1]?.trim();
-      if (last) {
-        return last;
-      }
-    }
-    const eventId = properties.$event_id as string | undefined;
-    if (eventId?.includes(":")) {
-      const maybe = eventId.split(":")[0]?.trim();
-      if (maybe) {
-        return maybe;
-      }
-    }
-    return undefined;
-  };
-
-  const messageId = resolveMessageId();
-
-  const possibleBodyFields = [
-    properties.body as string | undefined,
-    properties.Body as string | undefined,
-    properties.preview_text as string | undefined,
-  ];
-  const body = possibleBodyFields.find(
-    (value) => typeof value === "string" && value.trim().length > 0,
-  );
-
-  let subject =
-    (properties.subject as string | undefined) ||
-    (properties.Subject as string | undefined) ||
-    (properties["Campaign Name"] as string | undefined) ||
-    (properties.campaign_name as string | undefined) ||
-    event.attributes.metric?.name ||
-    "Email engagement";
-
-  const detailEntries: Array<[string, string]> = [];
-  const seenLabels = new Set<string>();
-  const usedPropertyKeys = new Set<string>();
-
-  const addDetail = (label: string, value?: unknown) => {
-    if (value === undefined || value === null) {
-      return;
-    }
-    if (
-      typeof value === "string" ||
-      typeof value === "number" ||
-      typeof value === "boolean"
-    ) {
-      const normalized = String(value).trim();
-      if (normalized && !seenLabels.has(label)) {
-        seenLabels.add(label);
-        detailEntries.push([label, normalized]);
-      }
-      return;
-    }
-    try {
-      const serialized = JSON.stringify(value, null, 2);
-      if (serialized && !seenLabels.has(label)) {
-        seenLabels.add(label);
-        detailEntries.push([label, serialized]);
-      }
-    } catch {
-      // ignore non-serializable
-    }
-  };
-
-  const addPropertyDetail = (label: string, key?: keyof typeof properties) => {
-    if (!key) return;
-    if (Object.hasOwn(properties, key)) {
-      usedPropertyKeys.add(String(key));
-      addDetail(label, properties[key]);
-    }
-  };
-
-  addPropertyDetail("Recipient", "Recipient Email Address");
-  addPropertyDetail("Recipient", "recipient");
-  addPropertyDetail("Recipient", "email");
-  addPropertyDetail("Recipient", "to_email");
-  addPropertyDetail("Recipient", "email_address");
-  addPropertyDetail("Recipient", "to");
-  addPropertyDetail("Recipient", "from_email");
-  addPropertyDetail("Recipient", "from");
-  addPropertyDetail("Recipient", "customer_email");
-
-  addPropertyDetail("Subject", "subject");
-  addPropertyDetail("Subject", "Subject");
-  addPropertyDetail("Campaign Name", "Campaign Name");
-  addPropertyDetail("Campaign Name", "campaign_name");
-  addPropertyDetail("Inbox Provider", "Inbox Provider");
-  addPropertyDetail("Email Domain", "Email Domain");
-  addPropertyDetail("Email Domain", "email_domain");
-  addPropertyDetail("Email Domain", "domain");
-  addPropertyDetail("Message Id", "message_id");
-  addPropertyDetail("Klaviyo Message", "$message");
-
-  addDetail(
-    "Metric",
-    event.attributes.metric?.name ?? event.attributes.metric?.id,
-  );
-  addDetail("Event Timestamp", event.attributes.timestamp);
-  addDetail("Event Id", event.id);
-  addDetail("Profile Id", profileId);
-
-  const ignoredKeys = new Set([
-    "body",
-    "Body",
-    "preview_text",
-    "subject",
-    "Subject",
-    "$message",
-    ...usedPropertyKeys,
-  ]);
-
-  Object.entries(properties).forEach(([key, value]) => {
-    if (ignoredKeys.has(key)) {
-      return;
-    }
-    if (
-      typeof value === "string" ||
-      typeof value === "number" ||
-      typeof value === "boolean"
-    ) {
-      const normalized = String(value).trim();
-      if (normalized) {
-        detailEntries.push([`Additional - ${key}`, normalized]);
-      }
-      return;
-    }
-    try {
-      const serialized = JSON.stringify(value, null, 2);
-      if (serialized && serialized !== "{}" && serialized !== "[]") {
-        detailEntries.push([`Additional - ${key}`, serialized]);
-      }
-    } catch {
-      // ignore
-    }
-  });
-
-  let enrichedBody = body?.trim();
-  if (messageId) {
-    const campaignMessage = await fetchKlaviyoCampaignMessage(
-      apiKey,
-      messageId,
-    );
-    const includedTemplate = campaignMessage?.included?.find(
-      (item) => item.type === "template",
-    );
-    const templateId =
-      includedTemplate?.id ??
-      campaignMessage?.data?.relationships?.template?.data?.id;
-
-    if (
-      includedTemplate?.attributes?.html ||
-      includedTemplate?.attributes?.text
-    ) {
-      enrichedBody =
-        stripHtml(includedTemplate.attributes?.html ?? undefined) ||
-        (includedTemplate.attributes?.text ?? undefined)?.trim() ||
-        enrichedBody;
-    }
-
-    if (!enrichedBody && templateId) {
-      const template = await fetchKlaviyoTemplate(apiKey, templateId);
-      const templateHtml = template?.attributes?.html ?? undefined;
-      const templateText = template?.attributes?.text ?? undefined;
-      enrichedBody =
-        stripHtml(templateHtml) ||
-        (typeof templateText === "string" && templateText.trim()
-          ? templateText.trim()
-          : undefined);
-    }
-
-    if (!enrichedBody) {
-      const messageContent = await fetchKlaviyoMessageContent(
-        apiKey,
-        messageId,
-      );
-      const htmlBody =
-        messageContent?.attributes?.html_body ??
-        messageContent?.attributes?.html ??
-        messageContent?.attributes?.content_html;
-      const textBody =
-        messageContent?.attributes?.text_body ??
-        messageContent?.attributes?.text ??
-        messageContent?.attributes?.content_text;
-
-      enrichedBody =
-        stripHtml(htmlBody) ||
-        (typeof textBody === "string" && textBody.trim()
-          ? textBody.trim()
-          : undefined);
-
-      if (!subject && messageContent?.attributes?.subject) {
-        subject = messageContent.attributes.subject;
-      }
-    }
-
-    if (!subject && campaignMessage?.data?.attributes?.content?.subject) {
-      subject = campaignMessage.data.attributes.content.subject;
-    }
-  }
-
-  const detailsText =
-    detailEntries.length > 0
-      ? detailEntries.map(([label, value]) => `${label}: ${value}`).join("\n")
-      : JSON.stringify(
-          {
-            metric: event.attributes.metric,
-            properties,
-            timestamp: event.attributes.timestamp,
-            profileId,
-            rawEvent: event,
-          },
-          null,
-          2,
-        );
-
-  const message = enrichedBody
-    ? [enrichedBody, detailsText].filter(Boolean).join("\n\n")
-    : [subject, detailsText].filter(Boolean).join("\n\n");
-
-  return {
-    subject,
-    message: message || subject,
-  };
-};
-
-const getEmailFromEvent = (event: KlaviyoEvent) => {
-  const properties = getEventProperties(event);
-  const possibleEmailFields = [
-    properties.email as string | undefined,
-    properties.to as string | undefined,
-    properties.recipient as string | undefined,
-    properties.to_email as string | undefined,
-    properties.email_address as string | undefined,
-    properties.from_email as string | undefined,
-    properties.from as string | undefined,
-    properties.customer_email as string | undefined,
-  ];
-
-  const email = possibleEmailFields.find(
-    (value) => typeof value === "string" && value.trim().length > 0,
-  );
-
-  return normalizeEmail(email);
-};
-
-const createEngagementFromEvent = async ({
-  teamId,
-  contactId,
-  event,
-  profileId,
-  apiKey,
-}: {
-  teamId: string;
-  contactId: string;
-  event: KlaviyoEvent;
-  profileId?: string;
-  apiKey: string;
-}) => {
-  const direction = resolveEngagementDirection(event.attributes.metric?.name);
-
-  let enrichedEvent = event;
-
-  const properties = getEventProperties(event);
-  const hasMeaningfulProperties =
-    properties && Object.keys(properties).length > 0;
-  const hasMetricDetails = Boolean(event.attributes.metric?.name);
-  const hasProfile = Boolean(event.relationships?.profile?.data?.id);
-
-  if (!hasMeaningfulProperties || !hasMetricDetails || !hasProfile) {
-    try {
-      const detail = await fetchKlaviyoEventDetails(apiKey, event.id);
-      if (
-        detail?.attributes?.properties &&
-        Object.keys(detail.attributes.properties).length > 0
-      ) {
-        enrichedEvent = {
-          ...event,
-          attributes: { ...event.attributes, ...detail.attributes },
-          relationships: detail.relationships ?? event.relationships,
-        };
-      } else {
-        enrichedEvent = detail ?? event;
-      }
-    } catch (_error) {
-      // Fallback to the original event if detail fetch fails.
-    }
-  }
-
-  if (!enrichedEvent.attributes.metric?.name) {
-    try {
-      const metric = await fetchKlaviyoEventMetric(apiKey, event.id);
-      if (metric?.attributes?.name) {
-        enrichedEvent = {
-          ...enrichedEvent,
-          attributes: {
-            ...enrichedEvent.attributes,
-            metric: {
-              id: metric.id ?? enrichedEvent.attributes.metric?.id,
-              name: metric.attributes.name,
-            },
-          },
-        };
-      }
-    } catch (_error) {
-      // keep existing metric info if fetch fails
-    }
-  }
-
-  const { subject, message } = await buildEngagementContent(
-    enrichedEvent,
-    profileId,
+  await markDeletedProfiles(teamId, apiKey, result);
+  await importProfiles(
+    teamId,
     apiKey,
+    watermark,
+    integration.defaultListId,
+    result,
   );
+  await importEmailEvents(
+    teamId,
+    apiKey,
+    watermark ??
+      new Date(now.getTime() - initialEventDays() * 24 * 60 * 60 * 1000),
+    result,
+  );
+  await pushConsents(teamId, apiKey, integration.defaultListId, result);
 
-  const rawTimestamp = enrichedEvent.attributes.timestamp;
-  const engagedAt = (() => {
-    if (typeof rawTimestamp === "number") {
-      return new Date(
-        rawTimestamp > 2_000_000_000 ? rawTimestamp : rawTimestamp * 1000,
-      );
-    }
-    if (typeof rawTimestamp === "string") {
-      const asNumber = Number(rawTimestamp);
-      if (!Number.isNaN(asNumber) && asNumber > 0) {
-        return new Date(asNumber > 2_000_000_000 ? asNumber : asNumber * 1000);
-      }
-      const parsed = new Date(rawTimestamp);
-      if (!Number.isNaN(parsed.getTime())) {
-        return parsed;
-      }
-    }
-    return new Date();
-  })();
-
-  await prisma.contactEngagement.upsert({
-    where: {
-      teamId_externalId_externalSource: {
-        teamId,
-        externalId: event.id,
-        externalSource: EXTERNAL_SOURCE,
-      },
-    },
-    update: {
-      direction,
-      source: EngagementSource.EMAIL,
-      subject,
-      message,
-      engagedAt,
-    },
-    create: {
-      contactId,
-      teamId,
-      direction,
-      source: EngagementSource.EMAIL,
-      subject,
-      message,
-      engagedAt,
-      externalId: event.id,
-      externalSource: EXTERNAL_SOURCE,
-    },
+  await prisma.integrationConnection.update({
+    where: { id: integration.id },
+    data: { lastSyncedAt: now },
   });
+  return result;
 };
 
-export const getKlaviyoIntegration = async (
-  teamId: string,
-): Promise<KlaviyoIntegrationSettings | null> => {
-  const integration = await prisma.integrationConnection.findUnique({
-    where: {
-      teamId_provider: {
-        teamId,
-        provider: PrismaIntegrationProvider.KLAVIYO,
-      },
-    },
-  });
-
-  if (!integration) {
-    return null;
-  }
-
-  return {
-    id: integration.id,
-    teamId: integration.teamId,
-    provider: IntegrationProvider.KLAVIYO,
-    defaultListId: integration.defaultListId ?? undefined,
-    isEnabled: integration.isEnabled,
-    lastSyncedAt: integration.lastSyncedAt ?? undefined,
-    createdAt: integration.createdAt,
-    updatedAt: integration.updatedAt,
-    hasApiKey: Boolean(integration.apiKey),
-    apiKeyPreview: maskKlaviyoApiKey(
-      decryptIntegrationSecret(integration.apiKey),
-    ),
-    connectionVerified: Boolean(integration.apiKey) && integration.isEnabled,
-  };
-};
-
-export const saveKlaviyoIntegration = async ({
-  teamId,
-  apiKey,
-  defaultListId,
-  isEnabled,
-  shouldTestConnection,
-}: {
-  teamId: string;
-  apiKey?: string;
-  defaultListId?: string;
-  isEnabled?: boolean;
-  shouldTestConnection?: boolean;
-}): Promise<KlaviyoIntegrationSettings> => {
-  const existing = await prisma.integrationConnection.findUnique({
-    where: {
-      teamId_provider: {
-        teamId,
-        provider: PrismaIntegrationProvider.KLAVIYO,
-      },
-    },
-  });
-
-  const plaintextApiKey =
-    apiKey?.trim() ||
-    (existing?.apiKey ? decryptIntegrationSecret(existing.apiKey) : undefined);
-
-  if (!plaintextApiKey) {
-    throw new Error("API key is required to configure Klaviyo integration.");
-  }
-
-  if (shouldTestConnection) {
-    await testKlaviyoCredentials(plaintextApiKey);
-  }
-  const apiKeyToPersist = encryptIntegrationSecret(plaintextApiKey);
-
-  const record = await prisma.integrationConnection.upsert({
-    where: {
-      teamId_provider: {
-        teamId,
-        provider: PrismaIntegrationProvider.KLAVIYO,
-      },
-    },
-    update: {
-      apiKey: apiKeyToPersist,
-      defaultListId,
-      isEnabled: isEnabled ?? existing?.isEnabled ?? true,
-    },
-    create: {
-      teamId,
-      provider: PrismaIntegrationProvider.KLAVIYO,
-      apiKey: apiKeyToPersist,
-      defaultListId,
-      isEnabled: isEnabled ?? true,
-    },
-  });
-
+const toSettings = async (
+  record: NonNullable<Awaited<ReturnType<typeof findIntegration>>>,
+  extra: { connectionVerified?: boolean; connectionMessage?: string } = {},
+): Promise<KlaviyoIntegrationSettings> => {
+  const job = await getLatestKlaviyoSyncJob(record.teamId);
   return {
     id: record.id,
     teamId: record.teamId,
@@ -628,169 +837,97 @@ export const saveKlaviyoIntegration = async ({
     updatedAt: record.updatedAt,
     hasApiKey: Boolean(record.apiKey),
     apiKeyPreview: maskKlaviyoApiKey(decryptIntegrationSecret(record.apiKey)),
-    connectionVerified: true,
-    connectionMessage: shouldTestConnection
-      ? "Connection successful"
+    // Known only from a test or a sync; a saved key alone proves nothing.
+    connectionVerified:
+      extra.connectionVerified ??
+      (job?.status === "SUCCEEDED" ? true : undefined),
+    connectionMessage: extra.connectionMessage,
+    lastSync: job
+      ? {
+          status: job.status,
+          queuedAt: job.createdAt,
+          finishedAt: job.finishedAt ?? undefined,
+          error: job.lastError ?? undefined,
+          result: job.result ?? undefined,
+        }
       : undefined,
   };
 };
 
-export const syncKlaviyoIntegration = async (
+export const getKlaviyoIntegration = async (
   teamId: string,
-): Promise<KlaviyoSyncResult> => {
-  const integration = await prisma.integrationConnection.findUnique({
+): Promise<KlaviyoIntegrationSettings | null> => {
+  const integration = await findIntegration(teamId);
+  return integration ? await toSettings(integration) : null;
+};
+
+export const saveKlaviyoIntegration = async ({
+  teamId,
+  apiKey,
+  defaultListId,
+  isEnabled,
+  shouldTestConnection,
+}: {
+  teamId: string;
+  apiKey?: string;
+  /** Empty clears the list; undefined keeps it. */
+  defaultListId?: string;
+  isEnabled?: boolean;
+  shouldTestConnection?: boolean;
+}): Promise<KlaviyoIntegrationSettings> => {
+  const existing = await findIntegration(teamId);
+  const plaintextApiKey =
+    apiKey?.trim() ||
+    (existing?.apiKey ? decryptIntegrationSecret(existing.apiKey) : undefined);
+  if (!plaintextApiKey) {
+    throw new Error("API key is required to configure Klaviyo integration.");
+  }
+  if (shouldTestConnection) {
+    await testKlaviyoCredentials(plaintextApiKey);
+  }
+  const apiKeyToPersist = encryptIntegrationSecret(plaintextApiKey);
+  const listId =
+    defaultListId === undefined ? undefined : defaultListId.trim() || null;
+
+  const record = await prisma.integrationConnection.upsert({
     where: {
-      teamId_provider: {
-        teamId,
-        provider: PrismaIntegrationProvider.KLAVIYO,
-      },
+      teamId_provider: { teamId, provider: PrismaIntegrationProvider.KLAVIYO },
+    },
+    update: {
+      apiKey: apiKeyToPersist,
+      ...(listId === undefined ? {} : { defaultListId: listId }),
+      isEnabled: isEnabled ?? existing?.isEnabled ?? true,
+    },
+    create: {
+      teamId,
+      provider: PrismaIntegrationProvider.KLAVIYO,
+      apiKey: apiKeyToPersist,
+      defaultListId: listId ?? null,
+      isEnabled: isEnabled ?? true,
     },
   });
 
-  if (!integration?.apiKey) {
-    throw new Error("Klaviyo integration is not configured for this team.");
-  }
+  return await toSettings(
+    record,
+    shouldTestConnection
+      ? { connectionVerified: true, connectionMessage: "Connection successful" }
+      : {},
+  );
+};
 
-  if (!integration.isEnabled) {
-    throw new Error("Klaviyo integration is currently disabled.");
-  }
-  const apiKey = decryptIntegrationSecret(integration.apiKey);
-
-  const profileIdToContactId = new Map<string, string>();
-  const emailToContactId = new Map<string, string>();
-  let contactsCreated = 0;
-  let contactsUpdated = 0;
-  let fallbackContactsCreated = 0;
-
-  const ensureContactForEmail = async (
-    email?: string,
-  ): Promise<string | undefined> => {
-    const normalized = normalizeEmail(email);
-    if (!normalized) {
-      return undefined;
-    }
-
-    const cached = emailToContactId.get(normalized);
-    if (cached) {
-      return cached;
-    }
-
-    const existing = await findContactByIdentityEmail(teamId, normalized);
-
-    if (existing) {
-      emailToContactId.set(normalized, existing.id);
-      return existing.id;
-    }
-
-    const created = await prisma.contact.create({
-      data: {
-        teamId,
-        name: normalized,
-        emails: {
-          create: [
-            {
-              teamId,
-              email: normalized,
-              kind: ContactEmailKind.PRIMARY,
-            },
-          ],
-        },
-      },
-    });
-    await logContactCreation(created.id, undefined, undefined, prisma, {
-      source: "klaviyo",
-      createdVia: "klaviyo-import",
-    });
-    fallbackContactsCreated += 1;
-    emailToContactId.set(normalized, created.id);
-    return created.id;
-  };
-
-  let profileCursor: string | undefined;
-  do {
-    const { profiles, nextCursor } = await fetchKlaviyoProfiles(
-      apiKey,
-      profileCursor,
-    );
-
-    for (const profile of profiles) {
-      const result = await upsertContactFromProfile(teamId, profile);
-      if (result) {
-        if (result.created) {
-          contactsCreated += 1;
-        } else {
-          contactsUpdated += 1;
-        }
-        profileIdToContactId.set(profile.id, result.contactId);
-        const email = normalizeEmail(profile.attributes.email);
-        if (email) {
-          emailToContactId.set(email, result.contactId);
-        }
-      }
-    }
-
-    profileCursor = nextCursor;
-  } while (profileCursor);
-
-  let engagementsUpserted = 0;
-  let eventsCursor: string | undefined;
-  do {
-    const { events, nextCursor } = await fetchKlaviyoEmailEvents(
-      apiKey,
-      eventsCursor,
-    );
-
-    for (const event of events) {
-      const profileId = event.relationships?.profile?.data?.id;
-      const email = getEmailFromEvent(event);
-      const contactIdFromProfile = profileId
-        ? profileIdToContactId.get(profileId)
-        : undefined;
-      const contactIdFromEmail = email
-        ? emailToContactId.get(email)
-        : undefined;
-
-      let contactId = contactIdFromProfile ?? contactIdFromEmail;
-
-      if (!contactId && email) {
-        contactId = await ensureContactForEmail(email);
-      }
-
-      if (!contactId) {
-        continue;
-      }
-
-      await createEngagementFromEvent({
-        teamId,
-        contactId,
-        event,
-        profileId,
-        apiKey,
-      });
-      engagementsUpserted += 1;
-    }
-
-    eventsCursor = nextCursor;
-  } while (eventsCursor);
-
-  const now = new Date();
-  await prisma.integrationConnection.update({
-    where: {
-      teamId_provider: {
-        teamId,
-        provider: PrismaIntegrationProvider.KLAVIYO,
-      },
-    },
-    data: {
-      lastSyncedAt: now,
-    },
-  });
-
-  return {
-    contactsCreated,
-    contactsUpdated,
-    engagementsUpserted,
-    fallbackContactsCreated,
-    lastSyncedAt: now,
-  };
+/**
+ * Disconnects Klaviyo: removes the key, the queued syncs and the record of
+ * what was sent, so connecting an account again sends every consent anew.
+ * Imported contacts, engagements and consents stay.
+ */
+export const deleteKlaviyoIntegration = async (teamId: string) => {
+  await prisma.$transaction([
+    prisma.klaviyoSyncJob.deleteMany({ where: { teamId } }),
+    prisma.klaviyoConsentSync.deleteMany({ where: { teamId } }),
+    // Addresses waiting to be marked in Klaviyo are not kept without it.
+    prisma.klaviyoProfileDeletion.deleteMany({ where: { teamId } }),
+    prisma.integrationConnection.deleteMany({
+      where: { teamId, provider: PrismaIntegrationProvider.KLAVIYO },
+    }),
+  ]);
 };

@@ -10,6 +10,7 @@ import {
   Circle,
   ClipboardList,
   Clock,
+  ExternalLink,
   Loader2,
   MessageSquare,
   Plus,
@@ -221,6 +222,25 @@ const parseEngagementContent = (message?: string): ParsedEngagementContent => {
   }
 
   return { body, details, additional };
+};
+
+/** Only web links are shown as links; anything else stays text. */
+const asWebUrl = (value: string) => {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? url.toString()
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+/** The "Klaviyo:" detail of an imported Klaviyo event, if it is Klaviyo's. */
+const getKlaviyoUrl = (details: Array<{ label: string; value: string }>) => {
+  const value = details.find((d) => d.label === "Klaviyo")?.value;
+  const url = value ? asWebUrl(value) : null;
+  return url && new URL(url).hostname === "www.klaviyo.com" ? url : null;
 };
 
 const getPreviewText = (message?: string, maxLength = 140) => {
@@ -796,6 +816,10 @@ function EngagementRow({
             const metric =
               parsed.details.find((d) => d.label.toLowerCase() === "metric")
                 ?.value ?? undefined;
+            const klaviyoUrl =
+              engagement.externalSource?.toUpperCase() === "KLAVIYO"
+                ? getKlaviyoUrl(parsed.details)
+                : null;
             return (
               <div className="space-y-3">
                 <div className="rounded-lg border shadow-sm bg-card">
@@ -819,6 +843,17 @@ function EngagementRow({
                         </span>
                       </div>
                     )}
+                    {klaviyoUrl && (
+                      <a
+                        href={klaviyoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 pt-1 text-xs font-medium text-primary underline-offset-4 hover:underline"
+                      >
+                        Open in Klaviyo
+                        <ExternalLink className="h-3 w-3" aria-hidden />
+                      </a>
+                    )}
                   </div>
 
                   <UiSeparator />
@@ -841,7 +876,8 @@ function EngagementRow({
                       ...parsed.details.filter(
                         (d) =>
                           !d.label.toLowerCase().includes("recipient") &&
-                          d.label.toLowerCase() !== "subject",
+                          d.label.toLowerCase() !== "subject" &&
+                          !(klaviyoUrl && d.label === "Klaviyo"),
                       ),
                       ...parsed.additional,
                     ];
@@ -867,7 +903,18 @@ function EngagementRow({
                                     {item.label}
                                   </p>
                                   <p className="text-sm text-foreground whitespace-pre-wrap break-words">
-                                    {item.value}
+                                    {asWebUrl(item.value) ? (
+                                      <a
+                                        href={asWebUrl(item.value) ?? undefined}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-primary underline-offset-4 hover:underline"
+                                      >
+                                        {item.value}
+                                      </a>
+                                    ) : (
+                                      item.value
+                                    )}
                                   </p>
                                 </div>
                               ))}

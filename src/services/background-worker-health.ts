@@ -10,6 +10,8 @@ export type BackgroundWorkerHealthSnapshot = {
   oldestZammadQueuedAt: Date | null;
   enabledInboxCount: number;
   oldestInboxSyncedAt: Date | null;
+  enabledKlaviyoCount: number;
+  oldestKlaviyoSyncedAt: Date | null;
 };
 
 type BackgroundWorkerHealthLimits = {
@@ -18,6 +20,7 @@ type BackgroundWorkerHealthLimits = {
   maxEmailQueueLagMs: number;
   maxZammadQueueLagMs: number;
   maxInboxSyncLagMs: number;
+  maxKlaviyoSyncLagMs: number;
 };
 
 export type BackgroundWorkerHealthResult = {
@@ -28,11 +31,13 @@ export type BackgroundWorkerHealthResult = {
     | "stale_heartbeat"
     | "email_queue_lag"
     | "zammad_queue_lag"
-    | "inbox_sync_lag";
+    | "inbox_sync_lag"
+    | "klaviyo_sync_lag";
   heartbeatAgeMs: number | null;
   emailQueueLagMs: number | null;
   zammadQueueLagMs: number | null;
   inboxSyncLagMs: number | null;
+  klaviyoSyncLagMs: number | null;
 };
 
 export const evaluateBackgroundWorkerHealth = (
@@ -47,89 +52,59 @@ export const evaluateBackgroundWorkerHealth = (
       emailQueueLagMs: null,
       zammadQueueLagMs: null,
       inboxSyncLagMs: null,
+      klaviyoSyncLagMs: null,
     };
   }
 
-  const heartbeatAgeMs = Math.max(
-    0,
-    limits.now.getTime() - snapshot.lastSeenAt.getTime(),
-  );
-  const emailQueueLagMs = snapshot.oldestEmailQueuedAt
-    ? Math.max(0, limits.now.getTime() - snapshot.oldestEmailQueuedAt.getTime())
-    : null;
-  const zammadQueueLagMs = snapshot.oldestZammadQueuedAt
-    ? Math.max(
-        0,
-        limits.now.getTime() - snapshot.oldestZammadQueuedAt.getTime(),
-      )
-    : null;
-  const inboxSyncLagMs = snapshot.oldestInboxSyncedAt
-    ? Math.max(0, limits.now.getTime() - snapshot.oldestInboxSyncedAt.getTime())
-    : null;
+  const ageOf = (date: Date | null) =>
+    date ? Math.max(0, limits.now.getTime() - date.getTime()) : null;
+  const heartbeatAgeMs = ageOf(snapshot.lastSeenAt) ?? 0;
+  const lags = {
+    heartbeatAgeMs,
+    emailQueueLagMs: ageOf(snapshot.oldestEmailQueuedAt),
+    zammadQueueLagMs: ageOf(snapshot.oldestZammadQueuedAt),
+    inboxSyncLagMs: ageOf(snapshot.oldestInboxSyncedAt),
+    klaviyoSyncLagMs: ageOf(snapshot.oldestKlaviyoSyncedAt),
+  };
+  const unhealthy = (reason: BackgroundWorkerHealthResult["reason"]) => ({
+    healthy: false,
+    reason,
+    ...lags,
+  });
 
   if (heartbeatAgeMs > limits.maxHeartbeatAgeMs) {
-    return {
-      healthy: false,
-      reason: "stale_heartbeat",
-      heartbeatAgeMs,
-      emailQueueLagMs,
-      zammadQueueLagMs,
-      inboxSyncLagMs,
-    };
+    return unhealthy("stale_heartbeat");
   }
-
   if (
     snapshot.emailQueueDepth > 0 &&
-    emailQueueLagMs !== null &&
-    emailQueueLagMs > limits.maxEmailQueueLagMs
+    lags.emailQueueLagMs !== null &&
+    lags.emailQueueLagMs > limits.maxEmailQueueLagMs
   ) {
-    return {
-      healthy: false,
-      reason: "email_queue_lag",
-      heartbeatAgeMs,
-      emailQueueLagMs,
-      zammadQueueLagMs,
-      inboxSyncLagMs,
-    };
+    return unhealthy("email_queue_lag");
   }
-
   if (
     snapshot.zammadQueueDepth > 0 &&
-    zammadQueueLagMs !== null &&
-    zammadQueueLagMs > limits.maxZammadQueueLagMs
+    lags.zammadQueueLagMs !== null &&
+    lags.zammadQueueLagMs > limits.maxZammadQueueLagMs
   ) {
-    return {
-      healthy: false,
-      reason: "zammad_queue_lag",
-      heartbeatAgeMs,
-      emailQueueLagMs,
-      zammadQueueLagMs,
-      inboxSyncLagMs,
-    };
+    return unhealthy("zammad_queue_lag");
   }
-
   if (
     snapshot.enabledInboxCount > 0 &&
-    (inboxSyncLagMs === null || inboxSyncLagMs > limits.maxInboxSyncLagMs)
+    (lags.inboxSyncLagMs === null ||
+      lags.inboxSyncLagMs > limits.maxInboxSyncLagMs)
   ) {
-    return {
-      healthy: false,
-      reason: "inbox_sync_lag",
-      heartbeatAgeMs,
-      emailQueueLagMs,
-      zammadQueueLagMs,
-      inboxSyncLagMs,
-    };
+    return unhealthy("inbox_sync_lag");
+  }
+  if (
+    snapshot.enabledKlaviyoCount > 0 &&
+    (lags.klaviyoSyncLagMs === null ||
+      lags.klaviyoSyncLagMs > limits.maxKlaviyoSyncLagMs)
+  ) {
+    return unhealthy("klaviyo_sync_lag");
   }
 
-  return {
-    healthy: true,
-    reason: "healthy",
-    heartbeatAgeMs,
-    emailQueueLagMs,
-    zammadQueueLagMs,
-    inboxSyncLagMs,
-  };
+  return { healthy: true, reason: "healthy", ...lags };
 };
 
 export const recordBackgroundWorkerHeartbeat = async (
@@ -143,6 +118,7 @@ export const recordBackgroundWorkerHeartbeat = async (
     zammadQueueDepth,
     oldestZammadJob,
     inboxes,
+    klaviyoIntegrations,
   ] = await prisma.$transaction([
     prisma.emailBatch.count({
       where: {
@@ -172,11 +148,20 @@ export const recordBackgroundWorkerHeartbeat = async (
       where: { isEnabled: true },
       select: { lastSyncedAt: true, createdAt: true },
     }),
+    prisma.integrationConnection.findMany({
+      where: { provider: "KLAVIYO", isEnabled: true },
+      select: { lastSyncedAt: true, createdAt: true },
+    }),
   ]);
-  const oldestInboxSyncedAt = inboxes.reduce<Date | null>((oldest, inbox) => {
-    const value = inbox.lastSyncedAt ?? inbox.createdAt;
-    return !oldest || value < oldest ? value : oldest;
-  }, null);
+  const oldestSyncedAt = (
+    rows: Array<{ lastSyncedAt: Date | null; createdAt: Date }>,
+  ) =>
+    rows.reduce<Date | null>((oldest, row) => {
+      const value = row.lastSyncedAt ?? row.createdAt;
+      return !oldest || value < oldest ? value : oldest;
+    }, null);
+  const oldestInboxSyncedAt = oldestSyncedAt(inboxes);
+  const oldestKlaviyoSyncedAt = oldestSyncedAt(klaviyoIntegrations);
 
   return await prisma.backgroundWorkerHeartbeat.upsert({
     where: { workerId },
@@ -190,6 +175,8 @@ export const recordBackgroundWorkerHeartbeat = async (
       oldestZammadQueuedAt: oldestZammadJob?.createdAt,
       enabledInboxCount: inboxes.length,
       oldestInboxSyncedAt,
+      enabledKlaviyoCount: klaviyoIntegrations.length,
+      oldestKlaviyoSyncedAt,
     },
     update: {
       startedAt,
@@ -200,6 +187,8 @@ export const recordBackgroundWorkerHeartbeat = async (
       oldestZammadQueuedAt: oldestZammadJob?.createdAt ?? null,
       enabledInboxCount: inboxes.length,
       oldestInboxSyncedAt,
+      enabledKlaviyoCount: klaviyoIntegrations.length,
+      oldestKlaviyoSyncedAt,
     },
   });
 };

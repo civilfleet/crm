@@ -16,6 +16,7 @@ Known open points are in [FOLLOW_UPS.md](FOLLOW_UPS.md).
   - [E-mail addresses](#e-mail-addresses)
   - [Merging contacts](#merging-contacts)
   - [Languages](#languages)
+  - [Klaviyo](#klaviyo)
   - [Trash, restore and permanent delete](#trash-restore-and-permanent-delete)
   - [Organizations in the trash](#organizations-in-the-trash)
 - [Lists and saved views](#lists-and-saved-views)
@@ -233,9 +234,11 @@ of a contact in the trash brings that contact back. Code:
 
 ### Proposed changes
 
-Website forms and event registrations never overwrite a value an existing
-contact already has. A different value is recorded as a proposal
-(`PROPOSED` in the change history) and waits for a person:
+Website forms, event registrations and Klaviyo never overwrite a value an
+existing contact already has. A different value is recorded as a proposal
+(`PROPOSED` in the change history) and waits for a person. Klaviyo can also
+propose withdrawing marketing consent (field `marketingConsent`, see
+"Klaviyo"); applying it records the withdrawal, it changes no contact field:
 
 - **Where:** on the contact ("Pending changes", above its consents) and for
   the whole team under CRM → Pending changes, oldest first.
@@ -318,6 +321,104 @@ consent holds, team scope), `tests/db/form-confirmation.test.ts`
 (confirmation, removal after 7 days), `tests/db/contact-form-filters.test.ts`
 (the form and consent filters) and `tests/db/contacts-merge.test.ts`.
 
+### Klaviyo
+
+A team can connect a Klaviyo account (Settings → Integrations; team admins
+only). The background worker syncs every 15 minutes
+(`KLAVIYO_SYNC_INTERVAL_MS`), and "Sync now" queues one; the sync never runs
+in a web request. One sync per team is queued or running at a time; the
+database refuses a second (`KlaviyoSyncJob_active_team_key`). A sync that
+fails on Klaviyo's side (unreachable, rate limit beyond five waits, a
+refused key) is retried with growing pauses, five times. Code:
+`src/services/integrations/klaviyo.ts`, `klaviyo-queue.ts`,
+`src/lib/klaviyo.ts` (API) and `src/lib/klaviyo-mapping.ts` (translation).
+
+**Profiles → contacts.** The first sync reads every profile, later ones the
+profiles changed since the last sync (ten minutes of overlap). A profile is
+matched by e-mail address, like a website form, through the same
+`resolveIntakeContact`:
+
+- an existing contact **only gets empty fields filled** (name, phone, city);
+  a different value becomes a proposal by "Klaviyo" (see "Proposed changes").
+  A value Klaviyo already proposed for the contact, decided or not, is not
+  proposed again;
+- a profile without a name leaves the contact's name as it is; a new contact
+  without one is named after its address;
+- a new contact is recorded as created from `klaviyo`;
+- an address of a contact **in the trash** is skipped (a sync does not
+  restore it, unlike a website form, which someone sent on purpose), and so
+  is an address of a **permanently deleted** contact (see "Trash, restore
+  and permanent delete").
+
+A profile or event the database refuses for its data (a value too long, an
+address taken or a contact deleted meanwhile) is skipped, counted and shown
+under the settings ("records could not be saved") without stopping the sync.
+Any other error (the database unreachable, a timeout) fails the sync, which
+is retried, so no record is skipped for a passing problem.
+
+**E-mail events → activity.** Only Klaviyo's built-in e-mail metrics are
+read (received, opened, clicked, bounced, marked as spam, unsubscribed), from
+the last sync on, or the last 90 days the first time
+(`KLAVIYO_INITIAL_EVENT_DAYS`). They attach only to existing contacts; an
+event never creates one. Each becomes a short entry with the subject, not the
+newsletter's text (one copy per recipient would fill the database), and an
+"Open in Klaviyo" link to the person's Klaviyo profile, which lists the
+e-mails sent to them. Opens
+and clicks of one e-mail by one person are one entry each, the first.
+
+**Marketing consent → Klaviyo** (an outbox, `KlaviyoConsentSync`). Every
+`marketing` grant or withdrawal is sent once:
+
+- only the row that **holds now** for the contact is sent; earlier ones are
+  marked skipped;
+- a **grant** subscribes the contact's primary address to the team's list
+  ("List for marketing consents") with the time of the consent, as a
+  historical import: the CRM already confirmed the address, so Klaviyo sends
+  no second opt-in mail (and no "added to list" flow starts). Without a list,
+  grants wait; for a contact in the trash, until it is restored;
+- a **withdrawal** unsubscribes the address from all e-mail marketing in
+  Klaviyo, list or not;
+- an address Klaviyo refuses is marked failed and retried on the next syncs,
+  five times in all; the others still go;
+- disconnecting Klaviyo forgets what was sent, so a new connection sends
+  every consent again. Imported contacts, activity and consents stay.
+
+**Unsubscribes in Klaviyo → the CRM.** A profile that is unsubscribed or
+suppressed for unsubscribing or a spam complaint, and an "unsubscribed" or
+"marked as spam" event, record a `WITHDRAWN` consent (source `EXTERNAL`, by
+"Klaviyo", at Klaviyo's time), unless the CRM already holds a withdrawal or a
+later grant (the person consented again since). These rows are not sent back.
+Bounces are not a withdrawal.
+
+**Leaving only the team's list** (Klaviyo's list-specific unsubscribe, on the
+list set for marketing consents) is not applied by itself: it becomes a
+proposed change "Marketing consent: Wants updates → Withdrawn" by "Klaviyo",
+under Pending changes. Proposed only while the CRM holds a grant older than
+Klaviyo's time, and once per time Klaviyo reports it (declined, it is not
+proposed again until the person leaves the list again). Applying it records
+the withdrawal as Klaviyo's (`EXTERNAL`, by "Klaviyo", at Klaviyo's time), so
+it is not sent back as an unsubscribe from all marketing; who applied it is
+in the change history. Leaving other lists is ignored.
+
+**Contacts deleted for good → Klaviyo.** Each sync first handles the
+addresses queued by permanent delete: a profile Klaviyo has for the address
+gets the property `crm_deleted_at` (the time of the delete) and is
+unsubscribed from e-mail marketing. Nothing is deleted in Klaviyo; the team
+does that, for example from a segment on `crm_deleted_at`. An address Klaviyo
+does not know is left alone, since an unsubscribe would create a profile for
+it. The queue keeps the address only until then: it is removed once handled,
+after five refused attempts (reported under the settings), or when Klaviyo is
+disconnected. Nothing is queued while Klaviyo is switched off, and addresses
+queued before switching it off wait until it is on again.
+
+**Sign-ups in Klaviyo** are not recorded as consents: the CRM's consents are
+confirmed by e-mail and keep the wording the person agreed to, which a
+Klaviyo sign-up does not give.
+
+Tests: `tests/klaviyo.test.ts` (translation, API calls),
+`tests/db/klaviyo-sync.test.ts` (matching, trash, events, consents, list
+leaves, queue).
+
 ### Unconfirmed website submissions
 
 A submission that asks for e-mail confirmation (the form requires it, or a
@@ -349,6 +450,18 @@ system log records who deleted how many, without the answers
   e-mail recipients keep their record, without the contact link.
 
 All three act only on contacts the person can see.
+
+Permanent delete also keeps a SHA-256 hash of the contact's primary and alias
+addresses (`ContactImportBlock`, never the address itself), so imports from
+other systems (Klaviyo) do not create the person again. A contact added by
+hand or a website form later is not affected
+(`src/services/contact-import-blocks.ts`, `tests/db/klaviyo-sync.test.ts`).
+
+With Klaviyo switched on, permanent delete also queues the addresses
+(`KlaviyoProfileDeletion`) for the next sync, which sets the profile property
+`crm_deleted_at` and unsubscribes the person from e-mail marketing there, so
+the team can find and delete them in Klaviyo (see "Klaviyo"). The delete
+dialog says so.
 
 ### Organizations in the trash
 
@@ -436,6 +549,7 @@ also enforced by Postgres:
 | A signer cannot be deleted | foreign key `DonationAgreementSignature_userId_fkey` (`ON DELETE RESTRICT`) |
 | A contact's `primaryEmail` copy matches its primary address | trigger `contact_primary_email_sync` on `ContactEmail` |
 | One signature per signer and agreement | primary key of `DonationAgreementSignature` |
+| One queued or running Klaviyo sync per team | partial unique index `KlaviyoSyncJob_active_team_key` |
 
 All of them are declared in `prisma/schema.prisma` (the partial indexes need
 the `partialIndexes` preview feature, with the predicate exactly as Postgres

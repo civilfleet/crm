@@ -10,8 +10,8 @@ import { getContactVisibility } from "@/services/contacts/access";
 import { ChangeAction, type Roles } from "@/types";
 
 /*
-  Reviewing changes that website forms and event registrations proposed for
-  existing contacts (docs/DATA_RULES.md, "Proposed changes"). A proposal is
+  Reviewing changes that website forms, event registrations and Klaviyo
+  proposed for existing contacts (docs/DATA_RULES.md, "Proposed changes"). A proposal is
   pending while nothing resolves it; applying writes an UPDATED entry and
   declining a PROPOSAL_REJECTED entry, each pointing at the proposal, in the
   same transaction as the change. The database allows one resolution per
@@ -28,6 +28,9 @@ const FIELDS = [
   "city",
   "country",
   "email",
+  // Klaviyo: the person left the team's list there; applying records a
+  // withdrawn marketing consent (docs/DATA_RULES.md, "Klaviyo").
+  "marketingConsent",
 ] as const;
 type ProposalField = (typeof FIELDS)[number];
 const isProposalField = (field: string | null): field is ProposalField =>
@@ -54,6 +57,17 @@ const parseValue = (value: string | null): string | null => {
   } catch {
     return value;
   }
+};
+
+/** The marketing consent that holds now, as the proposals compare it. */
+const MARKETING_CONSENT = {
+  where: {
+    purpose: "marketing",
+    status: { in: ["GRANTED", "WITHDRAWN"] as ("GRANTED" | "WITHDRAWN")[] },
+  },
+  orderBy: [{ recordedAt: "desc" as const }, { createdAt: "desc" as const }],
+  take: 1,
+  select: { status: true },
 };
 
 const comparable = (field: ProposalField, value: string | null) => {
@@ -97,13 +111,18 @@ type ContactValues = {
   city: string | null;
   country: string | null;
   emails: Array<{ email: string; kind: ContactEmailKind }>;
+  consents: Array<{ status: string }>;
 };
 
-const currentValueOf = (contact: ContactValues, field: ProposalField) =>
-  field === "email"
-    ? (contact.emails.find((entry) => entry.kind === ContactEmailKind.PRIMARY)
-        ?.email ?? null)
-    : contact[field];
+const currentValueOf = (contact: ContactValues, field: ProposalField) => {
+  if (field === "email")
+    return (
+      contact.emails.find((entry) => entry.kind === ContactEmailKind.PRIMARY)
+        ?.email ?? null
+    );
+  if (field === "marketingConsent") return contact.consents[0]?.status ?? null;
+  return contact[field];
+};
 
 const metadataOf = (metadata: Prisma.JsonValue | null) =>
   metadata && typeof metadata === "object" && !Array.isArray(metadata)
@@ -144,6 +163,7 @@ export const getPendingProposals = async (
           city: true,
           country: true,
           emails: { select: { email: true, kind: true } },
+          consents: MARKETING_CONSENT,
         },
       },
     },
@@ -265,6 +285,7 @@ export const resolveProposal = async (
               country: true,
               countryCode: true,
               emails: { select: { id: true, email: true, kind: true } },
+              consents: MARKETING_CONSENT,
             },
           },
         },
@@ -333,6 +354,44 @@ export const resolveProposal = async (
         throw new ProposalError(400, "The proposal has no value to apply");
       if (input.decision === "apply-alias" && field !== "email")
         throw new ProposalError(400, "Only an e-mail address can be added");
+
+      if (field === "marketingConsent") {
+        if (proposedValue !== "WITHDRAWN")
+          throw new ProposalError(400, "Only a withdrawal can be applied");
+        // Recorded as the other system's (source EXTERNAL, by "Klaviyo"), at
+        // the time it reported: a grant given since still holds, and the
+        // withdrawal is not sent back to Klaviyo as a global unsubscribe.
+        const metadata = metadataOf(proposal.metadata);
+        const at =
+          typeof metadata.at === "string" &&
+          !Number.isNaN(Date.parse(metadata.at))
+            ? new Date(metadata.at)
+            : new Date();
+        await tx.contactConsent.create({
+          data: {
+            teamId: contact.teamId,
+            contactId: contact.id,
+            purpose: "marketing",
+            status: "WITHDRAWN",
+            source: "EXTERNAL",
+            recordedBy: proposal.userName ?? "Klaviyo",
+            recordedAt: at,
+          },
+        });
+        await tx.contactChangeLog.create({
+          data: {
+            contactId: contact.id,
+            action: ChangeAction.UPDATED,
+            fieldName: field,
+            oldValue: JSON.stringify(currentValue),
+            newValue: JSON.stringify("WITHDRAWN"),
+            proposalId: proposal.id,
+            ...by,
+          },
+        });
+        await resolveSiblings(ChangeAction.UPDATED);
+        return { decision: input.decision, field };
+      }
 
       if (field === "email") {
         const email = proposedValue.trim().toLowerCase();

@@ -21,7 +21,14 @@ import { useToast } from "@/hooks/use-toast";
 export type ProposalRow = {
   id: string;
   contact: { id: string; name: string };
-  field: "name" | "phone" | "postalCode" | "city" | "country" | "email";
+  field:
+    | "name"
+    | "phone"
+    | "postalCode"
+    | "city"
+    | "country"
+    | "email"
+    | "marketingConsent";
   currentValue: string | null;
   proposedValue: string | null;
   isCurrent: boolean;
@@ -45,7 +52,18 @@ const FIELD_LABELS: Record<ProposalRow["field"], string> = {
   city: "City",
   country: "Country",
   email: "E-mail",
+  marketingConsent: "Marketing consent",
 };
+
+/** Consent states as people read them; other fields show their value. */
+const CONSENT_LABELS: Record<string, string> = {
+  GRANTED: "Wants updates",
+  WITHDRAWN: "Withdrawn",
+};
+const displayValue = (field: ProposalRow["field"], value: string | null) =>
+  field === "marketingConsent" && value
+    ? (CONSENT_LABELS[value] ?? value)
+    : value;
 
 const fetcher = async (url: string) => {
   const response = await fetch(url);
@@ -149,15 +167,21 @@ export const ProposalList = ({
               </span>
             </div>
             <p className="flex flex-wrap items-center gap-2 text-sm">
-              <Value value={row.currentValue} />
+              <Value value={displayValue(row.field, row.currentValue)} />
               <ArrowRight
                 aria-label="would become"
                 className="size-4 shrink-0 text-muted-foreground"
               />
               <span className="font-medium">
-                <Value value={row.proposedValue} />
+                <Value value={displayValue(row.field, row.proposedValue)} />
               </span>
             </p>
+            {row.field === "marketingConsent" ? (
+              <p className="text-xs text-muted-foreground">
+                Left the team&apos;s list in Klaviyo. Applying records a
+                withdrawal in the CRM; nothing is changed in Klaviyo.
+              </p>
+            ) : null}
             {row.isCurrent ? (
               <p className="text-xs text-muted-foreground">
                 The contact already has this value.
@@ -190,7 +214,9 @@ export const ProposalList = ({
                 >
                   {row.isCurrent
                     ? "Mark as done"
-                    : `Apply ${label.toLowerCase()}`}
+                    : row.field === "marketingConsent"
+                      ? "Record withdrawal"
+                      : `Apply ${label.toLowerCase()}`}
                 </Button>
               )}
               <Button

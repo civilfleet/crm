@@ -3,6 +3,17 @@
 import { AlertTriangle, CheckCircle2, Loader2, PlugZap } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +28,20 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
+type KlaviyoSyncSummary = {
+  contactsCreated?: number;
+  contactsMatched?: number;
+  changesProposed?: number;
+  engagementsUpserted?: number;
+  consentsWithdrawn?: number;
+  withdrawalsProposed?: number;
+  consentsSent?: number;
+  consentsFailed?: number;
+  consentsWaiting?: string[];
+  failures?: number;
+  errors?: string[];
+};
+
 type KlaviyoIntegrationResponse = {
   id?: string;
   teamId?: string;
@@ -27,8 +52,13 @@ type KlaviyoIntegrationResponse = {
   connectionVerified?: boolean;
   connectionMessage?: string;
   lastSyncedAt?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  lastSync?: {
+    status: "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED";
+    queuedAt: string;
+    finishedAt?: string;
+    error?: string;
+    result?: KlaviyoSyncSummary;
+  };
 };
 
 interface KlaviyoIntegrationProps {
@@ -36,9 +66,7 @@ interface KlaviyoIntegrationProps {
 }
 
 const formatDate = (value?: string) => {
-  if (!value) {
-    return null;
-  }
+  if (!value) return null;
   try {
     return new Intl.DateTimeFormat("default", {
       dateStyle: "medium",
@@ -49,24 +77,32 @@ const formatDate = (value?: string) => {
   }
 };
 
+const describeResult = (result?: KlaviyoSyncSummary) => {
+  if (!result) return null;
+  return [
+    `${result.contactsCreated ?? 0} contacts created`,
+    `${result.contactsMatched ?? 0} matched`,
+    `${result.changesProposed ?? 0} changes proposed`,
+    `${result.engagementsUpserted ?? 0} e-mail events`,
+    `${result.consentsSent ?? 0} consents sent`,
+    `${result.consentsWithdrawn ?? 0} unsubscribes recorded`,
+    `${result.withdrawalsProposed ?? 0} list unsubscribes to review`,
+  ].join(", ");
+};
+
 export default function KlaviyoIntegration({
   teamId,
 }: KlaviyoIntegrationProps) {
   const { toast } = useToast();
+  const endpoint = `/api/teams/${teamId}/integrations/klaviyo`;
 
   const [isSaving, setIsSaving] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isQueueing, setIsQueueing] = useState(false);
+  const [isRemoving, setIsRemoving] = useState(false);
 
   const [apiKey, setApiKey] = useState("");
   const [defaultListId, setDefaultListId] = useState("");
   const [isEnabled, setIsEnabled] = useState(true);
-  const [hasApiKey, setHasApiKey] = useState(false);
-  const [apiKeyPreview, setApiKeyPreview] = useState("");
-  const [lastSyncedAt, setLastSyncedAt] = useState<string | undefined>();
-  const [connectionVerified, setConnectionVerified] = useState(false);
-  const [connectionMessage, setConnectionMessage] = useState<
-    string | undefined
-  >();
 
   const fetcher = async (url: string) => {
     const response = await fetch(url);
@@ -78,29 +114,26 @@ export default function KlaviyoIntegration({
   };
 
   const {
-    data: integrationData,
+    data: integration,
     error: integrationError,
     isLoading,
     mutate,
-  } = useSWR(`/api/teams/${teamId}/integrations/klaviyo`, fetcher);
+  } = useSWR(endpoint, fetcher, {
+    // Follow a queued or running sync until it is done.
+    refreshInterval: (latest) =>
+      latest?.lastSync?.status === "PENDING" ||
+      latest?.lastSync?.status === "RUNNING"
+        ? 5000
+        : 0,
+  });
 
   useEffect(() => {
-    if (!integrationData) {
-      return;
-    }
-    setIsEnabled(integrationData.isEnabled ?? true);
-    setDefaultListId(integrationData.defaultListId ?? "");
-    setHasApiKey(Boolean(integrationData.hasApiKey));
-    setApiKeyPreview(integrationData.apiKeyPreview ?? "");
-    setLastSyncedAt(integrationData.lastSyncedAt);
-    setConnectionMessage(integrationData.connectionMessage);
-    setConnectionVerified(Boolean(integrationData.connectionVerified));
-  }, [integrationData]);
+    setIsEnabled(integration?.isEnabled ?? true);
+    setDefaultListId(integration?.defaultListId ?? "");
+  }, [integration?.isEnabled, integration?.defaultListId]);
 
   useEffect(() => {
-    if (!integrationError) {
-      return;
-    }
+    if (!integrationError) return;
     toast({
       title: "Unable to load Klaviyo integration",
       description: integrationError.message,
@@ -108,42 +141,34 @@ export default function KlaviyoIntegration({
     });
   }, [integrationError, toast]);
 
+  const hasApiKey = Boolean(integration?.hasApiKey);
+  const lastSync = integration?.lastSync;
+  const syncInProgress =
+    lastSync?.status === "PENDING" || lastSync?.status === "RUNNING";
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const response = await fetch(
-        `/api/teams/${teamId}/integrations/klaviyo`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            apiKey: apiKey || undefined,
-            defaultListId: defaultListId || undefined,
-            isEnabled,
-            testConnection: true,
-          }),
-        },
-      );
-
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: apiKey || undefined,
+          // Sent even when empty: an empty field clears the list.
+          defaultListId,
+          isEnabled,
+        }),
+      });
       const json = await response.json();
       if (!response.ok) {
         throw new Error(json?.error || response.statusText);
       }
-
       const data = json.data as KlaviyoIntegrationResponse;
-      mutate(data, { revalidate: false });
-      setHasApiKey(Boolean(data.hasApiKey));
-      setApiKeyPreview(data.apiKeyPreview ?? "");
-      setLastSyncedAt(data.lastSyncedAt);
-      setConnectionMessage(data.connectionMessage);
-      setConnectionVerified(Boolean(data.connectionVerified));
+      await mutate(data, { revalidate: false });
       setApiKey("");
-
       toast({
-        title: "Klaviyo connected",
-        description: data.connectionMessage || "Integration settings saved",
+        title: "Klaviyo settings saved",
+        description: data.connectionMessage,
       });
     } catch (error) {
       toast({
@@ -157,91 +182,100 @@ export default function KlaviyoIntegration({
   };
 
   const handleSync = async () => {
-    setIsSyncing(true);
+    setIsQueueing(true);
     try {
-      const response = await fetch(
-        `/api/teams/${teamId}/integrations/klaviyo/sync`,
-        {
-          method: "POST",
-        },
-      );
-
+      const response = await fetch(`${endpoint}/sync`, { method: "POST" });
       const json = await response.json();
       if (!response.ok) {
         throw new Error(json?.error || response.statusText);
       }
-
-      const result = json.data as {
-        contactsCreated?: number;
-        contactsUpdated?: number;
-        engagementsUpserted?: number;
-        lastSyncedAt?: string;
-      };
-
-      const syncedAt = result?.lastSyncedAt;
-      setLastSyncedAt(syncedAt);
-      setConnectionVerified(true);
-
+      await mutate();
       toast({
-        title: "Klaviyo sync finished",
-        description: `Created ${result?.contactsCreated ?? 0}, updated ${result?.contactsUpdated ?? 0}, synced ${result?.engagementsUpserted ?? 0} engagements.`,
+        title: "Klaviyo sync queued",
+        description: "It runs in the background; this page shows the result.",
       });
     } catch (error) {
       toast({
-        title: "Sync failed",
+        title: "Sync could not be queued",
         description: (error as Error).message,
         variant: "destructive",
       });
     } finally {
-      setIsSyncing(false);
+      setIsQueueing(false);
     }
   };
 
-  const canSync = useMemo(
-    () => isEnabled && (hasApiKey || apiKey.trim().length > 0),
-    [apiKey, hasApiKey, isEnabled],
-  );
+  const handleRemove = async () => {
+    setIsRemoving(true);
+    try {
+      const response = await fetch(endpoint, { method: "DELETE" });
+      const json = await response.json();
+      if (!response.ok) {
+        throw new Error(json?.error || response.statusText);
+      }
+      await mutate(null, { revalidate: false });
+      setApiKey("");
+      toast({ title: "Klaviyo disconnected" });
+    } catch (error) {
+      toast({
+        title: "Failed to disconnect Klaviyo",
+        description: (error as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsRemoving(false);
+    }
+  };
+
+  const canSync = Boolean(integration?.isEnabled) && hasApiKey;
 
   const status = useMemo(() => {
     if (!hasApiKey) {
       return {
         label: "Not configured",
         dotClass: "bg-amber-500",
-        panelClass: "border-warning/25 bg-warning/10",
         badgeClass: "bg-warning/10 text-warning-strong border-warning/25",
-        description: "Add your Klaviyo private key to enable syncing.",
         icon: AlertTriangle,
       };
     }
-    if (!isEnabled) {
+    if (!integration?.isEnabled) {
       return {
         label: "Disabled",
         dotClass: "bg-muted-foreground",
-        panelClass: "border-border bg-muted/30",
         badgeClass: "bg-muted text-foreground border-border",
-        description: "Klaviyo is configured but currently switched off.",
         icon: PlugZap,
       };
     }
-    if (connectionVerified) {
+    if (lastSync?.status === "FAILED") {
+      return {
+        label: "Sync failing",
+        dotClass: "bg-red-500",
+        badgeClass: "bg-destructive/10 text-destructive border-destructive/25",
+        icon: AlertTriangle,
+      };
+    }
+    if (integration?.connectionVerified) {
       return {
         label: "Connected",
         dotClass: "bg-emerald-500",
-        panelClass: "border-success/25 bg-success/10",
         badgeClass: "bg-success/10 text-success-strong border-success/25",
-        description: "Ready to sync contacts and email engagement.",
         icon: CheckCircle2,
       };
     }
     return {
       label: "Configured",
       dotClass: "bg-blue-500",
-      panelClass: "border-info/25 bg-info/10",
       badgeClass: "bg-info/10 text-info-strong border-info/25",
-      description: "Saved settings, but connection not verified yet.",
       icon: PlugZap,
     };
-  }, [connectionVerified, hasApiKey, isEnabled]);
+  }, [
+    hasApiKey,
+    integration?.isEnabled,
+    integration?.connectionVerified,
+    lastSync?.status,
+  ]);
+
+  const disabled = isLoading || isSaving || isRemoving;
 
   return (
     <Card className="w-full">
@@ -250,8 +284,9 @@ export default function KlaviyoIntegration({
           <div>
             <CardTitle>Klaviyo</CardTitle>
             <CardDescription>
-              Connect Klaviyo to import contacts and email engagements into your
-              CRM.
+              Imports contacts and newsletter activity from Klaviyo every 15
+              minutes, sends marketing consents to your Klaviyo list and records
+              unsubscribes made in Klaviyo.
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -269,24 +304,20 @@ export default function KlaviyoIntegration({
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {connectionMessage && (
-          <div className="rounded-md bg-muted p-3 text-sm text-muted-foreground">
-            {connectionMessage}
-          </div>
-        )}
-
         <div className="flex items-center justify-between rounded-lg border p-4">
           <div>
-            <p className="font-medium">Enable Klaviyo sync</p>
+            <p className="font-medium" id="klaviyo-enabled-label">
+              Enable Klaviyo sync
+            </p>
             <p className="text-sm text-muted-foreground">
-              When enabled, you can pull contacts and email engagement from
-              Klaviyo.
+              While switched off nothing is imported or sent.
             </p>
           </div>
           <Switch
+            aria-labelledby="klaviyo-enabled-label"
             checked={isEnabled}
             onCheckedChange={(checked) => setIsEnabled(checked)}
-            disabled={isLoading || isSaving}
+            disabled={disabled}
           />
         </div>
 
@@ -296,53 +327,132 @@ export default function KlaviyoIntegration({
             <Input
               id="klaviyo-api-key"
               type="password"
+              autoComplete="off"
               placeholder={
-                hasApiKey && apiKeyPreview
-                  ? `Current key: ${apiKeyPreview}`
+                hasApiKey && integration?.apiKeyPreview
+                  ? `Current key: ${integration.apiKeyPreview}`
                   : "pk_xxx..."
               }
               value={apiKey}
               onChange={(event) => setApiKey(event.target.value)}
-              disabled={isLoading || isSaving}
+              disabled={disabled}
             />
             <p className="text-xs text-muted-foreground">
-              We do not display saved keys. Enter a new key to rotate or update
-              the connection.
+              Needs read access to profiles, events and metrics, and write
+              access to subscriptions, lists and profiles. Saved keys are not
+              shown; enter a new one to replace it.
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="klaviyo-list-id">Default list ID (optional)</Label>
+            <Label htmlFor="klaviyo-list-id">List for marketing consents</Label>
             <Input
               id="klaviyo-list-id"
-              placeholder="List to use for subscriptions"
+              placeholder="e.g. XyZ123"
               value={defaultListId}
               onChange={(event) => setDefaultListId(event.target.value)}
-              disabled={isLoading || isSaving}
+              disabled={disabled}
             />
             <p className="text-xs text-muted-foreground">
-              Used when creating new contacts that should be tied to a Klaviyo
-              list.
+              Contacts who confirmed marketing consent are subscribed to this
+              list. Without a list, only unsubscribes are sent. Leave empty to
+              clear.
             </p>
           </div>
         </div>
 
+        {lastSync && (
+          <div
+            className="space-y-1 rounded-md bg-muted p-3 text-sm"
+            aria-live="polite"
+          >
+            {syncInProgress ? (
+              <p className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                {lastSync.status === "RUNNING"
+                  ? "Sync running…"
+                  : `Sync queued ${formatDate(lastSync.queuedAt)}${
+                      lastSync.error ? ", will retry" : ""
+                    }`}
+              </p>
+            ) : (
+              <p>
+                {lastSync.status === "FAILED" ? "Sync failed" : "Last sync"}{" "}
+                {formatDate(lastSync.finishedAt)}
+                {lastSync.status === "SUCCEEDED" && lastSync.result
+                  ? `: ${describeResult(lastSync.result)}.`
+                  : "."}
+              </p>
+            )}
+            {lastSync.error && (
+              <p className="text-destructive">{lastSync.error}</p>
+            )}
+            {lastSync.result?.consentsWaiting?.map((note) => (
+              <p key={note} className="text-muted-foreground">
+                {note}
+              </p>
+            ))}
+            {(lastSync.result?.failures ?? 0) > 0 && (
+              <p className="text-destructive">
+                {lastSync.result?.failures} records could not be saved:{" "}
+                {lastSync.result?.errors?.join("; ")}
+              </p>
+            )}
+            {(lastSync.result?.consentsFailed ?? 0) > 0 && (
+              <p className="text-destructive">
+                Klaviyo refused {lastSync.result?.consentsFailed} consents; they
+                are retried on the next syncs.
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-3">
-          <Button onClick={handleSave} disabled={isLoading || isSaving}>
+          <Button onClick={handleSave} disabled={disabled}>
             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Save connection
           </Button>
           <Button
             onClick={handleSync}
             variant="secondary"
-            disabled={isLoading || isSyncing || !canSync}
+            disabled={disabled || isQueueing || syncInProgress || !canSync}
           >
-            {isSyncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isQueueing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Sync now
           </Button>
-          {lastSyncedAt && (
+          {hasApiKey && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" disabled={disabled}>
+                  Disconnect
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Disconnect Klaviyo?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    The API key is removed and nothing more is imported or sent.
+                    Imported contacts, activity and consents stay in the CRM.
+                    Connecting again later sends every marketing consent anew.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isRemoving}>
+                    Cancel
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleRemove}
+                    disabled={isRemoving}
+                  >
+                    Disconnect
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+          {integration?.lastSyncedAt && (
             <p className="text-sm text-muted-foreground">
-              Last synced {formatDate(lastSyncedAt)}
+              Up to date as of {formatDate(integration.lastSyncedAt)}
             </p>
           )}
         </div>

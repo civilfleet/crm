@@ -230,6 +230,12 @@ export default function ContactTable({
     recordListFetcher,
     { keepPreviousData: true },
   );
+  // Only looked up in the trash, where permanent delete is offered.
+  const { data: klaviyoStatus } = useSWR<{ data?: { enabled?: boolean } }>(
+    showTrash ? `/api/teams/${teamId}/integrations/klaviyo/status` : null,
+    (url: string) => fetch(url).then((response) => response.json()),
+  );
+  const klaviyoEnabled = Boolean(klaviyoStatus?.data?.enabled);
   const contacts = useMemo<ContactRow[]>(
     () => (Array.isArray(data?.data) ? (data.data as ContactRow[]) : []),
     [data],
@@ -818,6 +824,15 @@ export default function ContactTable({
                         All related data will be deleted. This action cannot be
                         undone.
                       </AlertDialogDescription>
+                      {klaviyoEnabled ? (
+                        <p className="text-sm text-muted-foreground">
+                          Their profiles stay in Klaviyo. With the next sync
+                          (within about 15 minutes) they are unsubscribed there
+                          and marked with the property{" "}
+                          <code>crm_deleted_at</code>, so you can find and
+                          delete them in Klaviyo.
+                        </p>
+                      ) : null}
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>

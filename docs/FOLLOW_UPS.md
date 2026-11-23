@@ -13,7 +13,7 @@ done, remove it here and update `docs/DATA_RULES.md` if a rule changed.
 - [7. Data checks for imports and website intake](#7-data-checks-for-imports-and-website-intake)
 - [8. Test the distance filter](#8-test-the-distance-filter)
 - [9. Production checks](#9-production-checks)
-- [10. Send marketing consent to Klaviyo](#10-send-marketing-consent-to-klaviyo)
+- [10. First live Klaviyo sync](#10-first-live-klaviyo-sync)
 - [12. Unconfirmed submissions still fill existing contacts](#12-unconfirmed-submissions-still-fill-existing-contacts)
 - [13. Expired and repeated confirmation links](#13-expired-and-repeated-confirmation-links)
 - [14. Upgrade PostgreSQL 16 to 18](#14-upgrade-postgresql-16-to-18)
@@ -173,21 +173,33 @@ have not been run against production yet.
 
 **Size.** Run the queries; follow-up work depends on what they find.
 
-## 10. Send marketing consent to Klaviyo
+## 10. First live Klaviyo sync
 
-**What.** Consents are recorded in the CRM (`ContactConsent`,
-`docs/DATA_RULES.md` "Consent"), but newsletters go out through Klaviyo, which
-does not see them yet. Unsubscribes in Klaviyo do not reach the CRM either.
+**What.** The Klaviyo sync now runs in the worker, sends marketing consents
+and records unsubscribes (`docs/DATA_RULES.md`, "Klaviyo"). It was tested
+against a fake of Klaviyo's API, not against a real account.
 
 **How.**
-- An outbox: each `marketing` consent row gets a sync state; a job subscribes
-  `GRANTED` (that is, e-mail confirmed) contacts to the Klaviyo list (with the consent time and wording)
-  and unsubscribes `WITHDRAWN` ones, retrying on failure.
-- A Klaviyo webhook or a periodic pull writes `WITHDRAWN` rows (source
-  `EXTERNAL`) for unsubscribes, so the CRM stays the record.
-- Decide which team's consents go to which Klaviyo list.
+- Give the private key the scopes it now needs: read for profiles, events
+  and metrics; write for subscriptions, lists and profiles.
+- Set the list for marketing consents, then watch the first sync: under the
+  settings, in the system log (`KLAVIYO`), and in Klaviyo (the profiles'
+  consent and its time).
+- Decide whether subscribing as a historical import is right: it keeps the
+  CRM's consent time and sends no second opt-in, but starts no "added to
+  list" flow (a welcome series). The consent wording stays in the CRM only.
+- The old sync replaced an existing contact's name by its e-mail address
+  when the Klaviyo profile had no name, without history. Look for such
+  contacts and restore names where you know them (the list also holds
+  contacts created without a name, which are rightly named so):
 
-**Size.** Medium; needs a Klaviyo API key in the CRM's secrets.
+  ```sql
+  SELECT c.id, c."teamId", c.name
+  FROM "Contact" c
+  WHERE c.name = c."primaryEmail" AND c."deletedAt" IS NULL;
+  ```
+
+**Size.** Small; needs access to the Klaviyo account.
 
 ## 12. Unconfirmed submissions still fill existing contacts
 
